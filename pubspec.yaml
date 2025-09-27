@@ -11,15 +11,21 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  firebase_core: ^2.24.2
-  firebase_auth: ^4.15.3
-  cloud_firestore: ^4.13.6
-  google_sign_in: ^6.1.6
+  firebase_core: ^3.15.2
+  firebase_auth: ^5.7.0
+  cloud_firestore: ^5.6.12
+  google_sign_in: ^7.2.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
+
+# Fix for Firebase Auth Web compatibility issues
+dependency_overrides:
+  firebase_auth_web: ^5.12.5
+  js: ^0.6.7
+  web: ^0.5.1
 
 flutter:
   uses-material-design: true
