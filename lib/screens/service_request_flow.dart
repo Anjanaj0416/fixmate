@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'worker_selection_screen.dart';
 
 class ServiceRequestFlow extends StatefulWidget {
   final String serviceType;
@@ -753,101 +754,89 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
   }
 
   Future<void> _submitRequest() async {
+    if (!_canProceed()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
-      // Show loading
-      showDialog(
+      // Show confirmation dialog first
+      bool? confirmed = await showDialog<bool>(
         context: context,
-        barrierDismissible: false,
         builder: (context) => AlertDialog(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
+          title: Row(
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Submitting your request...'),
+              Icon(Icons.check_circle, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Request Submitted!'),
             ],
           ),
-        ),
-      );
-
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('User not authenticated');
-
-      // Create service request data
-      Map<String, dynamic> requestData = {
-        'customer_id': user.uid,
-        'service_type': widget.serviceType,
-        'sub_service': widget.subService,
-        'service_name': widget.serviceName,
-        'issue_type': _selectedIssueType,
-        'location': _selectedLocation,
-        'description': _problemDescription,
-        'urgency': _urgency,
-        'budget_range': _budgetRange,
-        'status': 'pending',
-        'created_at': FieldValue.serverTimestamp(),
-        'updated_at': FieldValue.serverTimestamp(),
-      };
-
-      // Add service-specific fields
-      if (widget.serviceType == 'plumbing' && _waterSupplyStatus != null) {
-        requestData['water_supply_status'] = _waterSupplyStatus;
-      }
-
-      // Add image count (actual image upload would be implemented separately)
-      if (_selectedImages.isNotEmpty) {
-        requestData['images_count'] = _selectedImages.length;
-        requestData['has_images'] = true;
-      }
-
-      // Save to Firestore
-      DocumentReference docRef = await FirebaseFirestore.instance
-          .collection('service_requests')
-          .add(requestData);
-
-      // Update with generated ID
-      await docRef.update({'request_id': docRef.id});
-
-      // Hide loading dialog
-      Navigator.pop(context);
-
-      // Show success dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          icon: Icon(Icons.check_circle, color: Colors.green, size: 64),
-          title: Text('Request Submitted!'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Your service request has been submitted successfully.'),
-              SizedBox(height: 8),
+              SizedBox(height: 16),
               Text(
-                  'Service providers will review your request and send quotes.'),
+                'Service providers will review your request and send quotes. You\'ll be notified when quotes are available.',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Close dialog
-                Navigator.pop(context); // Go back to dashboard
-              },
-              child: Text('OK'),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: Text('OK', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
       );
-    } catch (e) {
-      // Hide loading dialog if showing
-      Navigator.pop(context);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error submitting request: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (confirmed == true) {
+        // Navigate to worker selection screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WorkerSelectionScreen(
+              serviceType: widget.serviceType,
+              subService: widget.subService,
+              issueType: _selectedIssueType ?? 'other',
+              problemDescription: _problemDescription,
+              problemImageUrls: _selectedImages, // Convert if needed
+              location: _selectedLocation ?? 'other',
+              address: _currentAddress,
+              urgency: _urgency,
+              budgetRange: _budgetRange,
+              scheduledDate:
+                  DateTime.now().add(Duration(days: 1)), // Default to tomorrow
+              scheduledTime: _urgency == 'Same day'
+                  ? 'Same day'
+                  : 'Morning (9 AM - 12 PM)',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      _showErrorSnackBar('Failed to submit request: ${e.toString()}');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
+  }
+
+// Also add this helper method to handle error display:
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
   }
 }

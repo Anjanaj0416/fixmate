@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../constants/service_constants.dart';
 import 'service_request_flow.dart';
 import 'customer_profile_screen.dart';
+import 'customer_bookings_screen.dart';
 
 class CustomerDashboard extends StatefulWidget {
   @override
@@ -551,30 +552,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   Widget _buildBookingsScreen() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.calendar_today, size: 64, color: Colors.grey[400]),
-          SizedBox(height: 16),
-          Text(
-            'No Bookings Yet',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[600],
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Your service bookings will appear here',
-            style: TextStyle(
-              color: Colors.grey[500],
-            ),
-          ),
-        ],
-      ),
-    );
+    return CustomerBookingsScreen();
   }
 
   Widget _buildInboxScreen() {
