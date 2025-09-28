@@ -108,35 +108,68 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
 
   Widget _buildHomeScreen() {
     return SafeArea(
-      child: Column(
-        children: [
-          _buildHeader(),
-          _buildSearchBar(),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildServicesSection(),
-                  SizedBox(height: 24),
-                  _buildQuickActionsSection(),
-                  SizedBox(height: 24),
-                  _buildRecentBookingsSection(),
-                ],
-              ),
-            ),
-          ),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(),
+            _buildLocationSelector(),
+            _buildEmergencySection(),
+            _buildServicesSection(),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(20),
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hi, User!',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'What service do you need today?',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+              CircleAvatar(
+                radius: 25,
+                backgroundColor: Colors.blue[100],
+                child: Icon(Icons.person, color: Colors.blue),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationSelector() {
+    return Container(
+      margin: EdgeInsets.all(16),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -147,38 +180,103 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       ),
       child: Row(
         children: [
-          Icon(Icons.location_on, color: Colors.grey[600]),
-          SizedBox(width: 8),
+          Icon(Icons.location_on, color: Colors.blue),
+          SizedBox(width: 12),
           Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedLocation,
-                onChanged: (value) =>
-                    setState(() => _selectedLocation = value!),
-                items: [
-                  DropdownMenuItem(value: 'gampaha', child: Text('Gampaha')),
-                  DropdownMenuItem(value: 'colombo', child: Text('Colombo')),
-                  DropdownMenuItem(value: 'kandy', child: Text('Kandy')),
-                  DropdownMenuItem(value: 'galle', child: Text('Galle')),
-                ],
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Service Location',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  _selectedLocation.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
-          IconButton(
-            icon: Icon(Icons.notifications_outlined),
-            onPressed: () {
-              // TODO: Navigate to notifications
-            },
+          Icon(Icons.keyboard_arrow_down, color: Colors.grey),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmergencySection() {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.red[400]!, Colors.red[600]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.red.withOpacity(0.3),
+            blurRadius: 10,
+            offset: Offset(0, 4),
           ),
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: Colors.blue[100],
-            child: Text(
-              'A',
-              style: TextStyle(
-                color: Colors.blue[700],
-                fontWeight: FontWeight.bold,
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.emergency,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Emergency Service',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                Text(
+                  '24/7 Available',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withOpacity(0.9),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: _requestEmergencyService,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.red[600],
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
+            ),
+            child: Text(
+              'Call Now',
+              style: TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -186,56 +284,48 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     );
   }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: EdgeInsets.all(16),
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: 'Search for services or workers...',
-          prefixIcon: Icon(Icons.search),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        ),
-        onTap: () {
-          // TODO: Navigate to search screen
-        },
-      ),
-    );
-  }
-
   Widget _buildServicesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Services',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
+    return Container(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Our Services',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              TextButton(
+                onPressed: () {},
+                child: Text(
+                  'View All',
+                  style: TextStyle(color: Colors.blue),
+                ),
+              ),
+            ],
           ),
-        ),
-        SizedBox(height: 16),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 1.2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
+          SizedBox(height: 16),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+            ),
+            itemCount: _serviceCategories.length,
+            itemBuilder: (context, index) {
+              final service = _serviceCategories[index];
+              return _buildServiceCard(service);
+            },
           ),
-          itemCount: _serviceCategories.length,
-          itemBuilder: (context, index) {
-            final service = _serviceCategories[index];
-            return _buildServiceCard(service);
-          },
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -304,7 +394,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   Widget _buildServiceSelectionModal(Map<String, dynamic> service) {
-    List<String> subServices = ServiceTypes.getSubServices(service['id']);
+    List<String> subServices =
+        ServiceTypesExtension.getSubServices(service['id']);
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.6,
@@ -395,7 +486,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         icon = Icons.plumbing;
         break;
       case 'pipe installation':
-        icon = Icons.pipe;
+        icon = Icons.vertical_align_center; // Alternative to Icons.pipe
         break;
       case 'leak repair':
         icon = Icons.water_drop;
@@ -410,7 +501,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         icon = Icons.wc;
         break;
       case 'faucet installation':
-        icon = Icons.tap;
+        icon = Icons.water; // Alternative to Icons.tap
         break;
       default:
         icon = Icons.build;
@@ -438,24 +529,20 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           ),
         ),
         subtitle: subService == 'General Plumbing'
-            ? Text('Not sure? Get a general consultation')
+            ? Text('Not sure? Choose this option')
             : null,
         trailing: Icon(Icons.arrow_forward_ios, size: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        tileColor: Colors.grey[50],
       ),
     );
   }
 
   void _navigateToServiceRequest(
-      String serviceId, String subService, String serviceName) {
+      String serviceType, String subService, String serviceName) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ServiceRequestFlow(
-          serviceType: serviceId,
+          serviceType: serviceType,
           subService: subService,
           serviceName: serviceName,
         ),
@@ -463,256 +550,56 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     );
   }
 
-  Widget _buildQuickActionsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Quick Actions',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _buildQuickActionCard(
-                'Emergency Service',
-                Icons.emergency,
-                Colors.red,
-                () => _requestEmergencyService(),
-              ),
-            ),
-            SizedBox(width: 16),
-            Expanded(
-              child: _buildQuickActionCard(
-                'Schedule Later',
-                Icons.schedule,
-                Colors.green,
-                () => _scheduleService(),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuickActionCard(
-      String title, IconData icon, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 28),
-            ),
-            SizedBox(height: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRecentBookingsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Recent Bookings',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            TextButton(
-              onPressed: () => setState(() => _currentIndex = 1),
-              child: Text('View All'),
-            ),
-          ],
-        ),
-        SizedBox(height: 16),
-        // Placeholder for recent bookings
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Icon(Icons.bookmark_border, size: 48, color: Colors.grey[400]),
-              SizedBox(height: 16),
-              Text(
-                'No recent bookings',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Book your first service to see it here',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildBookingsScreen() {
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'My Bookings',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.calendar_today, size: 64, color: Colors.grey[400]),
+          SizedBox(height: 16),
+          Text(
+            'No Bookings Yet',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
             ),
-            SizedBox(height: 24),
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.calendar_today,
-                        size: 80, color: Colors.grey[400]),
-                    SizedBox(height: 16),
-                    Text(
-                      'No bookings yet',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Your service bookings will appear here',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                    SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: () => setState(() => _currentIndex = 0),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        'Book a Service',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Your service bookings will appear here',
+            style: TextStyle(
+              color: Colors.grey[500],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildInboxScreen() {
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Messages',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.chat, size: 64, color: Colors.grey[400]),
+          SizedBox(height: 16),
+          Text(
+            'No Messages',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
             ),
-            SizedBox(height: 24),
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.chat_bubble_outline,
-                        size: 80, color: Colors.grey[400]),
-                    SizedBox(height: 16),
-                    Text(
-                      'No messages yet',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Messages with service providers will appear here',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Messages from service providers will appear here',
+            style: TextStyle(
+              color: Colors.grey[500],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -726,7 +613,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Emergency Service'),
-        content: Text('Call emergency services or book urgent assistance?'),
+        content: Text(
+          'Are you experiencing a plumbing, electrical, or other emergency? Our 24/7 service team will connect you immediately.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

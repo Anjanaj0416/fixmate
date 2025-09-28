@@ -136,33 +136,28 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'What type of ${widget.serviceName.toLowerCase()} issue are you experiencing? *',
+            'What type of ${widget.serviceName.toLowerCase()} issue are you experiencing?',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
           ),
-          SizedBox(height: 16),
+          SizedBox(height: 20),
           ...issueTypes.map((issue) => _buildRadioOption(
-                issue['value']!,
                 issue['label']!,
+                issue['value']!,
                 _selectedIssueType,
                 (value) => setState(() => _selectedIssueType = value),
               )),
+          SizedBox(height: 16),
+          _buildInfoBox(),
         ],
       ),
     );
   }
 
   Widget _buildLocationStep() {
-    List<Map<String, String>> locations = [
-      {'value': 'kitchen', 'label': 'Kitchen'},
-      {'value': 'bathroom', 'label': 'Bathroom'},
-      {'value': 'basement', 'label': 'Basement'},
-      {'value': 'laundry_room', 'label': 'Laundry room'},
-      {'value': 'outdoor', 'label': 'Outdoor'},
-      {'value': 'multiple_locations', 'label': 'Multiple locations'},
-    ];
+    List<Map<String, String>> locations = _getLocationOptions();
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
@@ -170,42 +165,64 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Where is the ${widget.serviceName.toLowerCase()} problem located? *',
+            'Where is the ${widget.serviceName.toLowerCase()} service needed?',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
           ),
-          SizedBox(height: 16),
+          SizedBox(height: 20),
           ...locations.map((location) => _buildRadioOption(
-                location['value']!,
                 location['label']!,
+                location['value']!,
                 _selectedLocation,
                 (value) => setState(() => _selectedLocation = value),
               )),
-          SizedBox(height: 24),
+          SizedBox(height: 20),
           Text(
-            'Please describe the ${widget.serviceName.toLowerCase()} problem in detail *',
+            'Problem Description',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
           ),
-          SizedBox(height: 12),
-          TextField(
-            controller: _descriptionController,
-            maxLines: 4,
-            decoration: InputDecoration(
-              hintText:
-                  'Include any sounds, visible damage, water pressure issues, how long it\'s been happening, etc.',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              filled: true,
-              fillColor: Colors.white,
+          SizedBox(height: 8),
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[300]!),
             ),
-            onChanged: (value) => setState(() => _problemDescription = value),
+            child: TextField(
+              controller: _descriptionController,
+              maxLines: 4,
+              decoration: InputDecoration(
+                hintText: 'Describe the issue in detail...',
+                border: InputBorder.none,
+              ),
+              onChanged: (value) => setState(() => _problemDescription = value),
+            ),
           ),
+          if (widget.serviceType == 'plumbing') ...[
+            SizedBox(height: 20),
+            Text(
+              'Water Supply Status',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            SizedBox(height: 8),
+            _buildDropdown(
+              value: _waterSupplyStatus,
+              hint: 'Select water supply status',
+              items: ['Normal', 'Low pressure', 'No water', 'Intermittent'],
+              onChanged: (value) => setState(() => _waterSupplyStatus = value),
+            ),
+          ],
+          SizedBox(height: 16),
+          _buildInfoBox(),
         ],
       ),
     );
@@ -217,30 +234,8 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.serviceType == 'plumbing') ...[
-            Text(
-              'Water Supply Status',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            SizedBox(height: 12),
-            _buildDropdown(
-              value: _waterSupplyStatus,
-              hint: 'Select water supply status',
-              items: [
-                'Normal water supply',
-                'Low water pressure',
-                'No water supply',
-                'Not sure how to turn it off',
-              ],
-              onChanged: (value) => setState(() => _waterSupplyStatus = value),
-            ),
-            SizedBox(height: 24),
-          ],
           Text(
-            'Urgency',
+            'Service Urgency',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
@@ -255,11 +250,12 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
               'Same day',
               'Within 2-3 days',
               'Within a week',
-              'Flexible timing',
+              'Flexible'
             ],
-            onChanged: (value) => setState(() => _urgency = value),
+            onChanged: (value) =>
+                setState(() => _urgency = value ?? 'Same day'),
           ),
-          SizedBox(height: 24),
+          SizedBox(height: 20),
           Text(
             'Budget Range',
             style: TextStyle(
@@ -272,14 +268,14 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
             value: _budgetRange,
             hint: 'Select budget range',
             items: [
-              'Under LKR 5000',
               'LKR 5000-LKR 10000',
               'LKR 10000-LKR 15000',
               'LKR 15000-LKR 25000',
-              'Above LKR 25000',
-              'Get quotes first',
+              'LKR 25000-LKR 50000',
+              'LKR 50000+',
             ],
-            onChanged: (value) => setState(() => _budgetRange = value),
+            onChanged: (value) =>
+                setState(() => _budgetRange = value ?? 'LKR 10000-LKR 15000'),
           ),
           SizedBox(height: 24),
           Text(
@@ -379,9 +375,10 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
           if (widget.serviceType == 'plumbing' && _waterSupplyStatus != null)
             _buildSummaryRow('Water Supply Status:', _waterSupplyStatus!),
           _buildSummaryRow('Urgency:', _urgency),
-          _buildSummaryRow('Budget:', _budgetRange),
+          _buildSummaryRow('Budget Range:', _budgetRange),
           if (_selectedImages.isNotEmpty)
-            _buildSummaryRow('Photos:', '${_selectedImages.length} uploaded'),
+            _buildSummaryRow(
+                'Photos:', '${_selectedImages.length} image(s) attached'),
         ],
       ),
     );
@@ -389,7 +386,7 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
 
   Widget _buildSummaryRow(String label, String value) {
     return Padding(
-      padding: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -407,7 +404,7 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
             child: Text(
               value,
               style: TextStyle(
-                color: Colors.black87,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -420,41 +417,47 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
     switch (widget.serviceType) {
       case 'plumbing':
         return [
-          {'value': 'leaky_faucet_pipe', 'label': 'Leaky faucet/pipe'},
-          {'value': 'clogged_drain_toilet', 'label': 'Clogged drain/toilet'},
-          {'value': 'water_heater_problem', 'label': 'Water heater problem'},
-          {
-            'value': 'installation_replacement',
-            'label': 'Installation/replacement'
-          },
-          {'value': 'emergency_leak', 'label': 'Emergency leak'},
-          {'value': 'other', 'label': 'Other'},
+          {'label': 'Leak or drip', 'value': 'leak_or_drip'},
+          {'label': 'Blocked drain', 'value': 'blocked_drain'},
+          {'label': 'Installation needed', 'value': 'installation_needed'},
+          {'label': 'Repair needed', 'value': 'repair_needed'},
+          {'label': 'Emergency issue', 'value': 'emergency_issue'},
+          {'label': 'Other', 'value': 'other'},
         ];
       case 'electrical':
         return [
-          {'value': 'power_outage', 'label': 'Power outage'},
-          {'value': 'faulty_wiring', 'label': 'Faulty wiring'},
-          {'value': 'outlet_issues', 'label': 'Outlet issues'},
-          {'value': 'light_fixture_problem', 'label': 'Light fixture problem'},
-          {
-            'value': 'circuit_breaker_issues',
-            'label': 'Circuit breaker issues'
-          },
-          {'value': 'installation_new', 'label': 'New installation'},
-          {'value': 'other', 'label': 'Other'},
+          {'label': 'Power outage', 'value': 'power_outage'},
+          {'label': 'Faulty wiring', 'value': 'faulty_wiring'},
+          {'label': 'Installation needed', 'value': 'installation_needed'},
+          {'label': 'Repair needed', 'value': 'repair_needed'},
+          {'label': 'Emergency issue', 'value': 'emergency_issue'},
+          {'label': 'Other', 'value': 'other'},
         ];
       default:
         return [
-          {'value': 'repair_needed', 'label': 'Repair needed'},
-          {'value': 'installation_required', 'label': 'Installation required'},
-          {'value': 'maintenance_service', 'label': 'Maintenance service'},
-          {'value': 'consultation_needed', 'label': 'Consultation needed'},
-          {'value': 'other', 'label': 'Other'},
+          {'label': 'Installation needed', 'value': 'installation_needed'},
+          {'label': 'Repair needed', 'value': 'repair_needed'},
+          {'label': 'Maintenance required', 'value': 'maintenance_required'},
+          {'label': 'Emergency issue', 'value': 'emergency_issue'},
+          {'label': 'Other', 'value': 'other'},
         ];
     }
   }
 
-  Widget _buildRadioOption(String value, String label, String? selectedValue,
+  List<Map<String, String>> _getLocationOptions() {
+    return [
+      {'label': 'Kitchen', 'value': 'kitchen'},
+      {'label': 'Bathroom', 'value': 'bathroom'},
+      {'label': 'Living room', 'value': 'living_room'},
+      {'label': 'Bedroom', 'value': 'bedroom'},
+      {'label': 'Garage', 'value': 'garage'},
+      {'label': 'Basement', 'value': 'basement'},
+      {'label': 'Outdoor area', 'value': 'outdoor_area'},
+      {'label': 'Other', 'value': 'other'},
+    ];
+  }
+
+  Widget _buildRadioOption(String label, String value, String? selectedValue,
       Function(String) onChanged) {
     return Container(
       margin: EdgeInsets.only(bottom: 12),
@@ -505,24 +508,14 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
   Widget _buildImageUploadSection() {
     return Column(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildImageUploadCard(
-                icon: Icons.camera_alt,
-                label: 'Camera',
-                onTap: () => _pickImage(ImageSource.camera),
-              ),
-            ),
-            SizedBox(width: 16),
-            Expanded(
-              child: _buildImageUploadCard(
-                icon: Icons.photo_library,
-                label: 'Gallery',
-                onTap: () => _pickImage(ImageSource.gallery),
-              ),
-            ),
-          ],
+        // Only gallery upload option (camera removed as requested)
+        SizedBox(
+          width: double.infinity,
+          child: _buildImageUploadCard(
+            icon: Icons.photo_library,
+            label: 'Choose from Gallery',
+            onTap: () => _pickImage(ImageSource.gallery),
+          ),
         ),
         if (_selectedImages.isNotEmpty) ...[
           SizedBox(height: 16),
@@ -546,11 +539,19 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: Colors.grey[300]!),
         ),
-        child: Column(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 32, color: Colors.grey[600]),
-            SizedBox(height: 8),
-            Text(label, style: TextStyle(color: Colors.grey[600])),
+            Icon(icon, color: Colors.blue, size: 24),
+            SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.blue,
+              ),
+            ),
           ],
         ),
       ),
@@ -559,22 +560,24 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
 
   Widget _buildSelectedImagesGrid() {
     return Container(
-      height: 100,
+      height: 120,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: _selectedImages.length,
         itemBuilder: (context, index) {
           return Container(
-            margin: EdgeInsets.only(right: 8),
+            margin: EdgeInsets.only(right: 12),
             child: Stack(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    _selectedImages[index],
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.cover,
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    image: DecorationImage(
+                      image: FileImage(_selectedImages[index]),
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
                 Positioned(
@@ -590,8 +593,8 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
                       ),
                       child: Icon(
                         Icons.close,
-                        size: 16,
                         color: Colors.white,
+                        size: 16,
                       ),
                     ),
                   ),
@@ -606,30 +609,29 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
 
   Widget _buildInfoBox() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.blue[50],
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue[200]!),
+        border: Border.all(color: Colors.blue[100]!),
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: Colors.blue),
-          SizedBox(width: 12),
+          Icon(Icons.info_outline, color: Colors.blue[600], size: 20),
+          SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Why we ask these questions',
+                  'Service providers will review your request and send quotes.',
                   style: TextStyle(
-                    fontWeight: FontWeight.w600,
                     color: Colors.blue[700],
+                    fontSize: 12,
                   ),
                 ),
-                SizedBox(height: 4),
                 Text(
-                  'These details help us match you with the right service provider and ensure they come prepared with the right tools and knowledge.',
+                  'You\'ll be notified when quotes are available.',
                   style: TextStyle(
                     color: Colors.blue[600],
                     fontSize: 12,
@@ -822,45 +824,22 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
               Text('Your service request has been submitted successfully.'),
               SizedBox(height: 8),
               Text(
-                'Request ID: ${docRef.id.substring(0, 8).toUpperCase()}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Service providers will review your request and send quotes soon.',
-                style: TextStyle(color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
+                  'Service providers will review your request and send quotes.'),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(context); // Close dialog
-                Navigator.popUntil(
-                    context, (route) => route.isFirst); // Go back to dashboard
+                Navigator.pop(context); // Go back to dashboard
               },
-              child: Text('Go to Dashboard'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context); // Close dialog
-                Navigator.popUntil(
-                    context, (route) => route.isFirst); // Go back to dashboard
-                // TODO: Navigate to bookings tab
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-              child: Text('View My Requests',
-                  style: TextStyle(color: Colors.white)),
+              child: Text('OK'),
             ),
           ],
         ),
       );
     } catch (e) {
-      // Hide loading dialog if it's showing
+      // Hide loading dialog if showing
       Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -870,87 +849,5 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
         ),
       );
     }
-  }
-}
-
-// Additional service request model for better organization
-class ServiceRequest {
-  final String requestId;
-  final String customerId;
-  final String serviceType;
-  final String subService;
-  final String serviceName;
-  final String? issueType;
-  final String? location;
-  final String description;
-  final String? waterSupplyStatus;
-  final String urgency;
-  final String budgetRange;
-  final int imagesCount;
-  final bool hasImages;
-  final String status;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-
-  ServiceRequest({
-    required this.requestId,
-    required this.customerId,
-    required this.serviceType,
-    required this.subService,
-    required this.serviceName,
-    this.issueType,
-    this.location,
-    required this.description,
-    this.waterSupplyStatus,
-    required this.urgency,
-    required this.budgetRange,
-    this.imagesCount = 0,
-    this.hasImages = false,
-    required this.status,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  factory ServiceRequest.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-
-    return ServiceRequest(
-      requestId: doc.id,
-      customerId: data['customer_id'] ?? '',
-      serviceType: data['service_type'] ?? '',
-      subService: data['sub_service'] ?? '',
-      serviceName: data['service_name'] ?? '',
-      issueType: data['issue_type'],
-      location: data['location'],
-      description: data['description'] ?? '',
-      waterSupplyStatus: data['water_supply_status'],
-      urgency: data['urgency'] ?? 'Same day',
-      budgetRange: data['budget_range'] ?? '',
-      imagesCount: data['images_count'] ?? 0,
-      hasImages: data['has_images'] ?? false,
-      status: data['status'] ?? 'pending',
-      createdAt: (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      updatedAt: (data['updated_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
-    );
-  }
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'customer_id': customerId,
-      'service_type': serviceType,
-      'sub_service': subService,
-      'service_name': serviceName,
-      'issue_type': issueType,
-      'location': location,
-      'description': description,
-      'water_supply_status': waterSupplyStatus,
-      'urgency': urgency,
-      'budget_range': budgetRange,
-      'images_count': imagesCount,
-      'has_images': hasImages,
-      'status': status,
-      'created_at': FieldValue.serverTimestamp(),
-      'updated_at': FieldValue.serverTimestamp(),
-    };
   }
 }
