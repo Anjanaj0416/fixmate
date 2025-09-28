@@ -257,14 +257,8 @@ class CustomerService {
 class ServiceTypes {
   static const Map<String, Map<String, dynamic>> _serviceTypes = {
     'ac_repair': {
-      'name': 'Ac Repair',
-      'categories': [
-        'Window units',
-        'Central AC',
-        'Split systems',
-        'Maintenance',
-        'Installation'
-      ],
+      'name': 'AC Repair',
+      'categories': 'AC Repair',
       'specializations': [
         'Window units',
         'Central AC',
@@ -275,15 +269,7 @@ class ServiceTypes {
     },
     'appliance_repair': {
       'name': 'Appliance Repair',
-      'categories': [
-        'Refrigerator',
-        'Dishwasher',
-        'Microwave',
-        'Washing machine',
-        'Oven & stove',
-        'Dryer',
-        'Emergency service'
-      ],
+      'categories': 'Appliance Repair',
       'specializations': [
         'Refrigerator',
         'Dishwasher',
@@ -296,14 +282,7 @@ class ServiceTypes {
     },
     'carpentry': {
       'name': 'Carpentry',
-      'categories': [
-        'Custom furniture',
-        'Restoration',
-        'Repairs',
-        'Decorative',
-        'Cabinet making',
-        'Wooden flooring'
-      ],
+      'categories': 'Carpentry',
       'specializations': [
         'Custom furniture',
         'Restoration',
@@ -315,13 +294,7 @@ class ServiceTypes {
     },
     'cleaning': {
       'name': 'Cleaning',
-      'categories': [
-        'Deep cleaning',
-        'Post-construction',
-        'Regular maintenance',
-        'Carpet cleaning',
-        'Upholstery cleaning'
-      ],
+      'categories': 'Cleaning',
       'specializations': [
         'Deep cleaning',
         'Post-construction',
@@ -332,15 +305,7 @@ class ServiceTypes {
     },
     'electrical': {
       'name': 'Electrical',
-      'categories': [
-        'Installation',
-        'Wiring',
-        'Safety inspection',
-        'Emergency service',
-        'Lighting systems',
-        'Solar panel setup',
-        'Maintenance'
-      ],
+      'categories': 'Electrical',
       'specializations': [
         'Installation',
         'Wiring',
@@ -353,12 +318,7 @@ class ServiceTypes {
     },
     'gardening': {
       'name': 'Gardening',
-      'categories': [
-        'Landscaping',
-        'Lawn care',
-        'Tree trimming',
-        'Irrigation systems'
-      ],
+      'categories': 'Gardening',
       'specializations': [
         'Landscaping',
         'Lawn care',
@@ -368,13 +328,7 @@ class ServiceTypes {
     },
     'general_maintenance': {
       'name': 'General Maintenance',
-      'categories': [
-        'Property upkeep',
-        'Preventive maintenance',
-        'Multiple repairs',
-        'Furniture assembly',
-        'Small fixture replacements'
-      ],
+      'categories': 'General Maintenance',
       'specializations': [
         'Property upkeep',
         'Preventive maintenance',
@@ -385,13 +339,7 @@ class ServiceTypes {
     },
     'masonry': {
       'name': 'Masonry',
-      'categories': [
-        'Stone work',
-        'Brick work',
-        'Concrete',
-        'Tile setting',
-        'Wall finishing'
-      ],
+      'categories': 'Masonry',
       'specializations': [
         'Stone work',
         'Brick work',
@@ -402,14 +350,7 @@ class ServiceTypes {
     },
     'painting': {
       'name': 'Painting',
-      'categories': [
-        'Interior',
-        'Exterior',
-        'Commercial',
-        'Decorative',
-        'Waterproofing',
-        'Wall textures'
-      ],
+      'categories': 'Painting',
       'specializations': [
         'Interior',
         'Exterior',
@@ -421,15 +362,7 @@ class ServiceTypes {
     },
     'plumbing': {
       'name': 'Plumbing',
-      'categories': [
-        'Installation',
-        'Water heater service',
-        'Emergency repairs',
-        'Maintenance',
-        'Drain cleaning',
-        'Pipe replacement',
-        'Bathroom fittings'
-      ],
+      'categories': 'Plumbing',
       'specializations': [
         'Installation',
         'Water heater service',
@@ -442,13 +375,7 @@ class ServiceTypes {
     },
     'roofing': {
       'name': 'Roofing',
-      'categories': [
-        'Roof installation',
-        'Leak repair',
-        'Tile replacement',
-        'Waterproofing',
-        'Gutter maintenance'
-      ],
+      'categories': 'Roofing',
       'specializations': [
         'Roof installation',
         'Leak repair',
@@ -480,9 +407,17 @@ class ServiceTypes {
         _serviceTypes[serviceKey]?['specializations'] ?? []);
   }
 
+  // Updated to return single category string instead of list
+  static String getCategory(String? serviceKey) {
+    if (serviceKey == null || serviceKey.isEmpty) return '';
+    return _serviceTypes[serviceKey]?['categories'] ?? '';
+  }
+
+  // Deprecated - use getCategory instead
+  @Deprecated('Use getCategory instead')
   static List<String> getCategories(String? serviceKey) {
-    if (serviceKey == null || serviceKey.isEmpty) return [];
-    return List<String>.from(_serviceTypes[serviceKey]?['categories'] ?? []);
+    String category = getCategory(serviceKey);
+    return category.isNotEmpty ? [category] : [];
   }
 
   // Add helper method to check if service exists
