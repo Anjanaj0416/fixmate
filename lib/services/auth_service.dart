@@ -1,10 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Get current user
@@ -32,6 +30,7 @@ class AuthService {
         'phone': phone,
         'address': address,
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
 
       return userCredential;
@@ -55,39 +54,10 @@ class AuthService {
     }
   }
 
-  // Sign in with Google
-  Future<UserCredential?> signInWithGoogle() async {
+  // Send password reset email
+  Future<void> sendPasswordResetEmail(String email) async {
     try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return null;
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      UserCredential userCredential = await _auth.signInWithCredential(
-        credential,
-      );
-
-      // Check if user exists in Firestore, if not create
-      DocumentSnapshot userDoc = await _firestore
-          .collection('users')
-          .doc(userCredential.user!.uid)
-          .get();
-      if (!userDoc.exists) {
-        await _firestore.collection('users').doc(userCredential.user!.uid).set({
-          'name': userCredential.user!.displayName ?? '',
-          'email': userCredential.user!.email ?? '',
-          'phone': '',
-          'address': '',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      return userCredential;
+      await _auth.sendPasswordResetEmail(email: email);
     } catch (e) {
       throw e;
     }
@@ -95,17 +65,181 @@ class AuthService {
 
   // Sign out
   Future<void> signOut() async {
-    await _googleSignIn.signOut();
-    await _auth.signOut();
+    try {
+      await _auth.signOut();
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  // Update user profile
+  Future<void> updateUserProfile({
+    required String uid,
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      data['updatedAt'] = FieldValue.serverTimestamp();
+      await _firestore.collection('users').doc(uid).update(data);
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  // Get user data
+  Future<DocumentSnapshot> getUserData(String uid) async {
+    try {
+      return await _firestore.collection('users').doc(uid).get();
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  // Stream user data
+  Stream<DocumentSnapshot> streamUserData(String uid) {
+    return _firestore.collection('users').doc(uid).snapshots();
+  }
+
+  // Check if user has completed profile setup
+  Future<bool> hasCompletedProfile(String uid) async {
+    try {
+      DocumentSnapshot userDoc =
+          await _firestore.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+        return userData.containsKey('accountType') &&
+            userData['accountType'] != null;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
   }
 
   // Update account type
-  Future<void> updateAccountType(String accountType) async {
-    if (currentUser != null) {
-      await _firestore.collection('users').doc(currentUser!.uid).update({
+  Future<void> updateAccountType({
+    required String uid,
+    required String accountType,
+  }) async {
+    try {
+      await _firestore.collection('users').doc(uid).update({
         'accountType': accountType,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  // Create or update user document
+  Future<void> createOrUpdateUser({
+    required String uid,
+    required Map<String, dynamic> userData,
+  }) async {
+    try {
+      DocumentReference userRef = _firestore.collection('users').doc(uid);
+      DocumentSnapshot userDoc = await userRef.get();
+
+      if (userDoc.exists) {
+        // Update existing user
+        userData['updatedAt'] = FieldValue.serverTimestamp();
+        await userRef.update(userData);
+      } else {
+        // Create new user
+        userData['createdAt'] = FieldValue.serverTimestamp();
+        userData['updatedAt'] = FieldValue.serverTimestamp();
+        await userRef.set(userData);
+      }
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  // Delete user account
+  Future<void> deleteAccount() async {
+    try {
+      User? user = _auth.currentUser;
+      if (user != null) {
+        // Delete user document from Firestore
+        await _firestore.collection('users').doc(user.uid).delete();
+
+        // Delete user from Firebase Auth
+        await user.delete();
+      }
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  // Update email
+  Future<void> updateEmail(String newEmail) async {
+    try {
+      User? user = _auth.currentUser;
+      if (user != null) {
+        await user.updateEmail(newEmail);
+
+        // Update email in Firestore
+        await _firestore.collection('users').doc(user.uid).update({
+          'email': newEmail,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  // Update password
+  Future<void> updatePassword(String newPassword) async {
+    try {
+      User? user = _auth.currentUser;
+      if (user != null) {
+        await user.updatePassword(newPassword);
+      }
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  // Reauthenticate user (required for sensitive operations)
+  Future<void> reauthenticate(String email, String password) async {
+    try {
+      User? user = _auth.currentUser;
+      if (user != null) {
+        AuthCredential credential = EmailAuthProvider.credential(
+          email: email,
+          password: password,
+        );
+        await user.reauthenticateWithCredential(credential);
+      }
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  // Check if email is verified
+  bool get isEmailVerified => _auth.currentUser?.emailVerified ?? false;
+
+  // Send email verification
+  Future<void> sendEmailVerification() async {
+    try {
+      User? user = _auth.currentUser;
+      if (user != null && !user.emailVerified) {
+        await user.sendEmailVerification();
+      }
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  // Reload user data
+  Future<void> reloadUser() async {
+    try {
+      User? user = _auth.currentUser;
+      if (user != null) {
+        await user.reload();
+      }
+    } catch (e) {
+      throw e;
     }
   }
 }

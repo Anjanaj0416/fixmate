@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'create_account_screen.dart';
 import 'account_type_screen.dart';
+// Import your main app screen here when available
+// import 'main_app_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   @override
@@ -14,9 +15,9 @@ class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _rememberMe = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _rememberMe = false;
 
   @override
   void dispose() {
@@ -31,13 +32,15 @@ class _SignInScreenState extends State<SignInScreen> {
     setState(() => _isLoading = true);
 
     try {
-      UserCredential userCredential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
-          );
+      UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
 
-      // Check if user has account type set
+      _showSuccessSnackBar('Welcome back!');
+
+      // Check if user has completed profile setup
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
@@ -47,29 +50,29 @@ class _SignInScreenState extends State<SignInScreen> {
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
         if (userData.containsKey('accountType') &&
             userData['accountType'] != null) {
-          // User has account type, navigate to main app (for now, just show success)
-          _showSuccessSnackBar('Welcome back!');
-          // TODO: Navigate to main app dashboard
+          // User has completed setup, navigate to main app
+          // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => MainAppScreen()));
+          _showSuccessSnackBar('Redirecting to main app...');
         } else {
-          // User needs to select account type
+          // User needs to complete account type selection
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => AccountTypeScreen()),
           );
         }
       } else {
-        // Navigate to account type selection for new users
+        // User document doesn't exist, go to account type selection
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => AccountTypeScreen()),
         );
       }
     } on FirebaseAuthException catch (e) {
-      String errorMessage = 'Sign in failed';
+      String errorMessage;
 
       switch (e.code) {
         case 'user-not-found':
-          errorMessage = 'No user found with this email';
+          errorMessage = 'No user found for this email';
           break;
         case 'wrong-password':
           errorMessage = 'Incorrect password';
@@ -81,7 +84,10 @@ class _SignInScreenState extends State<SignInScreen> {
           errorMessage = 'This account has been disabled';
           break;
         case 'too-many-requests':
-          errorMessage = 'Too many attempts. Please try again later';
+          errorMessage = 'Too many failed attempts. Please try again later';
+          break;
+        case 'network-request-failed':
+          errorMessage = 'Network error. Please check your connection';
           break;
         default:
           errorMessage = e.message ?? 'Sign in failed';
@@ -95,79 +101,10 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  Future<void> _signInWithGoogle() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      UserCredential userCredential = await FirebaseAuth.instance
-          .signInWithCredential(credential);
-
-      // Check if user exists in Firestore
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCredential.user!.uid)
-          .get();
-
-      if (!userDoc.exists) {
-        // Create new user document
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .set({
-              'name': userCredential.user!.displayName ?? '',
-              'email': userCredential.user!.email ?? '',
-              'phone': '',
-              'address': '',
-              'createdAt': FieldValue.serverTimestamp(),
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
-
-        // Navigate to account type selection for new users
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => AccountTypeScreen()),
-        );
-      } else {
-        // Existing user
-        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
-        if (userData.containsKey('accountType') &&
-            userData['accountType'] != null) {
-          // User has account type, navigate to main app
-          _showSuccessSnackBar('Welcome back!');
-          // TODO: Navigate to main app dashboard
-        } else {
-          // User needs to select account type
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => AccountTypeScreen()),
-          );
-        }
-      }
-    } catch (e) {
-      _showErrorSnackBar('Google sign-in failed: ${e.toString()}');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
   Future<void> _resetPassword() async {
     String email = _emailController.text.trim();
-
     if (email.isEmpty) {
-      _showErrorSnackBar('Please enter your email address first');
+      _showErrorSnackBar('Please enter your email first');
       return;
     }
 
@@ -175,22 +112,23 @@ class _SignInScreenState extends State<SignInScreen> {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       _showSuccessSnackBar('Password reset email sent to $email');
     } on FirebaseAuthException catch (e) {
-      String errorMessage = 'Failed to send reset email';
-
+      String errorMessage;
       switch (e.code) {
         case 'user-not-found':
-          errorMessage = 'No user found with this email';
+          errorMessage = 'No user found for this email';
           break;
         case 'invalid-email':
           errorMessage = 'Invalid email address';
           break;
+        case 'too-many-requests':
+          errorMessage = 'Too many requests. Please try again later';
+          break;
         default:
           errorMessage = e.message ?? 'Failed to send reset email';
       }
-
       _showErrorSnackBar(errorMessage);
     } catch (e) {
-      _showErrorSnackBar('An unexpected error occurred');
+      _showErrorSnackBar('An error occurred while sending reset email');
     }
   }
 
@@ -200,6 +138,7 @@ class _SignInScreenState extends State<SignInScreen> {
         content: Text(message),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 4),
       ),
     );
   }
@@ -210,6 +149,7 @@ class _SignInScreenState extends State<SignInScreen> {
         content: Text(message),
         backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -235,147 +175,97 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: Color(0xFF2196F3),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.build, color: Colors.white, size: 20),
-            ),
-            SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Welcome Back',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                Text(
-                  'Sign in to FixMate',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(height: 32),
+              SizedBox(height: 48),
 
-              // Email Address
+              // Header
               Text(
-                'Email Address',
+                'Welcome Back',
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
                   color: Colors.black87,
                 ),
               ),
               SizedBox(height: 8),
-              TextFormField(
-                controller: _emailController,
-                validator: _validateEmail,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  hintText: 'Enter your email',
-                  hintStyle: TextStyle(color: Colors.grey[500]),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Color(0xFF2196F3), width: 2),
-                  ),
-                  errorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.red, width: 1),
-                  ),
-                  focusedErrorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.red, width: 2),
-                  ),
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-              ),
-              SizedBox(height: 24),
-
-              // Password
               Text(
-                'Password',
+                'Sign in to your FixMate account',
                 style: TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
+                  color: Colors.grey[600],
                 ),
               ),
-              SizedBox(height: 8),
-              TextFormField(
-                controller: _passwordController,
-                validator: _validatePassword,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  hintText: 'Enter your password',
-                  hintStyle: TextStyle(color: Colors.grey[500]),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Color(0xFF2196F3), width: 2),
-                  ),
-                  errorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.red, width: 1),
-                  ),
-                  focusedErrorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.red, width: 2),
-                  ),
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                      color: Colors.grey[400],
+              SizedBox(height: 48),
+
+              // Form
+              Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    // Email Field
+                    TextFormField(
+                      controller: _emailController,
+                      validator: _validateEmail,
+                      keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      decoration: InputDecoration(
+                        labelText: 'Email',
+                        hintText: 'Enter your email',
+                        prefixIcon: Icon(Icons.email_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Color(0xFF2196F3)),
+                        ),
+                      ),
                     ),
-                    onPressed: () {
-                      setState(() => _obscurePassword = !_obscurePassword);
-                    },
-                  ),
+                    SizedBox(height: 16),
+
+                    // Password Field
+                    TextFormField(
+                      controller: _passwordController,
+                      validator: _validatePassword,
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        hintText: 'Enter your password',
+                        prefixIcon: Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () {
+                            setState(
+                                () => _obscurePassword = !_obscurePassword);
+                          },
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Color(0xFF2196F3)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               SizedBox(height: 16),
@@ -388,8 +278,9 @@ class _SignInScreenState extends State<SignInScreen> {
                     children: [
                       Checkbox(
                         value: _rememberMe,
-                        onChanged: (value) =>
-                            setState(() => _rememberMe = value!),
+                        onChanged: (value) {
+                          setState(() => _rememberMe = value ?? false);
+                        },
                         activeColor: Color(0xFF2196F3),
                       ),
                       Text(
@@ -426,6 +317,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     elevation: 0,
+                    disabledBackgroundColor: Colors.grey[300],
                   ),
                   child: _isLoading
                       ? SizedBox(
@@ -445,60 +337,21 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                 ),
               ),
-              SizedBox(height: 24),
-
-              // Divider
-              Row(
-                children: [
-                  Expanded(child: Divider(color: Colors.grey[300])),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      'OR',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Expanded(child: Divider(color: Colors.grey[300])),
-                ],
-              ),
-              SizedBox(height: 24),
-
-              // Google Sign In
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _signInWithGoogle,
-                  icon: Icon(Icons.login, color: Colors.red, size: 20),
-                  label: Text(
-                    'Sign in with Google',
-                    style: TextStyle(fontSize: 16, color: Colors.black87),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    side: BorderSide(color: Colors.grey[300]!),
-                  ),
-                ),
-              ),
-              SizedBox(height: 24),
+              SizedBox(height: 40),
 
               // Sign Up Link
               Center(
                 child: TextButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => CreateAccountScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: _isLoading
+                      ? null
+                      : () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CreateAccountScreen(),
+                            ),
+                          );
+                        },
                   child: RichText(
                     text: TextSpan(
                       text: "Don't have an account? ",
@@ -516,7 +369,6 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                 ),
               ),
-
               SizedBox(height: 48),
 
               // Terms and Privacy

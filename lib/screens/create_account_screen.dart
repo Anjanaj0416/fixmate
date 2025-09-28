@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'sign_in_screen.dart';
 import 'account_type_screen.dart';
 
@@ -44,24 +43,26 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     setState(() => _isLoading = true);
 
     try {
-      UserCredential userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
-          );
+      UserCredential userCredential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
 
       // Save user data to Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
           .set({
-            'name': _nameController.text.trim(),
-            'email': _emailController.text.trim(),
-            'phone': _phoneController.text.trim(),
-            'address': _addressController.text.trim(),
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'address': _addressController.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      _showSuccessSnackBar('Account created successfully!');
 
       // Navigate to account type selection
       Navigator.pushReplacement(
@@ -81,6 +82,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         case 'invalid-email':
           errorMessage = 'The email address is not valid';
           break;
+        case 'operation-not-allowed':
+          errorMessage = 'Email/password accounts are not enabled';
+          break;
+        case 'network-request-failed':
+          errorMessage = 'Network error. Please check your connection';
+          break;
         default:
           errorMessage = e.message ?? 'Registration failed';
       }
@@ -93,64 +100,24 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     }
   }
 
-  Future<void> _signUpWithGoogle() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      UserCredential userCredential = await FirebaseAuth.instance
-          .signInWithCredential(credential);
-
-      // Check if user already exists
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCredential.user!.uid)
-          .get();
-
-      if (!userDoc.exists) {
-        // Save user data to Firestore for new users
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .set({
-              'name': userCredential.user!.displayName ?? '',
-              'email': userCredential.user!.email ?? '',
-              'phone': '',
-              'address': '',
-              'createdAt': FieldValue.serverTimestamp(),
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
-      }
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => AccountTypeScreen()),
-      );
-    } catch (e) {
-      _showErrorSnackBar('Google sign-up failed: ${e.toString()}');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 4),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -189,7 +156,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     if (value == null || value.isEmpty) {
       return 'Please enter your phone number';
     }
-    if (value.length < 10) {
+    if (!RegExp(r'^\+?[\d\s\-\(\)]{10,}$').hasMatch(value)) {
       return 'Please enter a valid phone number';
     }
     return null;
@@ -199,6 +166,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     if (value == null || value.isEmpty) {
       return 'Please enter your address';
     }
+    if (value.length < 5) {
+      return 'Please enter a complete address';
+    }
     return null;
   }
 
@@ -206,103 +176,214 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: IconThemeData(color: Colors.black),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              SizedBox(height: 32),
+
+              // Header
               Text(
                 'Create Account',
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 32,
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
                 ),
               ),
-              SizedBox(height: 32),
-
-              // Full Name
-              _buildInputField(
-                label: 'Full Name',
-                hintText: 'Enter your full name',
-                controller: _nameController,
-                validator: _validateName,
-                keyboardType: TextInputType.name,
+              SizedBox(height: 8),
+              Text(
+                'Join FixMate and connect with skilled professionals',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
               ),
-              SizedBox(height: 16),
+              SizedBox(height: 40),
 
-              // Email
-              _buildInputField(
-                label: 'Email',
-                hintText: 'Enter your email',
-                controller: _emailController,
-                validator: _validateEmail,
-                keyboardType: TextInputType.emailAddress,
-              ),
-              SizedBox(height: 16),
+              // Form
+              Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    // Name Field
+                    TextFormField(
+                      controller: _nameController,
+                      validator: _validateName,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: InputDecoration(
+                        labelText: 'Full Name',
+                        hintText: 'Enter your full name',
+                        prefixIcon: Icon(Icons.person_outline),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Color(0xFF2196F3)),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16),
 
-              // Phone Number
-              _buildInputField(
-                label: 'Phone Number',
-                hintText: 'Enter your phone number',
-                controller: _phoneController,
-                validator: _validatePhone,
-                keyboardType: TextInputType.phone,
-              ),
-              SizedBox(height: 16),
+                    // Email Field
+                    TextFormField(
+                      controller: _emailController,
+                      validator: _validateEmail,
+                      keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      decoration: InputDecoration(
+                        labelText: 'Email',
+                        hintText: 'Enter your email',
+                        prefixIcon: Icon(Icons.email_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Color(0xFF2196F3)),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16),
 
-              // Address
-              _buildInputField(
-                label: 'Address',
-                hintText: 'Enter your address',
-                controller: _addressController,
-                validator: _validateAddress,
-                keyboardType: TextInputType.streetAddress,
-                maxLines: 2,
-              ),
-              SizedBox(height: 16),
+                    // Phone Field
+                    TextFormField(
+                      controller: _phoneController,
+                      validator: _validatePhone,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        labelText: 'Phone Number',
+                        hintText: 'Enter your phone number',
+                        prefixIcon: Icon(Icons.phone_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Color(0xFF2196F3)),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16),
 
-              // Password
-              _buildPasswordField(
-                label: 'Password',
-                hintText: 'Enter your password',
-                controller: _passwordController,
-                validator: _validatePassword,
-                obscureText: _obscurePassword,
-                onToggleVisibility: () {
-                  setState(() => _obscurePassword = !_obscurePassword);
-                },
-              ),
-              SizedBox(height: 16),
+                    // Address Field
+                    TextFormField(
+                      controller: _addressController,
+                      validator: _validateAddress,
+                      textCapitalization: TextCapitalization.words,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        labelText: 'Address',
+                        hintText: 'Enter your address',
+                        prefixIcon: Icon(Icons.location_on_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Color(0xFF2196F3)),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16),
 
-              // Confirm Password
-              _buildPasswordField(
-                label: 'Confirm Password',
-                hintText: 'Confirm your password',
-                controller: _confirmPasswordController,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please confirm your password';
-                  }
-                  return null;
-                },
-                obscureText: _obscureConfirmPassword,
-                onToggleVisibility: () {
-                  setState(
-                    () => _obscureConfirmPassword = !_obscureConfirmPassword,
-                  );
-                },
+                    // Password Field
+                    TextFormField(
+                      controller: _passwordController,
+                      validator: _validatePassword,
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        hintText: 'Enter your password',
+                        prefixIcon: Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () {
+                            setState(
+                                () => _obscurePassword = !_obscurePassword);
+                          },
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Color(0xFF2196F3)),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+
+                    // Confirm Password Field
+                    TextFormField(
+                      controller: _confirmPasswordController,
+                      obscureText: _obscureConfirmPassword,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please confirm your password';
+                        }
+                        if (value != _passwordController.text) {
+                          return 'Passwords do not match';
+                        }
+                        return null;
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Confirm Password',
+                        hintText: 'Confirm your password',
+                        prefixIcon: Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscureConfirmPassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () {
+                            setState(() => _obscureConfirmPassword =
+                                !_obscureConfirmPassword);
+                          },
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Color(0xFF2196F3)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               SizedBox(height: 32),
 
@@ -319,6 +400,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     elevation: 0,
+                    disabledBackgroundColor: Colors.grey[300],
                   ),
                   child: _isLoading
                       ? SizedBox(
@@ -338,45 +420,28 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                         ),
                 ),
               ),
-              SizedBox(height: 16),
-
-              // Google Sign Up
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _signUpWithGoogle,
-                  icon: Icon(Icons.login, color: Colors.red, size: 20),
-                  label: Text(
-                    'Sign up with Google',
-                    style: TextStyle(fontSize: 16, color: Colors.black87),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    side: BorderSide(color: Colors.grey[300]!),
-                  ),
-                ),
-              ),
               SizedBox(height: 24),
 
               // Sign In Link
               Center(
                 child: TextButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => SignInScreen()),
-                    );
-                  },
+                  onPressed: _isLoading
+                      ? null
+                      : () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => SignInScreen(),
+                            ),
+                          );
+                        },
                   child: RichText(
                     text: TextSpan(
-                      text: 'Already have an account? ',
+                      text: "Already have an account? ",
                       style: TextStyle(color: Colors.grey[600], fontSize: 14),
                       children: [
                         TextSpan(
-                          text: 'Sign In',
+                          text: 'Sign in',
                           style: TextStyle(
                             color: Color(0xFF2196F3),
                             fontWeight: FontWeight.bold,
@@ -387,122 +452,20 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   ),
                 ),
               ),
+              SizedBox(height: 32),
+
+              // Terms and Privacy
+              Center(
+                child: Text(
+                  'By creating an account, you agree to our Terms of Service and Privacy Policy',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+              ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildInputField({
-    required String label,
-    required String hintText,
-    required TextEditingController controller,
-    required String? Function(String?) validator,
-    TextInputType? keyboardType,
-    int maxLines = 1,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          validator: validator,
-          keyboardType: keyboardType,
-          maxLines: maxLines,
-          decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle: TextStyle(color: Colors.grey[500]),
-            filled: true,
-            fillColor: Colors.grey[100],
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Color(0xFF2196F3), width: 2),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.red, width: 1),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.red, width: 2),
-            ),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPasswordField({
-    required String label,
-    required String hintText,
-    required TextEditingController controller,
-    required String? Function(String?) validator,
-    required bool obscureText,
-    required VoidCallback onToggleVisibility,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          validator: validator,
-          obscureText: obscureText,
-          decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle: TextStyle(color: Colors.grey[500]),
-            filled: true,
-            fillColor: Colors.grey[100],
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Color(0xFF2196F3), width: 2),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.red, width: 1),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.red, width: 2),
-            ),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            suffixIcon: IconButton(
-              icon: Icon(
-                obscureText ? Icons.visibility_off : Icons.visibility,
-                color: Colors.grey[400],
-              ),
-              onPressed: onToggleVisibility,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
