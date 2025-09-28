@@ -199,12 +199,12 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
           overtimeHourlyLkr: double.tryParse(_overtimeRate) ?? 0.0,
         ),
         availability: WorkerAvailability(
-          workingHours: {
-            'start': _workingHoursStart,
-            'end': _workingHoursEnd,
-          },
-          workingDays: _selectedWorkingDays.toList(),
+          availableToday: true, // or based on your logic
+          availableWeekends: _availableWeekends,
           emergencyService: _emergencyService,
+          workingHours:
+              '${_workingHoursStart} - ${_workingHoursEnd}', // Convert to string format
+          responseTimeMinutes: 30, // or another appropriate default value
         ),
         capabilities: WorkerCapabilities(
           toolsOwned: _toolsOwned,
