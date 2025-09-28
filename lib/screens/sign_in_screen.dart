@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'create_account_screen.dart';
 import 'account_type_screen.dart';
+import 'worker_registration_flow.dart';
 // Import your main app screen here when available
 // import 'main_app_screen.dart';
 
@@ -48,11 +49,40 @@ class _SignInScreenState extends State<SignInScreen> {
 
       if (userDoc.exists) {
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+
         if (userData.containsKey('accountType') &&
             userData['accountType'] != null) {
-          // User has completed setup, navigate to main app
-          // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => MainAppScreen()));
-          _showSuccessSnackBar('Redirecting to main app...');
+          String accountType = userData['accountType'];
+
+          // Navigate based on account type
+          if (accountType == 'service_provider') {
+            _showSuccessSnackBar('Redirecting to worker dashboard...');
+            await Future.delayed(
+                Duration(seconds: 1)); // Brief delay to show message
+
+            Navigator.pushReplacementNamed(context, '/worker_dashboard');
+          } else if (accountType == 'customer') {
+            _showSuccessSnackBar('Redirecting to customer dashboard...');
+            await Future.delayed(Duration(seconds: 1));
+
+            // Navigate to customer dashboard when available
+            Navigator.pushReplacementNamed(context, '/customer_dashboard');
+          } else if (accountType == 'service_provider_pending') {
+            // User started worker registration but didn't complete it
+            _showSuccessSnackBar('Completing your worker registration...');
+            await Future.delayed(Duration(seconds: 1));
+
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => WorkerRegistrationFlow()),
+            );
+          } else {
+            // Unknown account type, go to account type selection
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => AccountTypeScreen()),
+            );
+          }
         } else {
           // User needs to complete account type selection
           Navigator.pushReplacement(

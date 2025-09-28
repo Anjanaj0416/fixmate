@@ -9,6 +9,8 @@ import 'screens/sign_in_screen.dart';
 import 'screens/create_account_screen.dart';
 import 'screens/account_type_screen.dart';
 import 'screens/worker_registration_flow.dart';
+// Import your customer dashboard screen when you create it
+// import 'screens/customer_dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +41,8 @@ class FixMateApp extends StatelessWidget {
         '/account_type': (context) => AccountTypeScreen(),
         '/worker_registration': (context) => WorkerRegistrationFlow(),
         '/worker_dashboard': (context) => WorkerDashboardScreen(),
+        // Add customer dashboard route when the screen is created
+        // '/customer_dashboard': (context) => CustomerDashboardScreen(),
       },
       onGenerateRoute: (settings) {
         // Handle dynamic routes or routes with parameters
@@ -46,6 +50,33 @@ class FixMateApp extends StatelessWidget {
           case '/worker_dashboard':
             return MaterialPageRoute(
               builder: (context) => WorkerDashboardScreen(),
+            );
+          case '/customer_dashboard':
+            // Temporary fallback - replace with actual CustomerDashboardScreen
+            return MaterialPageRoute(
+              builder: (context) => Scaffold(
+                appBar: AppBar(title: Text('Customer Dashboard')),
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('Customer Dashboard'),
+                      Text('(Under Development)'),
+                      ElevatedButton(
+                        onPressed: () async {
+                          await FirebaseAuth.instance.signOut();
+                          Navigator.pushNamedAndRemoveUntil(
+                            context,
+                            '/welcome',
+                            (route) => false,
+                          );
+                        },
+                        child: Text('Logout'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             );
           default:
             return null;
