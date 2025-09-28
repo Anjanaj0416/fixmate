@@ -356,7 +356,7 @@ class _WorkerSelectionScreenState extends State<WorkerSelectionScreen> {
               children: [
                 _buildDetailChip(Icons.work, '${worker.experienceYears} years'),
                 SizedBox(width: 8),
-                _buildDetailChip(Icons.location_on, '${worker.location.area}'),
+                _buildDetailChip(Icons.location_on, '${worker.location.city}'),
                 SizedBox(width: 8),
                 if (worker.capabilities.toolsOwned)
                   _buildDetailChip(Icons.build, 'Own tools'),

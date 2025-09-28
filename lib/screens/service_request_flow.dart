@@ -26,6 +26,10 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
   int _currentStep = 0;
   final int _totalSteps = 4;
 
+  // Add these missing variables:
+  bool _isLoading = false;
+  String _currentAddress = '';
+
   // Form data
   String? _selectedIssueType;
   String? _selectedLocation;
@@ -804,7 +808,8 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
               subService: widget.subService,
               issueType: _selectedIssueType ?? 'other',
               problemDescription: _problemDescription,
-              problemImageUrls: _selectedImages, // Convert if needed
+              problemImageUrls:
+                  _selectedImages.map((file) => file.path).toList(),
               location: _selectedLocation ?? 'other',
               address: _currentAddress,
               urgency: _urgency,
