@@ -1312,7 +1312,11 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
       );
 
       // Navigate back to account type or main screen
-      Navigator.pop(context);
+      await Future.delayed(Duration(seconds: 1));
+
+      // Navigate to worker dashboard and remove all previous routes
+      Navigator.pushNamedAndRemoveUntil(
+          context, '/worker_dashboard', (route) => false);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
