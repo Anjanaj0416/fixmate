@@ -17,52 +17,92 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
 
   final List<Map<String, dynamic>> _serviceCategories = [
     {
-      'id': 'plumbing',
-      'name': 'Plumbing',
-      'icon': Icons.plumbing,
-      'color': Colors.blue,
-      'serviceCount': 6,
-      'description': 'Professional plumbing services',
+      'id': 'ac_repair',
+      'name': 'Ac Repair',
+      'icon': Icons.ac_unit,
+      'color': Colors.cyan,
+      'serviceCount': 5,
+      'description': 'AC installation, repair and maintenance',
     },
     {
-      'id': 'electrical',
-      'name': 'Electrical',
-      'icon': Icons.electrical_services,
+      'id': 'appliance_repair',
+      'name': 'Appliance Repair',
+      'icon': Icons.kitchen,
       'color': Colors.orange,
-      'serviceCount': 6,
-      'description': 'Expert electrical solutions',
+      'serviceCount': 7,
+      'description': 'Repair for all home appliances',
     },
     {
-      'id': 'house_cleaning',
-      'name': 'House Cleaning',
+      'id': 'carpentry',
+      'name': 'Carpentry',
+      'icon': Icons.carpenter,
+      'color': Colors.brown,
+      'serviceCount': 6,
+      'description': 'Custom furniture and woodwork',
+    },
+    {
+      'id': 'cleaning',
+      'name': 'Cleaning',
       'icon': Icons.cleaning_services,
       'color': Colors.green,
       'serviceCount': 5,
       'description': 'Professional cleaning services',
     },
     {
-      'id': 'handyman',
-      'name': 'Handyman',
+      'id': 'electrical',
+      'name': 'Electrical',
+      'icon': Icons.electrical_services,
+      'color': Colors.amber,
+      'serviceCount': 7,
+      'description': 'Expert electrical solutions',
+    },
+    {
+      'id': 'gardening',
+      'name': 'Gardening',
+      'icon': Icons.grass,
+      'color': Colors.lightGreen,
+      'serviceCount': 4,
+      'description': 'Landscaping and garden care',
+    },
+    {
+      'id': 'general_maintenance',
+      'name': 'General Maintenance',
       'icon': Icons.handyman,
-      'color': Colors.brown,
-      'serviceCount': 8,
+      'color': Colors.grey,
+      'serviceCount': 5,
       'description': 'General repair and maintenance',
+    },
+    {
+      'id': 'masonry',
+      'name': 'Masonry',
+      'icon': Icons.foundation,
+      'color': Colors.blueGrey,
+      'serviceCount': 5,
+      'description': 'Stone and brick work',
     },
     {
       'id': 'painting',
       'name': 'Painting',
       'icon': Icons.format_paint,
       'color': Colors.purple,
-      'serviceCount': 4,
+      'serviceCount': 6,
       'description': 'Interior and exterior painting',
     },
     {
-      'id': 'ac_repair',
-      'name': 'AC Repair',
-      'icon': Icons.ac_unit,
-      'color': Colors.cyan,
-      'serviceCount': 3,
-      'description': 'AC installation and repair',
+      'id': 'plumbing',
+      'name': 'Plumbing',
+      'icon': Icons.plumbing,
+      'color': Colors.blue,
+      'serviceCount': 7,
+      'description': 'Professional plumbing services',
+    },
+    {
+      'id': 'roofing',
+      'name': 'Roofing',
+      'icon': Icons.roofing,
+      'color': Colors.red,
+      'serviceCount': 5,
+      'description': 'Roof installation and repair',
     },
   ];
 
@@ -91,11 +131,11 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today),
+            icon: Icon(Icons.book_online),
             label: 'Bookings',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat),
+            icon: Icon(Icons.message),
             label: 'Inbox',
           ),
           BottomNavigationBarItem(
@@ -109,221 +149,236 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
 
   Widget _buildHomeScreen() {
     return SafeArea(
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            _buildLocationSelector(),
-            _buildEmergencySection(),
-            _buildServicesSection(),
-          ],
-        ),
-      ),
-    );
-  }
+      child: CustomScrollView(
+        slivers: [
+          // Custom App Bar
+          SliverAppBar(
+            floating: true,
+            backgroundColor: Colors.white,
+            elevation: 0,
+            expandedHeight: 120,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                padding: EdgeInsets.fromLTRB(16, 50, 16, 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Hello, Welcome back!',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.location_on,
+                                    size: 16, color: Colors.grey[600]),
+                                SizedBox(width: 4),
+                                Text(
+                                  _selectedLocation
+                                      .replaceAll('_', ' ')
+                                      .toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: _showEmergencyDialog,
+                              icon: Icon(Icons.warning,
+                                  color: Colors.red, size: 28),
+                            ),
+                            IconButton(
+                              onPressed: () {},
+                              icon: Icon(Icons.notifications_outlined,
+                                  color: Colors.grey[700], size: 28),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
 
-  Widget _buildHeader() {
-    return Container(
-      padding: EdgeInsets.all(20),
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // Search Bar
+          SliverToBoxAdapter(
+            child: Container(
+              margin: EdgeInsets.all(16),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search for services...',
+                  prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding:
+                      EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                ),
+              ),
+            ),
+          ),
+
+          // Emergency Banner
+          SliverToBoxAdapter(
+            child: Container(
+              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.red[400]!, Colors.red[600]!],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
                 children: [
-                  Text(
-                    'Hi, User!',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                  Icon(Icons.emergency, color: Colors.white, size: 28),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Emergency Service',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Need urgent help? Get 24/7 assistance',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Text(
-                    'What service do you need today?',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[600],
+                  ElevatedButton(
+                    onPressed: _showEmergencyDialog,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.red[600],
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     ),
+                    child: Text('Call Now'),
                   ),
                 ],
               ),
-              CircleAvatar(
-                radius: 25,
-                backgroundColor: Colors.blue[100],
-                child: Icon(Icons.person, color: Colors.blue),
-              ),
-            ],
+            ),
           ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildLocationSelector() {
-    return Container(
-      margin: EdgeInsets.all(16),
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.location_on, color: Colors.blue),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Service Location',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
+          // Services Grid
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Our Services',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
                   ),
-                ),
-                Text(
-                  _selectedLocation.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                  SizedBox(height: 16),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 1.1,
+                    ),
+                    itemCount: _serviceCategories.length,
+                    itemBuilder: (context, index) {
+                      final service = _serviceCategories[index];
+                      return _buildServiceCard(service);
+                    },
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-          Icon(Icons.keyboard_arrow_down, color: Colors.grey),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildEmergencySection() {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.red[400]!, Colors.red[600]!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.red.withOpacity(0.3),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.emergency,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-          SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Emergency Service',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+          // Quick Actions
+          SliverToBoxAdapter(
+            child: Container(
+              margin: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Quick Actions',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
                   ),
-                ),
-                Text(
-                  '24/7 Available',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withOpacity(0.9),
+                  SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildQuickActionCard(
+                          'Schedule Service',
+                          Icons.schedule,
+                          Colors.blue,
+                          _scheduleService,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: _buildQuickActionCard(
+                          'View Bookings',
+                          Icons.list_alt,
+                          Colors.green,
+                          () => setState(() => _currentIndex = 1),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
-          ),
-          ElevatedButton(
-            onPressed: _requestEmergencyService,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.red[600],
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                ],
               ),
             ),
-            child: Text(
-              'Call Now',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildServicesSection() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Our Services',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              TextButton(
-                onPressed: () {},
-                child: Text(
-                  'View All',
-                  style: TextStyle(color: Colors.blue),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 16),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-            ),
-            itemCount: _serviceCategories.length,
-            itemBuilder: (context, index) {
-              final service = _serviceCategories[index];
-              return _buildServiceCard(service);
-            },
           ),
         ],
       ),
@@ -332,12 +387,16 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
 
   Widget _buildServiceCard(Map<String, dynamic> service) {
     return GestureDetector(
-      onTap: () => _selectService(service),
+      onTap: () => _showServiceOptions(
+        service['id'],
+        service['name'],
+        service['icon'],
+        service['color'],
+      ),
       child: Container(
-        padding: EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
@@ -346,36 +405,87 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             ),
           ],
         ),
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: service['color'].withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  service['icon'],
+                  size: 32,
+                  color: service['color'],
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                service['name'],
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                '${service['serviceCount']} services',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                service['description'],
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[500],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionCard(
+      String title, IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: service['color'].withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                service['icon'],
-                size: 32,
-                color: service['color'],
-              ),
-            ),
-            SizedBox(height: 12),
+            Icon(icon, color: color, size: 32),
+            SizedBox(height: 8),
             Text(
-              service['name'],
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              title,
               textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 4),
-            Text(
-              '${service['serviceCount']} services',
               style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[800],
               ),
             ),
           ],
@@ -384,94 +494,31 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     );
   }
 
-  void _selectService(Map<String, dynamic> service) {
-    // Show service selection modal similar to your plumbing example
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _buildServiceSelectionModal(service),
-    );
+  Widget _buildBookingsScreen() {
+    return CustomerBookingsScreen();
   }
 
-  Widget _buildServiceSelectionModal(Map<String, dynamic> service) {
-    List<String> subServices =
-        ServiceTypesExtension.getSubServices(service['id']);
-
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.6,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+  Widget _buildInboxScreen() {
+    return Center(
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: EdgeInsets.all(20),
-            child: Column(
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  service['name'],
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Select a specific service:',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 16,
-                  ),
-                ),
-              ],
+          Icon(Icons.message, size: 64, color: Colors.grey[400]),
+          SizedBox(height: 16),
+          Text(
+            'Messages',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[600],
             ),
           ),
-          Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              itemCount: subServices.length,
-              itemBuilder: (context, index) {
-                return _buildSubServiceTile(
-                  service['id'],
-                  subServices[index],
-                  service['name'],
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.all(20),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[300],
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  'Cancel',
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+          SizedBox(height: 8),
+          Text(
+            'No messages yet',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[500],
             ),
           ),
         ],
@@ -479,41 +526,113 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     );
   }
 
-  Widget _buildSubServiceTile(
-      String serviceId, String subService, String serviceName) {
-    IconData icon;
-    switch (subService.toLowerCase()) {
-      case 'general plumbing':
-        icon = Icons.plumbing;
-        break;
-      case 'pipe installation':
-        icon = Icons.vertical_align_center; // Alternative to Icons.pipe
-        break;
-      case 'leak repair':
-        icon = Icons.water_drop;
-        break;
-      case 'drain cleaning':
-        icon = Icons.cleaning_services;
-        break;
-      case 'water heater service':
-        icon = Icons.hot_tub;
-        break;
-      case 'toilet repair':
-        icon = Icons.wc;
-        break;
-      case 'faucet installation':
-        icon = Icons.water; // Alternative to Icons.tap
-        break;
-      default:
-        icon = Icons.build;
-    }
+  Widget _buildProfileScreen() {
+    return CustomerProfileScreen();
+  }
+
+  void _showServiceOptions(
+      String serviceId, String serviceName, IconData icon, Color color) {
+    // Get categories for the selected service
+    List<String> categories = ServiceTypes.getCategories(serviceId);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Header
+            Padding(
+              padding: EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: color, size: 24),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          serviceName,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Choose a category',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+
+            Divider(height: 1),
+
+            // Categories list
+            Expanded(
+              child: ListView.builder(
+                padding: EdgeInsets.all(16),
+                itemCount: categories.length,
+                itemBuilder: (context, index) {
+                  return _buildCategoryTile(
+                      serviceId, categories[index], serviceName);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryTile(
+      String serviceId, String category, String serviceName) {
+    IconData icon = _getCategoryIcon(serviceId, category);
 
     return Container(
       margin: EdgeInsets.only(bottom: 12),
       child: ListTile(
         onTap: () {
           Navigator.pop(context);
-          _navigateToServiceRequest(serviceId, subService, serviceName);
+          _navigateToServiceRequest(serviceId, category, serviceName);
         },
         leading: Container(
           padding: EdgeInsets.all(8),
@@ -524,17 +643,205 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           child: Icon(icon, color: Colors.blue, size: 20),
         ),
         title: Text(
-          subService,
+          category,
           style: TextStyle(
             fontWeight: FontWeight.w500,
           ),
         ),
-        subtitle: subService == 'General Plumbing'
-            ? Text('Not sure? Choose this option')
-            : null,
-        trailing: Icon(Icons.arrow_forward_ios, size: 16),
+        trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        tileColor: Colors.grey[50],
       ),
     );
+  }
+
+  IconData _getCategoryIcon(String serviceId, String category) {
+    // Return appropriate icons based on service and category - using only standard Flutter icons
+    switch (serviceId) {
+      case 'ac_repair':
+        switch (category.toLowerCase()) {
+          case 'window units':
+            return Icons.window;
+          case 'central ac':
+            return Icons.ac_unit;
+          case 'split systems':
+            return Icons.view_column; // Fixed: replaced split_screen
+          case 'maintenance':
+            return Icons.build;
+          case 'installation':
+            return Icons.construction;
+          default:
+            return Icons.ac_unit;
+        }
+      case 'appliance_repair':
+        switch (category.toLowerCase()) {
+          case 'refrigerator':
+            return Icons.kitchen;
+          case 'dishwasher':
+            return Icons.local_laundry_service;
+          case 'microwave':
+            return Icons.microwave;
+          case 'washing machine':
+            return Icons.local_laundry_service;
+          case 'oven & stove':
+            return Icons.soup_kitchen;
+          case 'dryer':
+            return Icons.dry_cleaning;
+          case 'emergency service':
+            return Icons.emergency;
+          default:
+            return Icons.kitchen;
+        }
+      case 'carpentry':
+        switch (category.toLowerCase()) {
+          case 'custom furniture':
+            return Icons.chair;
+          case 'restoration':
+            return Icons.restore;
+          case 'repairs':
+            return Icons.build;
+          case 'decorative':
+            return Icons.palette;
+          case 'cabinet making':
+            return Icons.kitchen;
+          case 'wooden flooring':
+            return Icons.layers;
+          default:
+            return Icons.carpenter;
+        }
+      case 'cleaning':
+        switch (category.toLowerCase()) {
+          case 'deep cleaning':
+            return Icons.cleaning_services;
+          case 'post-construction':
+            return Icons.construction;
+          case 'regular maintenance':
+            return Icons.schedule;
+          case 'carpet cleaning':
+            return Icons.cleaning_services;
+          case 'upholstery cleaning':
+            return Icons.weekend;
+          default:
+            return Icons.cleaning_services;
+        }
+      case 'electrical':
+        switch (category.toLowerCase()) {
+          case 'installation':
+            return Icons.electrical_services;
+          case 'wiring':
+            return Icons.cable;
+          case 'safety inspection':
+            return Icons.security;
+          case 'emergency service':
+            return Icons.emergency;
+          case 'lighting systems':
+            return Icons.lightbulb;
+          case 'solar panel setup':
+            return Icons.solar_power;
+          case 'maintenance':
+            return Icons.build;
+          default:
+            return Icons.electrical_services;
+        }
+      case 'gardening':
+        switch (category.toLowerCase()) {
+          case 'landscaping':
+            return Icons.landscape;
+          case 'lawn care':
+            return Icons.grass;
+          case 'tree trimming':
+            return Icons.park;
+          case 'irrigation systems':
+            return Icons.water_drop;
+          default:
+            return Icons.grass;
+        }
+      case 'general_maintenance':
+        switch (category.toLowerCase()) {
+          case 'property upkeep':
+            return Icons.home_repair_service;
+          case 'preventive maintenance':
+            return Icons.schedule;
+          case 'multiple repairs':
+            return Icons.build;
+          case 'furniture assembly':
+            return Icons.chair;
+          case 'small fixture replacements':
+            return Icons.settings;
+          default:
+            return Icons.handyman;
+        }
+      case 'masonry':
+        switch (category.toLowerCase()) {
+          case 'stone work':
+            return Icons.foundation;
+          case 'brick work':
+            return Icons.apartment;
+          case 'concrete':
+            return Icons.layers; // Fixed: replaced concrete
+          case 'tile setting':
+            return Icons.grid_on;
+          case 'wall finishing':
+            return Icons.format_paint;
+          default:
+            return Icons.foundation;
+        }
+      case 'painting':
+        switch (category.toLowerCase()) {
+          case 'interior':
+            return Icons.home;
+          case 'exterior':
+            return Icons.home_outlined;
+          case 'commercial':
+            return Icons.business;
+          case 'decorative':
+            return Icons.palette;
+          case 'waterproofing':
+            return Icons.water_drop;
+          case 'wall textures':
+            return Icons.texture;
+          default:
+            return Icons.format_paint;
+        }
+      case 'plumbing':
+        switch (category.toLowerCase()) {
+          case 'installation':
+            return Icons.plumbing;
+          case 'water heater service':
+            return Icons.hot_tub;
+          case 'emergency repairs':
+            return Icons.emergency;
+          case 'maintenance':
+            return Icons.build;
+          case 'drain cleaning':
+            return Icons.cleaning_services;
+          case 'pipe replacement':
+            return Icons.straighten;
+          case 'bathroom fittings':
+            return Icons.bathroom;
+          default:
+            return Icons.plumbing;
+        }
+      case 'roofing':
+        switch (category.toLowerCase()) {
+          case 'roof installation':
+            return Icons.roofing;
+          case 'leak repair':
+            return Icons.water_drop;
+          case 'tile replacement':
+            return Icons.grid_on;
+          case 'waterproofing':
+            return Icons.umbrella;
+          case 'gutter maintenance':
+            return Icons.stairs;
+          default:
+            return Icons.roofing;
+        }
+      default:
+        return Icons.build;
+    }
   }
 
   void _navigateToServiceRequest(
@@ -551,48 +858,19 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     );
   }
 
-  Widget _buildBookingsScreen() {
-    return CustomerBookingsScreen();
-  }
-
-  Widget _buildInboxScreen() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.chat, size: 64, color: Colors.grey[400]),
-          SizedBox(height: 16),
-          Text(
-            'No Messages',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[600],
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Messages from service providers will appear here',
-            style: TextStyle(
-              color: Colors.grey[500],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfileScreen() {
-    return CustomerProfileScreen();
-  }
-
-  void _requestEmergencyService() {
+  void _showEmergencyDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Emergency Service'),
+        title: Row(
+          children: [
+            Icon(Icons.emergency, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Emergency Service'),
+          ],
+        ),
         content: Text(
-          'Are you experiencing a plumbing, electrical, or other emergency? Our 24/7 service team will connect you immediately.',
+          'Need immediate assistance? Our emergency service team is available 24/7 for urgent repairs.',
         ),
         actions: [
           TextButton(
@@ -616,67 +894,5 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Schedule service feature coming soon!')),
     );
-  }
-}
-
-// Extension to ServiceTypes for getting sub-services
-extension ServiceTypesExtension on ServiceTypes {
-  static List<String> getSubServices(String serviceType) {
-    switch (serviceType) {
-      case 'plumbing':
-        return [
-          'General Plumbing',
-          'Pipe Installation',
-          'Leak Repair',
-          'Drain Cleaning',
-          'Water Heater Service',
-          'Toilet Repair',
-          'Faucet Installation',
-        ];
-      case 'electrical':
-        return [
-          'General Electrical',
-          'Wiring Installation',
-          'Circuit Repair',
-          'Outlet Installation',
-          'Light Fixture Setup',
-          'Panel Upgrade',
-          'Emergency Electrical',
-        ];
-      case 'house_cleaning':
-        return [
-          'Regular Cleaning',
-          'Deep Cleaning',
-          'Post-Construction Cleanup',
-          'Window Cleaning',
-          'Carpet Cleaning',
-        ];
-      case 'handyman':
-        return [
-          'General Repairs',
-          'Furniture Assembly',
-          'Wall Mounting',
-          'Door/Window Repair',
-          'Painting Touch-ups',
-          'Minor Installations',
-          'Maintenance Work',
-          'Shelf Installation',
-        ];
-      case 'painting':
-        return [
-          'Interior Painting',
-          'Exterior Painting',
-          'Wall Preparation',
-          'Touch-up Work',
-        ];
-      case 'ac_repair':
-        return [
-          'AC Installation',
-          'AC Repair',
-          'AC Maintenance',
-        ];
-      default:
-        return ['General Service'];
-    }
   }
 }

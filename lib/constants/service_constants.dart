@@ -84,26 +84,88 @@ class WorkerService {
     }
   }
 
-  // Search workers by service type
-  static Future<List<WorkerModel>> searchWorkersByService(
-      String serviceType) async {
+  // Search workers
+  static Future<List<WorkerModel>> searchWorkers({
+    required String serviceType,
+    String? city,
+    String? serviceCategory,
+    String? specialization,
+    double? maxDistance,
+    double? userLat,
+    double? userLng,
+  }) async {
     try {
-      QuerySnapshot snapshot = await _firestore
-          .collection('workers')
-          .where('service_type', isEqualTo: serviceType)
-          .where('verified', isEqualTo: true)
-          .orderBy('rating', descending: true)
-          .get();
+      Query query = _firestore.collection('workers');
 
-      return snapshot.docs
+      // Filter by service type
+      query = query.where('service_type', isEqualTo: serviceType);
+
+      // Filter by city if provided
+      if (city != null && city.isNotEmpty) {
+        query = query.where('city', isEqualTo: city);
+      }
+
+      // Filter by service category if provided
+      if (serviceCategory != null && serviceCategory.isNotEmpty) {
+        query = query.where('service_category', isEqualTo: serviceCategory);
+      }
+
+      // Filter by availability
+      query = query.where('is_available', isEqualTo: true);
+      query = query.where('is_verified', isEqualTo: true);
+
+      QuerySnapshot querySnapshot = await query.get();
+
+      List<WorkerModel> workers = querySnapshot.docs
           .map((doc) => WorkerModel.fromFirestore(doc))
           .toList();
+
+      // Filter by specialization if provided
+      if (specialization != null && specialization.isNotEmpty) {
+        workers = workers
+            .where((worker) =>
+                worker.profile.specializations.contains(specialization))
+            .toList();
+      }
+
+      // Filter by distance if location is provided
+      if (maxDistance != null && userLat != null && userLng != null) {
+        workers = workers.where((worker) {
+          double distance = _calculateDistance(userLat, userLng,
+              worker.location.latitude, worker.location.longitude);
+          return distance <= maxDistance;
+        }).toList();
+      }
+
+      return workers;
     } catch (e) {
       throw Exception('Failed to search workers: ${e.toString()}');
     }
   }
 
-  // Get workers by location radius
+  // Calculate distance between two points
+  static double _calculateDistance(
+      double lat1, double lng1, double lat2, double lng2) {
+    const double earthRadius = 6371; // Earth's radius in kilometers
+
+    double dLat = _degreesToRadians(lat2 - lat1);
+    double dLng = _degreesToRadians(lng2 - lng1);
+
+    double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_degreesToRadians(lat1)) *
+            math.cos(_degreesToRadians(lat2)) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+
+    double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadius * c;
+  }
+
+  static double _degreesToRadians(double degrees) {
+    return degrees * (math.pi / 180);
+  }
+
+  // Add the missing method that was being called
   static Future<List<WorkerModel>> getWorkersByLocation({
     required double latitude,
     required double longitude,
@@ -122,7 +184,7 @@ class WorkerService {
       List<WorkerModel> workers =
           snapshot.docs.map((doc) => WorkerModel.fromFirestore(doc)).toList();
 
-      // Filter by distance (simple calculation - for production, use more accurate geospatial queries)
+      // Filter by distance
       return workers.where((worker) {
         double distance = _calculateDistance(
           latitude,
@@ -136,62 +198,11 @@ class WorkerService {
       throw Exception('Failed to get workers by location: ${e.toString()}');
     }
   }
-
-  // Simple distance calculation (Haversine formula simplified)
-  static double _calculateDistance(
-      double lat1, double lon1, double lat2, double lon2) {
-    const double earthRadius = 6371; // Earth's radius in kilometers
-
-    double dLat = _toRadians(lat2 - lat1);
-    double dLon = _toRadians(lon2 - lon1);
-
-    double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_toRadians(lat1)) *
-            math.cos(_toRadians(lat2)) *
-            math.sin(dLon / 2) *
-            math.sin(dLon / 2);
-
-    double c = 2 * math.asin(math.sqrt(a));
-
-    return earthRadius * c;
-  }
-
-  static double _toRadians(double degrees) {
-    return degrees * (math.pi / 180);
-  }
 }
 
 class CustomerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  // Generate unique customer ID
-  static Future<String> generateCustomerId() async {
-    // Get the count of existing customers to generate sequential ID
-    QuerySnapshot customerCount =
-        await _firestore.collection('customers').get();
-    int count = customerCount.docs.length + 1;
-
-    // Format: CUST_XXXX (4 digits)
-    String customerId = 'CUST_${count.toString().padLeft(4, '0')}';
-
-    // Check if ID already exists, if so increment
-    while (await _customerIdExists(customerId)) {
-      count++;
-      customerId = 'CUST_${count.toString().padLeft(4, '0')}';
-    }
-
-    return customerId;
-  }
-
-  // Check if customer ID exists
-  static Future<bool> _customerIdExists(String customerId) async {
-    QuerySnapshot existing = await _firestore
-        .collection('customers')
-        .where('customer_id', isEqualTo: customerId)
-        .get();
-    return existing.docs.isNotEmpty;
-  }
 
   // Save customer to database
   static Future<void> saveCustomer(CustomerModel customer) async {
@@ -245,100 +256,205 @@ class CustomerService {
 
 class ServiceTypes {
   static const Map<String, Map<String, dynamic>> _serviceTypes = {
-    'plumbing': {
-      'name': 'Plumbing',
-      'categories': ['Residential', 'Commercial', 'Emergency'],
-      'specializations': [
-        'Pipe repair',
-        'Drain cleaning',
-        'Faucet installation',
-        'Toilet repair',
-        'Water heater service',
-        'Emergency plumbing'
-      ]
-    },
-    'electrical': {
-      'name': 'Electrical',
-      'categories': ['Residential', 'Commercial', 'Industrial'],
-      'specializations': [
-        'Wiring',
-        'Circuit installation',
-        'Outlet repair',
-        'Light fixture installation',
-        'Panel upgrades',
-        'Emergency electrical'
-      ]
-    },
-    'painting': {
-      'name': 'Painting',
-      'categories': ['Interior', 'Exterior', 'Decorative'],
-      'specializations': [
-        'Interior',
-        'Exterior',
-        'Wall preparation',
-        'Color consultation',
-        'Touch-ups',
-        'Spray painting'
-      ]
-    },
-    'cleaning': {
-      'name': 'Cleaning',
-      'categories': ['Residential', 'Commercial', 'Deep Cleaning'],
-      'specializations': [
-        'Regular maintenance',
-        'Deep cleaning',
-        'Post-construction',
-        'Window cleaning',
-        'Carpet cleaning',
-        'Move-in/move-out'
-      ]
-    },
     'ac_repair': {
-      'name': 'AC Repair',
-      'categories': ['Split AC', 'Central AC', 'Window AC'],
-      'specializations': [
-        'Installation',
-        'Maintenance',
-        'Repair',
+      'name': 'Ac Repair',
+      'categories': [
+        'Window units',
         'Central AC',
-        'Split units',
-        'Emergency service'
+        'Split systems',
+        'Maintenance',
+        'Installation'
+      ],
+      'specializations': [
+        'Window units',
+        'Central AC',
+        'Split systems',
+        'Maintenance',
+        'Installation'
       ]
     },
-    'general_maintenance': {
-      'name': 'General Maintenance',
-      'categories': ['Home Maintenance', 'Property Management', 'Emergency'],
+    'appliance_repair': {
+      'name': 'Appliance Repair',
+      'categories': [
+        'Refrigerator',
+        'Dishwasher',
+        'Microwave',
+        'Washing machine',
+        'Oven & stove',
+        'Dryer',
+        'Emergency service'
+      ],
       'specializations': [
-        'Home repairs',
-        'Preventive maintenance',
-        'Minor fixes',
-        'Handyman services',
-        'Property upkeep',
-        'Emergency repairs'
+        'Refrigerator',
+        'Dishwasher',
+        'Microwave',
+        'Washing machine',
+        'Oven & stove',
+        'Dryer',
+        'Emergency service'
       ]
     },
     'carpentry': {
       'name': 'Carpentry',
-      'categories': ['Furniture', 'Installation', 'Repair'],
+      'categories': [
+        'Custom furniture',
+        'Restoration',
+        'Repairs',
+        'Decorative',
+        'Cabinet making',
+        'Wooden flooring'
+      ],
       'specializations': [
         'Custom furniture',
-        'Cabinet installation',
-        'Door repair',
-        'Window installation',
-        'Flooring',
-        'Trim work'
+        'Restoration',
+        'Repairs',
+        'Decorative',
+        'Cabinet making',
+        'Wooden flooring'
+      ]
+    },
+    'cleaning': {
+      'name': 'Cleaning',
+      'categories': [
+        'Deep cleaning',
+        'Post-construction',
+        'Regular maintenance',
+        'Carpet cleaning',
+        'Upholstery cleaning'
+      ],
+      'specializations': [
+        'Deep cleaning',
+        'Post-construction',
+        'Regular maintenance',
+        'Carpet cleaning',
+        'Upholstery cleaning'
+      ]
+    },
+    'electrical': {
+      'name': 'Electrical',
+      'categories': [
+        'Installation',
+        'Wiring',
+        'Safety inspection',
+        'Emergency service',
+        'Lighting systems',
+        'Solar panel setup',
+        'Maintenance'
+      ],
+      'specializations': [
+        'Installation',
+        'Wiring',
+        'Safety inspection',
+        'Emergency service',
+        'Lighting systems',
+        'Solar panel setup',
+        'Maintenance'
       ]
     },
     'gardening': {
       'name': 'Gardening',
-      'categories': ['Landscaping', 'Maintenance', 'Design'],
-      'specializations': [
-        'Lawn maintenance',
+      'categories': [
         'Landscaping',
+        'Lawn care',
         'Tree trimming',
-        'Garden design',
-        'Irrigation',
-        'Pest control'
+        'Irrigation systems'
+      ],
+      'specializations': [
+        'Landscaping',
+        'Lawn care',
+        'Tree trimming',
+        'Irrigation systems'
+      ]
+    },
+    'general_maintenance': {
+      'name': 'General Maintenance',
+      'categories': [
+        'Property upkeep',
+        'Preventive maintenance',
+        'Multiple repairs',
+        'Furniture assembly',
+        'Small fixture replacements'
+      ],
+      'specializations': [
+        'Property upkeep',
+        'Preventive maintenance',
+        'Multiple repairs',
+        'Furniture assembly',
+        'Small fixture replacements'
+      ]
+    },
+    'masonry': {
+      'name': 'Masonry',
+      'categories': [
+        'Stone work',
+        'Brick work',
+        'Concrete',
+        'Tile setting',
+        'Wall finishing'
+      ],
+      'specializations': [
+        'Stone work',
+        'Brick work',
+        'Concrete',
+        'Tile setting',
+        'Wall finishing'
+      ]
+    },
+    'painting': {
+      'name': 'Painting',
+      'categories': [
+        'Interior',
+        'Exterior',
+        'Commercial',
+        'Decorative',
+        'Waterproofing',
+        'Wall textures'
+      ],
+      'specializations': [
+        'Interior',
+        'Exterior',
+        'Commercial',
+        'Decorative',
+        'Waterproofing',
+        'Wall textures'
+      ]
+    },
+    'plumbing': {
+      'name': 'Plumbing',
+      'categories': [
+        'Installation',
+        'Water heater service',
+        'Emergency repairs',
+        'Maintenance',
+        'Drain cleaning',
+        'Pipe replacement',
+        'Bathroom fittings'
+      ],
+      'specializations': [
+        'Installation',
+        'Water heater service',
+        'Emergency repairs',
+        'Maintenance',
+        'Drain cleaning',
+        'Pipe replacement',
+        'Bathroom fittings'
+      ]
+    },
+    'roofing': {
+      'name': 'Roofing',
+      'categories': [
+        'Roof installation',
+        'Leak repair',
+        'Tile replacement',
+        'Waterproofing',
+        'Gutter maintenance'
+      ],
+      'specializations': [
+        'Roof installation',
+        'Leak repair',
+        'Tile replacement',
+        'Waterproofing',
+        'Gutter maintenance'
       ]
     }
   };
@@ -364,7 +480,6 @@ class ServiceTypes {
         _serviceTypes[serviceKey]?['specializations'] ?? []);
   }
 
-  // Add the missing getCategories method
   static List<String> getCategories(String? serviceKey) {
     if (serviceKey == null || serviceKey.isEmpty) return [];
     return List<String>.from(_serviceTypes[serviceKey]?['categories'] ?? []);
@@ -499,74 +614,59 @@ class Cities {
     'Hingurakgoda',
     'Anuradhapura',
     'Kekirawa',
-    'Tambuttegama',
-    'Galenbindunuwewa',
-    'Mihintale',
+    'Thambuttegama',
+    'Eppawala',
+    'Medawachchiya',
+    'Kurunegala',
     'Puttalam',
     'Chilaw',
-    'Nattandiya',
     'Wennappuwa',
-    'Dankotuwa',
     'Marawila',
-    'Kurunegala',
+    'Nattandiya',
+    'Dankotuwa',
     'Kuliyapitiya',
-    'Narammala',
+    'Nikaweratiya',
+    'Bingiriya',
     'Wariyapola',
     'Pannala',
-    'Melsiripura',
-    'Kegalle',
-    'Mawanella',
-    'Warakapola',
-    'Rambukkana',
-    'Galigamuwa',
-    'Ratnapura',
-    'Embilipitiya',
-    'Balangoda',
-    'Rakwana',
-    'Eheliyagoda',
-    'Kuruwita',
-    'Pelmadulla',
+    'Matale',
+    'Dambulla',
+    'Sigiriya',
+    'Naula',
+    'Ukuwela',
+    'Rattota',
     'Kandy',
     'Peradeniya',
     'Gampola',
     'Nawalapitiya',
-    'Kadugannawa',
-    'Katugastota',
-    'Akurana',
-    'Digana',
-    'Teldeniya',
-    'Matale',
-    'Dambulla',
-    'Sigiriya',
-    'Nalanda',
-    'Ukuwela',
-    'Rattota',
-    'Galewela',
-    'Nuwara Eliya',
     'Hatton',
-    'Talawakele',
-    'Ginigathena',
-    'Kotagala',
-    'Maskeliya',
-    'Norton Bridge',
+    'Nuwara Eliya',
+    'Talawakelle',
+    'Nanu Oya',
+    'Ragala',
+    'Kegalle',
+    'Mawanella',
+    'Warakapola',
+    'Rambukkana',
+    'Kitulgala',
+    'Ruwanwella',
+    'Deraniyagala',
+    'Ratnapura',
+    'Embilipitiya',
+    'Balangoda',
+    'Rakwana',
+    'Pelmadulla',
+    'Kahawatta',
+    'Kuruwita',
+    'Eheliyagoda',
     'Jaffna',
-    'Chavakachcheri',
+    'Chavakacheri',
+    'Valvettithurai',
     'Point Pedro',
     'Karainagar',
-    'Velanai',
-    'Kayts',
-    'Kilinochchi',
-    'Paranthan',
-    'Pallai',
-    'Mannar',
-    'Nanattan',
-    'Pesalai',
     'Vavuniya',
-    'Cheddikulam',
-    'Nedunkeni',
-    'Mullaitivu',
-    'Pudukuduirippu',
-    'Maritimepattu',
-    'Oddusuddan'
+    'Mannar',
+    'Kilinochchi',
+    'Mullativu',
   ];
 }
