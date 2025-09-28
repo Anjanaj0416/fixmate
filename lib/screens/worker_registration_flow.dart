@@ -108,26 +108,85 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
   }
 
   void _nextStep() {
+    print('Current step: $_currentStep');
+    print('Selected service type: $_selectedServiceType');
+    print('Selected service category: $_selectedServiceCategory');
+    print('Can proceed: $_canProceedToNextStep');
+
+    // Validate the current form
     if (_formKey.currentState?.validate() ?? false) {
-      if (_currentStep < _steps.length - 1) {
-        setState(() => _currentStep++);
-        _pageController.nextPage(
-          duration: Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
+      // Check if we can proceed to next step
+      if (_canProceedToNextStep) {
+        if (_currentStep < _steps.length - 1) {
+          setState(() {
+            _currentStep++;
+          });
+
+          // Animate to next page
+          _pageController.nextPage(
+            duration: Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        } else {
+          // Final step - submit registration
+          _submitRegistration();
+        }
       } else {
-        _submitRegistration();
+        // Show validation message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_getValidationMessage()),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
+    } else {
+      // Form validation failed
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please fill in all required fields correctly.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
+// Helper method to get validation message for current step
+  String _getValidationMessage() {
+    switch (_currentStep) {
+      case 0:
+        return 'Please select a service type to continue.';
+      case 1:
+        return 'Please fill in all personal information fields.';
+      case 2:
+        return 'Please fill in all business information fields.';
+      case 3:
+        return 'Please select at least one specialization.';
+      case 4:
+        return 'Please select your working days.';
+      case 5:
+        return 'Please fill in your pricing information.';
+      case 6:
+        return 'Please fill in your location and service radius.';
+      default:
+        return 'Please complete all required fields.';
+    }
+  }
+
+// Also update the _previousStep method for completeness
   void _previousStep() {
     if (_currentStep > 0) {
-      setState(() => _currentStep--);
+      setState(() {
+        _currentStep--;
+      });
+
       _pageController.previousPage(
         duration: Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
+    } else {
+      // If on first step, go back to previous screen
+      Navigator.pop(context);
     }
   }
 
