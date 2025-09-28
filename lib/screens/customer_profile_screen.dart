@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/customer_model.dart';
-import '../constants/service_constants.dart';
 
 class CustomerProfileScreen extends StatefulWidget {
   @override
@@ -140,7 +139,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       setState(() {
         _isSaving = false;
       });
-      _showErrorSnackBar('Error updating profile: ${e.toString()}');
+      _showErrorSnackBar('Error saving profile: ${e.toString()}');
     }
   }
 
@@ -198,20 +197,15 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
         foregroundColor: Colors.black,
         elevation: 0,
         actions: [
-          if (!_isEditing && !_isLoading)
+          if (!_isEditing)
             IconButton(
               icon: Icon(Icons.edit),
               onPressed: () => setState(() => _isEditing = true),
-            ),
-          if (_isEditing)
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _isEditing = false;
-                  _initializeControllers(); // Reset to original values
-                });
-              },
-              child: Text('Cancel'),
+            )
+          else
+            IconButton(
+              icon: Icon(Icons.close),
+              onPressed: () => setState(() => _isEditing = false),
             ),
         ],
       ),
@@ -424,58 +418,34 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
   }
 
   Widget _buildPreferencesSection() {
-    return Container(
-      padding: EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Preferred Services',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 16),
-          if (_customer?.preferredServices?.isEmpty ?? true)
-            Text(
-              'No preferred services selected',
-              style: TextStyle(color: Colors.grey[600]),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _customer!.preferredServices.map((service) {
-                return Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[100],
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    service,
-                    style: TextStyle(
-                      color: Colors.blue[700],
-                      fontSize: 12,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-        ],
-      ),
+    return _buildSection(
+      'Preferences',
+      [
+        _buildPreferenceTile(
+          'Email Notifications',
+          _customer?.preferences.emailNotifications ?? true,
+          Icons.email_outlined,
+          (value) {
+            // TODO: Update preference
+          },
+        ),
+        _buildPreferenceTile(
+          'SMS Notifications',
+          _customer?.preferences.smsNotifications ?? true,
+          Icons.sms_outlined,
+          (value) {
+            // TODO: Update preference
+          },
+        ),
+        _buildPreferenceTile(
+          'Push Notifications',
+          _customer?.preferences.pushNotifications ?? true,
+          Icons.notifications_outlined,
+          (value) {
+            // TODO: Update preference
+          },
+        ),
+      ],
     );
   }
 
@@ -501,6 +471,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
+              color: Colors.black87,
             ),
           ),
           SizedBox(height: 16),
@@ -515,32 +486,13 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     String? value,
     TextEditingController? controller,
     IconData icon, {
-    TextInputType? keyboardType,
+    TextInputType keyboardType = TextInputType.text,
   }) {
-    if (_isEditing && controller != null) {
-      return Padding(
-        padding: EdgeInsets.only(bottom: 16),
-        child: TextFormField(
-          controller: controller,
-          keyboardType: keyboardType,
-          decoration: InputDecoration(
-            labelText: label,
-            prefixIcon: Icon(icon),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            filled: true,
-            fillColor: Colors.grey[50],
-          ),
-        ),
-      );
-    }
-
     return Padding(
-      padding: EdgeInsets.only(bottom: 16),
+      padding: EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(icon, color: Colors.grey[600], size: 20),
+          Icon(icon, color: Colors.blue, size: 20),
           SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -555,15 +507,35 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                   ),
                 ),
                 SizedBox(height: 4),
-                Text(
-                  value?.isNotEmpty == true ? value! : 'Not provided',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: value?.isNotEmpty == true
-                        ? Colors.black
-                        : Colors.grey[400],
-                  ),
-                ),
+                _isEditing && controller != null
+                    ? TextField(
+                        controller: controller,
+                        keyboardType: keyboardType,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.blue),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          isDense: true,
+                        ),
+                      )
+                    : Text(
+                        value?.isNotEmpty == true ? value! : 'Not provided',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: value?.isNotEmpty == true
+                              ? Colors.black87
+                              : Colors.grey[500],
+                        ),
+                      ),
               ],
             ),
           ),
@@ -572,26 +544,64 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     );
   }
 
+  Widget _buildPreferenceTile(
+    String label,
+    bool value,
+    IconData icon,
+    Function(bool) onChanged,
+  ) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.blue, size: 20),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: _isEditing ? onChanged : null,
+            activeColor: Colors.blue,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSaveButton() {
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      height: 50,
       child: ElevatedButton(
         onPressed: _isSaving ? null : _saveProfile,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.blue,
+          padding: EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
         ),
         child: _isSaving
-            ? CircularProgressIndicator(color: Colors.white)
+            ? SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
             : Text(
                 'Save Changes',
                 style: TextStyle(
+                  color: Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
                 ),
               ),
       ),
