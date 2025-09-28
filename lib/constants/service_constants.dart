@@ -247,6 +247,7 @@ class ServiceTypes {
   static const Map<String, Map<String, dynamic>> _serviceTypes = {
     'plumbing': {
       'name': 'Plumbing',
+      'categories': ['Residential', 'Commercial', 'Emergency'],
       'specializations': [
         'Pipe repair',
         'Drain cleaning',
@@ -258,6 +259,7 @@ class ServiceTypes {
     },
     'electrical': {
       'name': 'Electrical',
+      'categories': ['Residential', 'Commercial', 'Industrial'],
       'specializations': [
         'Wiring',
         'Circuit installation',
@@ -269,6 +271,7 @@ class ServiceTypes {
     },
     'painting': {
       'name': 'Painting',
+      'categories': ['Interior', 'Exterior', 'Decorative'],
       'specializations': [
         'Interior',
         'Exterior',
@@ -280,6 +283,7 @@ class ServiceTypes {
     },
     'cleaning': {
       'name': 'Cleaning',
+      'categories': ['Residential', 'Commercial', 'Deep Cleaning'],
       'specializations': [
         'Regular maintenance',
         'Deep cleaning',
@@ -291,6 +295,7 @@ class ServiceTypes {
     },
     'ac_repair': {
       'name': 'AC Repair',
+      'categories': ['Split AC', 'Central AC', 'Window AC'],
       'specializations': [
         'Installation',
         'Maintenance',
@@ -302,6 +307,7 @@ class ServiceTypes {
     },
     'general_maintenance': {
       'name': 'General Maintenance',
+      'categories': ['Home Maintenance', 'Property Management', 'Emergency'],
       'specializations': [
         'Home repairs',
         'Preventive maintenance',
@@ -313,6 +319,7 @@ class ServiceTypes {
     },
     'carpentry': {
       'name': 'Carpentry',
+      'categories': ['Furniture', 'Installation', 'Repair'],
       'specializations': [
         'Custom furniture',
         'Cabinet installation',
@@ -324,6 +331,7 @@ class ServiceTypes {
     },
     'gardening': {
       'name': 'Gardening',
+      'categories': ['Landscaping', 'Maintenance', 'Design'],
       'specializations': [
         'Lawn maintenance',
         'Landscaping',
@@ -340,6 +348,7 @@ class ServiceTypes {
         .map((entry) => {
               'key': entry.key,
               'name': entry.value['name'],
+              'categories': entry.value['categories'],
               'specializations': entry.value['specializations']
             })
         .toList();
@@ -349,9 +358,26 @@ class ServiceTypes {
     return _serviceTypes[serviceKey]?['name'] ?? 'Unknown Service';
   }
 
-  static List<String> getSpecializations(String serviceKey) {
+  static List<String> getSpecializations(String? serviceKey) {
+    if (serviceKey == null || serviceKey.isEmpty) return [];
     return List<String>.from(
         _serviceTypes[serviceKey]?['specializations'] ?? []);
+  }
+
+  // Add the missing getCategories method
+  static List<String> getCategories(String? serviceKey) {
+    if (serviceKey == null || serviceKey.isEmpty) return [];
+    return List<String>.from(_serviceTypes[serviceKey]?['categories'] ?? []);
+  }
+
+  // Add helper method to check if service exists
+  static bool hasService(String serviceKey) {
+    return _serviceTypes.containsKey(serviceKey);
+  }
+
+  // Get all service keys
+  static List<String> get allServiceKeys {
+    return _serviceTypes.keys.toList();
   }
 }
 

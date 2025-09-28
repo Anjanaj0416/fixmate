@@ -15,33 +15,55 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
   int _currentStep = 0;
   bool _isLoading = false;
 
-  // Form data
-  String _selectedServiceType = '';
+  // Form key for validation
+  final _formKey = GlobalKey<FormState>();
+
+  // Form data - Updated with proper null handling
+  String? _selectedServiceType; // Make nullable
+  String? _selectedServiceCategory; // Add new variable
+  String _firstName = '';
+  String _lastName = '';
+  String _email = '';
+  String _phone = '';
   String _businessName = '';
   String _experienceYears = '';
   String _bio = '';
+  String _address = '';
+  String _city = '';
+  String _state = '';
+  String _postalCode = '';
+
+  // Collections
   List<String> _selectedSpecializations = [];
-  String _workingHoursStart = '08:00';
+  List<String> _selectedLanguages = [];
+  Set<String> _selectedWorkingDays = {};
+
+  // Time fields with default values
+  String _workingHoursStart = '09:00';
   String _workingHoursEnd = '17:00';
+
+  // Boolean fields
   bool _availableWeekends = false;
   bool _emergencyService = false;
   bool _toolsOwned = false;
   bool _vehicleAvailable = false;
   bool _certified = false;
   bool _insurance = false;
-  List<String> _selectedLanguages = [];
+  bool _whatsappAvailable = false;
+
+  // Pricing fields
   String _dailyWage = '';
   String _halfDayRate = '';
   String _minimumCharge = '';
   String _overtimeRate = '';
+
+  // Location fields
   String _serviceRadius = '';
-  String _city = '';
-  String _postalCode = '';
   String _website = '';
-  bool _whatsappAvailable = false;
 
   final List<String> _steps = [
     'Service Type',
+    'Personal Info',
     'Business Info',
     'Experience & Skills',
     'Availability',
@@ -55,17 +77,59 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
     super.dispose();
   }
 
+  // Updated navigation logic with proper validation
+  bool get _canProceedToNextStep {
+    switch (_currentStep) {
+      case 0: // Service Type
+        return _selectedServiceType != null &&
+            _selectedServiceType!.isNotEmpty &&
+            _selectedServiceCategory != null &&
+            _selectedServiceCategory!.isNotEmpty;
+      case 1: // Personal Info
+        return _firstName.isNotEmpty &&
+            _lastName.isNotEmpty &&
+            _email.isNotEmpty &&
+            _phone.isNotEmpty;
+      case 2: // Business Info
+        return _businessName.isNotEmpty &&
+            _address.isNotEmpty &&
+            _city.isNotEmpty &&
+            _state.isNotEmpty;
+      case 3: // Skills
+        return _selectedSpecializations.isNotEmpty;
+      case 4: // Availability
+        return _selectedWorkingDays.isNotEmpty;
+      case 5: // Pricing
+        return _dailyWage.isNotEmpty && _minimumCharge.isNotEmpty;
+      case 6: // Location & Contact
+        return _city.isNotEmpty && _serviceRadius.isNotEmpty;
+      default:
+        return true;
+    }
+  }
+
   void _nextStep() {
-    if (_currentStep < _steps.length - 1) {
-      setState(() {
-        _currentStep++;
-      });
-      _pageController.nextPage(
-        duration: Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    } else {
-      _submitWorkerData();
+    if (_formKey.currentState?.validate() ?? false) {
+      if (_canProceedToNextStep) {
+        if (_currentStep < _steps.length - 1) {
+          setState(() {
+            _currentStep++;
+          });
+          _pageController.nextPage(
+            duration: Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        } else {
+          _submitWorkerData();
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please complete all required fields'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -81,25 +145,6 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
     }
   }
 
-  bool _isCurrentStepValid() {
-    switch (_currentStep) {
-      case 0:
-        return _selectedServiceType.isNotEmpty;
-      case 1:
-        return _businessName.isNotEmpty && _experienceYears.isNotEmpty;
-      case 2:
-        return _bio.isNotEmpty && _selectedSpecializations.isNotEmpty;
-      case 3:
-        return true; // Always valid, has defaults
-      case 4:
-        return _dailyWage.isNotEmpty && _minimumCharge.isNotEmpty;
-      case 5:
-        return _city.isNotEmpty && _serviceRadius.isNotEmpty;
-      default:
-        return false;
-    }
-  }
-
   Future<void> _submitWorkerData() async {
     setState(() {
       _isLoading = true;
@@ -107,47 +152,39 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
 
     try {
       User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('User not authenticated');
+      if (user == null) {
+        throw Exception('User not authenticated');
+      }
 
-      // Get user data from Firestore
+      // Get user data
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
 
-      if (!userDoc.exists) throw Exception('User document not found');
+      if (!userDoc.exists) {
+        throw Exception('User document not found');
+      }
 
       Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
 
       // Generate worker ID
-      String workerId =
-          'HM_${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
-
-      // Calculate half day rate if not provided
-      double dailyWageValue = double.tryParse(_dailyWage) ?? 0.0;
-      double halfDayRateValue = _halfDayRate.isNotEmpty
-          ? double.tryParse(_halfDayRate) ?? 0.0
-          : dailyWageValue * 0.6;
-
-      // Calculate overtime rate if not provided
-      double overtimeRateValue = _overtimeRate.isNotEmpty
-          ? double.tryParse(_overtimeRate) ?? 0.0
-          : dailyWageValue / 8 * 1.5;
+      String workerId = await _generateWorkerId();
 
       // Create worker model
       WorkerModel worker = WorkerModel(
         workerId: workerId,
-        workerName: userData['name'] ?? '',
-        firstName: userData['name']?.split(' ')[0] ?? '',
-        lastName: userData['name']?.split(' ').skip(1).join(' ') ?? '',
-        serviceType: _selectedServiceType,
-        serviceCategory: ServiceTypes.getServiceName(_selectedServiceType),
+        workerName: '$_firstName $_lastName',
+        firstName: _firstName,
+        lastName: _lastName,
+        serviceType: _selectedServiceType!,
+        serviceCategory: _selectedServiceCategory!,
         businessName: _businessName,
         location: WorkerLocation(
-          latitude: 6.9271, // Default to Colombo
+          latitude: 6.9271, // Default Colombo coordinates
           longitude: 79.8612,
           city: _city,
-          state: 'Sri Lanka',
+          state: _state,
           postalCode: _postalCode,
         ),
         rating: 0.0,
@@ -155,18 +192,19 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
         jobsCompleted: 0,
         successRate: 0.0,
         pricing: WorkerPricing(
-          dailyWageLkr: dailyWageValue,
-          halfDayRateLkr: halfDayRateValue,
+          dailyWageLkr: double.tryParse(_dailyWage) ?? 0.0,
+          halfDayRateLkr: double.tryParse(_halfDayRate) ?? 0.0,
           minimumChargeLkr: double.tryParse(_minimumCharge) ?? 0.0,
           emergencyRateMultiplier: _emergencyService ? 1.5 : 1.0,
-          overtimeHourlyLkr: overtimeRateValue,
+          overtimeHourlyLkr: double.tryParse(_overtimeRate) ?? 0.0,
         ),
         availability: WorkerAvailability(
-          availableToday: true,
-          availableWeekends: _availableWeekends,
+          workingHours: {
+            'start': _workingHoursStart,
+            'end': _workingHoursEnd,
+          },
+          workingDays: _selectedWorkingDays.toList(),
           emergencyService: _emergencyService,
-          workingHours: '$_workingHoursStart-$_workingHoursEnd',
-          responseTimeMinutes: 30,
         ),
         capabilities: WorkerCapabilities(
           toolsOwned: _toolsOwned,
@@ -176,9 +214,9 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
           languages: _selectedLanguages,
         ),
         contact: WorkerContact(
-          phoneNumber: userData['phone'] ?? '',
+          phoneNumber: _phone,
           whatsappAvailable: _whatsappAvailable,
-          email: userData['email'] ?? '',
+          email: _email,
           website: _website.isNotEmpty ? _website : null,
         ),
         profile: WorkerProfile(
@@ -195,7 +233,7 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
           .doc(user.uid)
           .set(worker.toFirestore());
 
-      // Update user document with worker reference
+      // Update user document
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -207,7 +245,7 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
 
       _showSuccessSnackBar('Worker profile created successfully!');
 
-      // Navigate to worker dashboard
+      // Navigate to worker dashboard after delay
       await Future.delayed(Duration(seconds: 2));
       Navigator.pushNamedAndRemoveUntil(
           context, '/worker_dashboard', (route) => false);
@@ -218,6 +256,13 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
         _isLoading = false;
       });
     }
+  }
+
+  Future<String> _generateWorkerId() async {
+    QuerySnapshot workerCount =
+        await FirebaseFirestore.instance.collection('workers').get();
+    int count = workerCount.docs.length + 1;
+    return 'HM_${count.toString().padLeft(4, '0')}';
   }
 
   void _showErrorSnackBar(String message) {
@@ -256,118 +301,108 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
           onPressed:
               _currentStep > 0 ? _previousStep : () => Navigator.pop(context),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Text(
+          'Worker Registration',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+      ),
+      body: Form(
+        key: _formKey,
+        child: Column(
           children: [
-            Text(
-              'Worker Registration',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
+            // Progress indicator
+            Container(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Text(
+                    'Step ${_currentStep + 1} of ${_steps.length}: ${_steps[_currentStep]}',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+                  SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: (_currentStep + 1) / _steps.length,
+                    backgroundColor: Colors.grey[300],
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Color(0xFFFF9800)),
+                  ),
+                ],
               ),
             ),
-            Text(
-              'Step ${_currentStep + 1} of ${_steps.length}: ${_steps[_currentStep]}',
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+            // Page content
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: NeverScrollableScrollPhysics(),
+                children: [
+                  _buildServiceTypeStep(),
+                  _buildPersonalInfoStep(),
+                  _buildBusinessInfoStep(),
+                  _buildExperienceSkillsStep(),
+                  _buildAvailabilityStep(),
+                  _buildPricingStep(),
+                  _buildLocationContactStep(),
+                ],
+              ),
+            ),
+            // Navigation buttons
+            Container(
+              padding: EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  if (_currentStep > 0)
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _previousStep,
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Color(0xFFFF9800)),
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text(
+                          'Previous',
+                          style: TextStyle(color: Color(0xFFFF9800)),
+                        ),
+                      ),
+                    ),
+                  if (_currentStep > 0) SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _canProceedToNextStep ? _nextStep : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFFFF9800),
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: _isLoading
+                          ? SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : Text(
+                              _currentStep == _steps.length - 1
+                                  ? 'Complete Registration'
+                                  : 'Next',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
-      body: Column(
-        children: [
-          // Progress Indicator
-          Container(
-            padding: EdgeInsets.all(16),
-            child: LinearProgressIndicator(
-              value: (_currentStep + 1) / _steps.length,
-              backgroundColor: Colors.grey[200],
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF9800)),
-            ),
-          ),
-
-          // Page View
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: NeverScrollableScrollPhysics(),
-              children: [
-                _buildServiceTypeStep(),
-                _buildBusinessInfoStep(),
-                _buildExperienceSkillsStep(),
-                _buildAvailabilityStep(),
-                _buildPricingStep(),
-                _buildLocationContactStep(),
-              ],
-            ),
-          ),
-
-          // Bottom Navigation
-          Container(
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: Offset(0, -2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                if (_currentStep > 0)
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _previousStep,
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        side: BorderSide(color: Color(0xFFFF9800)),
-                      ),
-                      child: Text(
-                        'Previous',
-                        style: TextStyle(color: Color(0xFFFF9800)),
-                      ),
-                    ),
-                  ),
-                if (_currentStep > 0) SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed:
-                        _isCurrentStepValid() && !_isLoading ? _nextStep : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFF9800),
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: _isLoading
-                        ? SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : Text(
-                            _currentStep == _steps.length - 1
-                                ? 'Complete Registration'
-                                : 'Next',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold),
-                          ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
+  // Step 1: Service Type Selection
   Widget _buildServiceTypeStep() {
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
@@ -396,12 +431,18 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
             itemCount: ServiceTypes.serviceTypesList.length,
             itemBuilder: (context, index) {
               final service = ServiceTypes.serviceTypesList[index];
-              final isSelected = _selectedServiceType == service['key'];
+              final serviceKey = service['key'] as String? ?? '';
+              final serviceName =
+                  service['name'] as String? ?? 'Unknown Service';
+
+              final isSelected = _selectedServiceType == serviceKey;
 
               return GestureDetector(
                 onTap: () {
                   setState(() {
-                    _selectedServiceType = service['key'];
+                    _selectedServiceType = serviceKey;
+                    // Reset category when service type changes
+                    _selectedServiceCategory = null;
                   });
                 },
                 child: Container(
@@ -411,38 +452,36 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
                         : Colors.white,
                     border: Border.all(
                       color: isSelected ? Color(0xFFFF9800) : Colors.grey[300]!,
-                      width: 2,
+                      width: isSelected ? 2 : 1,
                     ),
                     borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  padding: EdgeInsets.all(16),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        service['icon'],
-                        style: TextStyle(fontSize: 32),
+                      Icon(
+                        Icons.build, // Default icon
+                        size: 32,
+                        color:
+                            isSelected ? Color(0xFFFF9800) : Colors.grey[600],
                       ),
                       SizedBox(height: 8),
                       Text(
-                        service['name'],
+                        serviceName,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: isSelected ? Color(0xFFFF9800) : Colors.black,
+                          fontWeight: FontWeight.w500,
+                          color:
+                              isSelected ? Color(0xFFFF9800) : Colors.grey[800],
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        service['description'],
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[600],
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -450,11 +489,83 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
               );
             },
           ),
+
+          // Show service category selection if service type is selected
+          if (_selectedServiceType != null &&
+              _selectedServiceType!.isNotEmpty) ...[
+            SizedBox(height: 24),
+            Text(
+              'Service Category',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 12),
+            _buildDropdownField(
+              label: 'Category',
+              value: _selectedServiceCategory,
+              items: ServiceTypes.getCategories(_selectedServiceType!) ?? [],
+              onChanged: (value) =>
+                  setState(() => _selectedServiceCategory = value),
+              icon: Icons.category,
+              hint: 'Select a category',
+            ),
+          ],
         ],
       ),
     );
   }
 
+  // Step 2: Personal Information
+  Widget _buildPersonalInfoStep() {
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Personal Information',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Tell us about yourself',
+            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+          ),
+          SizedBox(height: 24),
+          _buildTextField(
+            label: 'First Name',
+            value: _firstName,
+            onChanged: (value) => setState(() => _firstName = value),
+            icon: Icons.person,
+          ),
+          SizedBox(height: 16),
+          _buildTextField(
+            label: 'Last Name',
+            value: _lastName,
+            onChanged: (value) => setState(() => _lastName = value),
+            icon: Icons.person_outline,
+          ),
+          SizedBox(height: 16),
+          _buildTextField(
+            label: 'Email',
+            value: _email,
+            onChanged: (value) => setState(() => _email = value),
+            icon: Icons.email,
+            keyboardType: TextInputType.emailAddress,
+          ),
+          SizedBox(height: 16),
+          _buildTextField(
+            label: 'Phone Number',
+            value: _phone,
+            onChanged: (value) => setState(() => _phone = value),
+            icon: Icons.phone,
+            keyboardType: TextInputType.phone,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Step 3: Business Information
   Widget _buildBusinessInfoStep() {
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
@@ -467,13 +578,12 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
           ),
           SizedBox(height: 8),
           Text(
-            'Tell us about your business',
+            'Provide your business details',
             style: TextStyle(fontSize: 16, color: Colors.grey[600]),
           ),
           SizedBox(height: 24),
           _buildTextField(
             label: 'Business Name',
-            hint: 'e.g., John\'s Electrical Services',
             value: _businessName,
             onChanged: (value) => setState(() => _businessName = value),
             icon: Icons.business,
@@ -481,16 +591,50 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
           SizedBox(height: 16),
           _buildTextField(
             label: 'Years of Experience',
-            hint: 'e.g., 5',
             value: _experienceYears,
             onChanged: (value) => setState(() => _experienceYears = value),
-            icon: Icons.calendar_today,
+            icon: Icons.work,
             keyboardType: TextInputType.number,
           ),
           SizedBox(height: 16),
           _buildTextField(
-            label: 'Bio/Description',
-            hint: 'Tell customers about yourself and your services...',
+            label: 'Address',
+            value: _address,
+            onChanged: (value) => setState(() => _address = value),
+            icon: Icons.location_on,
+          ),
+          SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTextField(
+                  label: 'City',
+                  value: _city,
+                  onChanged: (value) => setState(() => _city = value),
+                  icon: Icons.location_city,
+                ),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: _buildTextField(
+                  label: 'State/Province',
+                  value: _state,
+                  onChanged: (value) => setState(() => _state = value),
+                  icon: Icons.map,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          _buildTextField(
+            label: 'Postal Code',
+            value: _postalCode,
+            onChanged: (value) => setState(() => _postalCode = value),
+            icon: Icons.markunread_mailbox,
+          ),
+          SizedBox(height: 16),
+          _buildTextField(
+            label: 'Bio',
             value: _bio,
             onChanged: (value) => setState(() => _bio = value),
             icon: Icons.description,
@@ -501,6 +645,7 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
     );
   }
 
+  // Step 4: Experience & Skills
   Widget _buildExperienceSkillsStep() {
     final availableSpecializations =
         ServiceTypes.getSpecializations(_selectedServiceType);
@@ -581,7 +726,18 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
     );
   }
 
+  // Step 5: Availability
   Widget _buildAvailabilityStep() {
+    final List<String> weekDays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday'
+    ];
+
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
       child: Column(
@@ -624,59 +780,47 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
             ],
           ),
           SizedBox(height: 24),
-          _buildSwitchTile(
-            title: 'Available on Weekends',
-            subtitle: 'Work on Saturdays and Sundays',
-            value: _availableWeekends,
-            onChanged: (value) => setState(() => _availableWeekends = value),
-            icon: Icons.weekend,
-          ),
-          _buildSwitchTile(
-            title: 'Emergency Services',
-            subtitle: 'Available for urgent repairs',
-            value: _emergencyService,
-            onChanged: (value) => setState(() => _emergencyService = value),
-            icon: Icons.emergency,
-          ),
-          SizedBox(height: 24),
           Text(
-            'Equipment & Capabilities',
+            'Working Days',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           SizedBox(height: 12),
-          _buildSwitchTile(
-            title: 'Own Tools',
-            subtitle: 'I have my own tools and equipment',
-            value: _toolsOwned,
-            onChanged: (value) => setState(() => _toolsOwned = value),
-            icon: Icons.build,
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: weekDays.map((day) {
+              final isSelected = _selectedWorkingDays.contains(day);
+              return FilterChip(
+                label: Text(day),
+                selected: isSelected,
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedWorkingDays.add(day);
+                    } else {
+                      _selectedWorkingDays.remove(day);
+                    }
+                  });
+                },
+                selectedColor: Color(0xFFFF9800).withOpacity(0.2),
+                checkmarkColor: Color(0xFFFF9800),
+              );
+            }).toList(),
           ),
+          SizedBox(height: 24),
           _buildSwitchTile(
-            title: 'Vehicle Available',
-            subtitle: 'I have transportation',
-            value: _vehicleAvailable,
-            onChanged: (value) => setState(() => _vehicleAvailable = value),
-            icon: Icons.directions_car,
-          ),
-          _buildSwitchTile(
-            title: 'Certified Professional',
-            subtitle: 'I have relevant certifications',
-            value: _certified,
-            onChanged: (value) => setState(() => _certified = value),
-            icon: Icons.verified,
-          ),
-          _buildSwitchTile(
-            title: 'Insured',
-            subtitle: 'I have professional insurance',
-            value: _insurance,
-            onChanged: (value) => setState(() => _insurance = value),
-            icon: Icons.security,
+            title: 'Emergency Service',
+            subtitle: 'Available for emergency calls',
+            value: _emergencyService,
+            onChanged: (value) => setState(() => _emergencyService = value),
+            icon: Icons.emergency,
           ),
         ],
       ),
     );
   }
 
+  // Step 6: Pricing
   Widget _buildPricingStep() {
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
@@ -695,76 +839,45 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
           SizedBox(height: 24),
           _buildTextField(
             label: 'Daily Rate (LKR)',
-            hint: 'e.g., 5000',
             value: _dailyWage,
             onChanged: (value) => setState(() => _dailyWage = value),
             icon: Icons.attach_money,
             keyboardType: TextInputType.number,
+            hint: 'e.g., 5000',
           ),
           SizedBox(height: 16),
           _buildTextField(
             label: 'Half Day Rate (LKR) - Optional',
-            hint: 'Leave empty to auto-calculate',
             value: _halfDayRate,
             onChanged: (value) => setState(() => _halfDayRate = value),
             icon: Icons.schedule,
             keyboardType: TextInputType.number,
+            hint: 'Leave empty to auto-calculate',
           ),
           SizedBox(height: 16),
           _buildTextField(
             label: 'Minimum Charge (LKR)',
-            hint: 'e.g., 1000',
             value: _minimumCharge,
             onChanged: (value) => setState(() => _minimumCharge = value),
             icon: Icons.money,
             keyboardType: TextInputType.number,
+            hint: 'e.g., 1000',
           ),
           SizedBox(height: 16),
           _buildTextField(
             label: 'Overtime Hourly Rate (LKR) - Optional',
-            hint: 'Leave empty to auto-calculate',
             value: _overtimeRate,
             onChanged: (value) => setState(() => _overtimeRate = value),
             icon: Icons.access_time,
             keyboardType: TextInputType.number,
-          ),
-          SizedBox(height: 24),
-          Container(
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue[200]!),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Colors.blue[600], size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'Pricing Tips',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[600],
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '• Research market rates in your area\n• Consider your experience level\n• Factor in travel time and costs\n• Emergency services typically cost 1.5x normal rate',
-                  style: TextStyle(color: Colors.blue[600]),
-                ),
-              ],
-            ),
+            hint: 'Leave empty to auto-calculate',
           ),
         ],
       ),
     );
   }
 
+  // Step 7: Location & Contact
   Widget _buildLocationContactStep() {
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
@@ -777,63 +890,78 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
           ),
           SizedBox(height: 8),
           Text(
-            'Complete your profile setup',
+            'Final details about your service area',
             style: TextStyle(fontSize: 16, color: Colors.grey[600]),
           ),
           SizedBox(height: 24),
-          _buildDropdownField(
-            label: 'City',
-            value: _city,
-            items: Cities.sriLankanCities,
-            onChanged: (value) => setState(() => _city = value ?? ''),
-            icon: Icons.location_city,
-          ),
-          SizedBox(height: 16),
-          _buildTextField(
-            label: 'Postal Code',
-            hint: 'e.g., 10400',
-            value: _postalCode,
-            onChanged: (value) => setState(() => _postalCode = value),
-            icon: Icons.local_post_office,
-          ),
-          SizedBox(height: 16),
           _buildTextField(
             label: 'Service Radius (km)',
-            hint: 'How far are you willing to travel? e.g., 20',
             value: _serviceRadius,
             onChanged: (value) => setState(() => _serviceRadius = value),
-            icon: Icons.radio_button_checked,
+            icon: Icons.location_searching,
             keyboardType: TextInputType.number,
+            hint: 'e.g., 20',
           ),
           SizedBox(height: 16),
           _buildTextField(
             label: 'Website (Optional)',
-            hint: 'https://yourwebsite.com',
             value: _website,
             onChanged: (value) => setState(() => _website = value),
             icon: Icons.web,
+            keyboardType: TextInputType.url,
+            hint: 'https://yourwebsite.com',
           ),
-          SizedBox(height: 16),
+          SizedBox(height: 24),
           _buildSwitchTile(
             title: 'WhatsApp Available',
-            subtitle: 'Customers can contact you via WhatsApp',
+            subtitle: 'Clients can contact you via WhatsApp',
             value: _whatsappAvailable,
             onChanged: (value) => setState(() => _whatsappAvailable = value),
-            icon: Icons.chat,
+            icon: Icons.message,
+          ),
+          _buildSwitchTile(
+            title: 'Tools Owned',
+            subtitle: 'I have my own tools and equipment',
+            value: _toolsOwned,
+            onChanged: (value) => setState(() => _toolsOwned = value),
+            icon: Icons.build_circle,
+          ),
+          _buildSwitchTile(
+            title: 'Vehicle Available',
+            subtitle: 'I have transportation for service calls',
+            value: _vehicleAvailable,
+            onChanged: (value) => setState(() => _vehicleAvailable = value),
+            icon: Icons.directions_car,
+          ),
+          _buildSwitchTile(
+            title: 'Certified',
+            subtitle: 'I have relevant certifications',
+            value: _certified,
+            onChanged: (value) => setState(() => _certified = value),
+            icon: Icons.verified,
+          ),
+          _buildSwitchTile(
+            title: 'Insurance',
+            subtitle: 'I have professional insurance coverage',
+            value: _insurance,
+            onChanged: (value) => setState(() => _insurance = value),
+            icon: Icons.security,
           ),
         ],
       ),
     );
   }
 
+  // Helper widget methods
   Widget _buildTextField({
     required String label,
-    required String hint,
     required String value,
     required Function(String) onChanged,
     required IconData icon,
-    TextInputType? keyboardType,
+    TextInputType keyboardType = TextInputType.text,
     int maxLines = 1,
+    String? hint,
+    String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -848,16 +976,35 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
           onChanged: onChanged,
           keyboardType: keyboardType,
           maxLines: maxLines,
+          validator: validator ??
+              (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter $label';
+                }
+                return null;
+              },
           decoration: InputDecoration(
-            hintText: hint,
             prefixIcon: Icon(icon, color: Color(0xFFFF9800)),
+            hintText: hint ?? 'Enter $label',
             border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: Color(0xFFFF9800)),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.red),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.red),
             ),
           ),
         ),
@@ -867,10 +1014,11 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
 
   Widget _buildDropdownField({
     required String label,
-    required String value,
+    String? value,
     required List<String> items,
     required Function(String?) onChanged,
     required IconData icon,
+    String? hint,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -881,10 +1029,13 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
         ),
         SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: value.isEmpty ? null : value,
+          value: (value != null && value.isNotEmpty && items.contains(value))
+              ? value
+              : null,
           onChanged: onChanged,
           decoration: InputDecoration(
             prefixIcon: Icon(icon, color: Color(0xFFFF9800)),
+            hintText: hint ?? 'Select $label',
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: Colors.grey[300]!),
@@ -895,11 +1046,17 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
             ),
           ),
           items: items.map((item) {
-            return DropdownMenuItem(
+            return DropdownMenuItem<String>(
               value: item,
               child: Text(item),
             );
           }).toList(),
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please select $label';
+            }
+            return null;
+          },
         ),
       ],
     );
