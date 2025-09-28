@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/customer_model.dart';
+import '../models/user_model.dart';
+import 'worker_registration_flow.dart';
 
 class AccountTypeScreen extends StatefulWidget {
   @override
@@ -19,29 +22,14 @@ class _AccountTypeScreenState extends State<AccountTypeScreen> {
 
     try {
       User? user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .update({
-              'accountType': type,
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
+      if (user == null) {
+        throw Exception('User not authenticated');
+      }
 
-        _showSuccessSnackBar('Account type set successfully!');
-
-        // Navigate to main app or dashboard
-        // For now, just show a success message
-        await Future.delayed(Duration(seconds: 2));
-
-        // TODO: Navigate to appropriate dashboard based on account type
-        if (type == 'customer') {
-          // Navigate to customer dashboard
-          _showSuccessSnackBar('Welcome! You can now find skilled workers.');
-        } else {
-          // Navigate to service provider dashboard
-          _showSuccessSnackBar('Welcome! You can now offer your services.');
-        }
+      if (type == 'customer') {
+        await _createCustomer(user);
+      } else if (type == 'service_provider') {
+        await _navigateToWorkerRegistration();
       }
     } catch (e) {
       _showErrorSnackBar('Error: ${e.toString()}');
@@ -51,6 +39,90 @@ class _AccountTypeScreenState extends State<AccountTypeScreen> {
         _selectedType = null;
       });
     }
+  }
+
+  Future<void> _createCustomer(User user) async {
+    try {
+      // Get user data from Firestore
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        throw Exception('User document not found');
+      }
+
+      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+
+      // Generate customer ID
+      String customerId =
+          'CUST_${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+
+      // Create customer model
+      CustomerModel customer = CustomerModel(
+        customerId: customerId,
+        customerName: userData['name'] ?? '',
+        firstName: userData['name']?.split(' ')[0] ?? '',
+        lastName: userData['name']?.split(' ').skip(1).join(' ') ?? '',
+        email: userData['email'] ?? '',
+        phoneNumber: userData['phone'] ?? '',
+        location: null, // Will be set later when user searches for services
+        preferredServices: [],
+        preferences: CustomerPreferences(),
+        verified: false,
+      );
+
+      // Save customer to Firestore
+      await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .set(customer.toFirestore());
+
+      // Update user document with customer reference
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'accountType': 'customer',
+        'customerId': customerId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      _showSuccessSnackBar('Account created successfully!');
+
+      // Navigate to customer dashboard
+      await Future.delayed(Duration(seconds: 2));
+      Navigator.pushNamedAndRemoveUntil(
+          context, '/customer_dashboard', (route) => false);
+    } catch (e) {
+      throw Exception('Failed to create customer profile: ${e.toString()}');
+    }
+  }
+
+  Future<void> _navigateToWorkerRegistration() async {
+    // Update user document to mark as service provider
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'accountType': 'service_provider_pending',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    setState(() {
+      _isLoading = false;
+      _selectedType = null;
+    });
+
+    // Navigate to worker registration flow
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => WorkerRegistrationFlow()),
+    );
   }
 
   void _showErrorSnackBar(String message) {
@@ -180,7 +252,7 @@ class _AccountTypeScreenState extends State<AccountTypeScreen> {
                     },
               child: Text(
                 'Skip for now',
-                style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                style: TextStyle(color: Colors.grey[600]),
               ),
             ),
           ],
@@ -200,10 +272,7 @@ class _AccountTypeScreenState extends State<AccountTypeScreen> {
     required Color buttonColor,
     required bool isSelected,
   }) {
-    return AnimatedContainer(
-      duration: Duration(milliseconds: 200),
-      width: double.infinity,
-      padding: EdgeInsets.all(24),
+    return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -213,115 +282,114 @@ class _AccountTypeScreenState extends State<AccountTypeScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: isSelected
-                ? buttonColor.withOpacity(0.1)
-                : Colors.grey.withOpacity(0.1),
-            spreadRadius: isSelected ? 2 : 1,
-            blurRadius: isSelected ? 8 : 6,
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 8,
             offset: Offset(0, 2),
           ),
         ],
       ),
-      child: Column(
-        children: [
-          // Icon
-          Container(
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, size: 35, color: iconColor),
-          ),
-          SizedBox(height: 20),
-
-          // Title
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          SizedBox(height: 12),
-
-          // Description
-          Text(
-            description,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 15,
-              height: 1.4,
-            ),
-          ),
-          SizedBox(height: 20),
-
-          // Features
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: features
-                .map((feature) => _buildFeatureTag(feature))
-                .toList(),
-          ),
-          SizedBox(height: 24),
-
-          // Button
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: (_isLoading && isSelected)
-                  ? null
-                  : () => _selectAccountType(type),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: buttonColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Icon and Title
+            Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: iconColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 28),
                 ),
-                elevation: 0,
-              ),
-              child: (_isLoading && isSelected)
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
+                SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
                       ),
-                    )
-                  : Text(
-                      buttonText,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                      SizedBox(height: 4),
+                      Text(
+                        description,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
                       ),
-                    ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildFeatureTag(String text) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.green[50],
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.green[200]!),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: Colors.green[700],
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
+            SizedBox(height: 20),
+
+            // Features
+            ...features.map((feature) => Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle, color: iconColor, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        feature,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+
+            SizedBox(height: 20),
+
+            // Action Button
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: _isLoading && _selectedType == type
+                    ? null
+                    : () => _selectAccountType(type),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: buttonColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 0,
+                ),
+                child: _isLoading && _selectedType == type
+                    ? SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text(
+                        buttonText,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ),
+          ],
         ),
       ),
     );
