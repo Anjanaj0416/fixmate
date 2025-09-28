@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'firebase_options.dart'; // Add this import
-import 'screens/welcome_screen.dart'; // Add this import
+import 'firebase_options.dart';
+import 'screens/welcome_screen.dart';
+import 'screens/worker_dashboard_screen.dart';
+import 'screens/sign_in_screen.dart';
+import 'screens/create_account_screen.dart';
+import 'screens/account_type_screen.dart';
+import 'screens/worker_registration_flow.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Fix: Pass the Firebase options for the current platform
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -28,6 +32,25 @@ class FixMateApp extends StatelessWidget {
       ),
       home: WelcomeScreen(),
       debugShowCheckedModeBanner: false,
+      routes: {
+        '/welcome': (context) => WelcomeScreen(),
+        '/signin': (context) => SignInScreen(),
+        '/signup': (context) => CreateAccountScreen(),
+        '/account_type': (context) => AccountTypeScreen(),
+        '/worker_registration': (context) => WorkerRegistrationFlow(),
+        '/worker_dashboard': (context) => WorkerDashboardScreen(),
+      },
+      onGenerateRoute: (settings) {
+        // Handle dynamic routes or routes with parameters
+        switch (settings.name) {
+          case '/worker_dashboard':
+            return MaterialPageRoute(
+              builder: (context) => WorkerDashboardScreen(),
+            );
+          default:
+            return null;
+        }
+      },
     );
   }
 }
