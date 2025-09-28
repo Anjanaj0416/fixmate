@@ -14,8 +14,14 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
   int _currentStep = 0;
   bool _isLoading = false;
 
-  // Form key for validation
-  final _formKey = GlobalKey<FormState>();
+  // FIXED: Create separate form keys for each step instead of single _formKey
+  final _serviceTypeFormKey = GlobalKey<FormState>();
+  final _personalInfoFormKey = GlobalKey<FormState>();
+  final _businessInfoFormKey = GlobalKey<FormState>();
+  final _experienceFormKey = GlobalKey<FormState>();
+  final _availabilityFormKey = GlobalKey<FormState>();
+  final _pricingFormKey = GlobalKey<FormState>();
+  final _locationFormKey = GlobalKey<FormState>();
 
   // Form data
   String? _selectedServiceType;
@@ -85,6 +91,100 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
     'general_maintenance': 'General Maintenance',
   };
 
+  // Specializations by service type
+  final Map<String, List<String>> _specializationsByService = {
+    'plumbing': [
+      'Pipe Installation',
+      'Leak Repair',
+      'Drain Cleaning',
+      'Water Heater Repair',
+      'Bathroom Plumbing',
+      'Kitchen Plumbing',
+      'Emergency Plumbing',
+    ],
+    'electrical': [
+      'Wiring Installation',
+      'Circuit Breaker Repair',
+      'Outlet Installation',
+      'Lighting Installation',
+      'Electrical Panel Upgrade',
+      'Emergency Electrical',
+    ],
+    'carpentry': [
+      'Custom Furniture',
+      'Door Installation',
+      'Window Installation',
+      'Kitchen Cabinets',
+      'Flooring',
+      'Deck Building',
+    ],
+    'painting': [
+      'Interior Painting',
+      'Exterior Painting',
+      'Wall Preparation',
+      'Texture Work',
+      'Commercial Painting',
+    ],
+    'cleaning': [
+      'House Cleaning',
+      'Office Cleaning',
+      'Deep Cleaning',
+      'Move-in/Move-out Cleaning',
+      'Post-Construction Cleanup',
+    ],
+    'gardening': [
+      'Lawn Maintenance',
+      'Landscaping',
+      'Tree Trimming',
+      'Garden Design',
+      'Irrigation Systems',
+    ],
+    'ac_repair': [
+      'AC Installation',
+      'AC Repair',
+      'AC Maintenance',
+      'Duct Cleaning',
+      'Thermostat Installation',
+    ],
+    'appliance_repair': [
+      'Refrigerator Repair',
+      'Washing Machine Repair',
+      'Dishwasher Repair',
+      'Oven Repair',
+      'Dryer Repair',
+    ],
+    'masonry': [
+      'Brick Work',
+      'Stone Work',
+      'Concrete Work',
+      'Tile Installation',
+      'Retaining Walls',
+    ],
+    'roofing': [
+      'Roof Repair',
+      'Roof Installation',
+      'Gutter Installation',
+      'Roof Inspection',
+      'Emergency Roof Repair',
+    ],
+    'general_maintenance': [
+      'Preventive Maintenance',
+      'Repair Work',
+      'Installation Services',
+      'Emergency Services',
+    ],
+  };
+
+  final List<String> _availableLanguages = [
+    'English',
+    'Sinhala',
+    'Tamil',
+    'Arabic',
+    'Chinese',
+    'Hindi',
+    'Other',
+  ];
+
   final List<String> _workingDays = [
     'Monday',
     'Tuesday',
@@ -92,162 +192,84 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
     'Thursday',
     'Friday',
     'Saturday',
-    'Sunday'
+    'Sunday',
   ];
 
-  final List<String> _languages = ['Sinhala', 'Tamil', 'English'];
-
-  // Specializations based on service type
-  final Map<String, List<String>> _specializationsByService = {
-    'plumbing': [
-      'Pipe Installation',
-      'Leak Repair',
-      'Drain Cleaning',
-      'Water Heater',
-      'Bathroom Fitting'
-    ],
-    'electrical': [
-      'Wiring',
-      'Switch Installation',
-      'Fan Installation',
-      'Light Fitting',
-      'Electrical Repair'
-    ],
-    'carpentry': [
-      'Furniture Making',
-      'Door Installation',
-      'Window Fitting',
-      'Cabinet Making',
-      'Wood Repair'
-    ],
-    'painting': [
-      'Interior Painting',
-      'Exterior Painting',
-      'Wall Texture',
-      'Primer Application',
-      'Color Consultation'
-    ],
-    'cleaning': [
-      'House Cleaning',
-      'Office Cleaning',
-      'Deep Cleaning',
-      'Post-Construction Cleaning',
-      'Move-in/out Cleaning'
-    ],
-    'gardening': [
-      'Lawn Care',
-      'Plant Care',
-      'Garden Design',
-      'Tree Pruning',
-      'Landscaping'
-    ],
-    'ac_repair': [
-      'AC Installation',
-      'AC Repair',
-      'AC Maintenance',
-      'Gas Filling',
-      'Filter Cleaning'
-    ],
-    'appliance_repair': [
-      'Washing Machine',
-      'Refrigerator',
-      'Microwave',
-      'Dishwasher',
-      'Dryer'
-    ],
-    'masonry': [
-      'Brick Work',
-      'Stone Work',
-      'Concrete Work',
-      'Wall Construction',
-      'Foundation Work'
-    ],
-    'roofing': [
-      'Roof Installation',
-      'Roof Repair',
-      'Gutter Installation',
-      'Roof Cleaning',
-      'Waterproofing'
-    ],
-    'general_maintenance': [
-      'Basic Repairs',
-      'Property Maintenance',
-      'Fixture Installation',
-      'Minor Renovations',
-      'Handyman Services'
-    ],
-  };
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
+  // FIXED: Updated validation to use correct form keys
   bool get _canProceedToNextStep {
     switch (_currentStep) {
-      case 0: // Service Type
-        return _selectedServiceType != null && _selectedServiceType!.isNotEmpty;
-      case 1: // Personal Info
+      case 0:
+        return _selectedServiceType != null;
+      case 1:
         return _firstName.isNotEmpty &&
             _lastName.isNotEmpty &&
             _email.isNotEmpty &&
             _phone.isNotEmpty;
-      case 2: // Business Info
+      case 2:
         return _businessName.isNotEmpty &&
             _address.isNotEmpty &&
             _city.isNotEmpty &&
             _state.isNotEmpty;
-      case 3: // Skills
+      case 3:
         return _selectedSpecializations.isNotEmpty &&
             _experienceYears.isNotEmpty;
-      case 4: // Availability
+      case 4:
         return _selectedWorkingDays.isNotEmpty;
-      case 5: // Pricing
-        return _dailyWage.isNotEmpty && _minimumCharge.isNotEmpty;
-      case 6: // Location & Contact
-        return _city.isNotEmpty && _serviceRadius.isNotEmpty;
+      case 5:
+        return _dailyWage.isNotEmpty;
+      case 6:
+        return _serviceRadius.isNotEmpty;
       default:
-        return true;
+        return false;
     }
   }
 
   void _nextStep() {
-    if (_currentStep == 0) {
-      if (_selectedServiceType != null && _selectedServiceType!.isNotEmpty) {
+    // FIXED: Use the appropriate form key for validation
+    bool isValid = false;
+    switch (_currentStep) {
+      case 0:
+        isValid = _serviceTypeFormKey.currentState?.validate() ?? true;
+        break;
+      case 1:
+        isValid = _personalInfoFormKey.currentState?.validate() ?? false;
+        break;
+      case 2:
+        isValid = _businessInfoFormKey.currentState?.validate() ?? false;
+        break;
+      case 3:
+        isValid = _experienceFormKey.currentState?.validate() ?? false;
+        break;
+      case 4:
+        isValid = _availabilityFormKey.currentState?.validate() ?? false;
+        break;
+      case 5:
+        isValid = _pricingFormKey.currentState?.validate() ?? false;
+        break;
+      case 6:
+        isValid = _locationFormKey.currentState?.validate() ?? false;
+        break;
+    }
+
+    if (_selectedServiceType == null && _currentStep == 0) {
+      _showValidationError('Please select a service type to continue.');
+      return;
+    }
+
+    if (isValid && _canProceedToNextStep) {
+      if (_currentStep < _steps.length - 1) {
         setState(() {
           _currentStep++;
-          // Set service category based on service type
-          _selectedServiceCategory = _serviceTypes[_selectedServiceType] ?? '';
         });
         _pageController.nextPage(
           duration: Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
       } else {
-        _showValidationError('Please select a service type to continue.');
-      }
-      return;
-    }
-
-    if (_formKey.currentState?.validate() ?? false) {
-      if (_canProceedToNextStep) {
-        if (_currentStep < _steps.length - 1) {
-          setState(() {
-            _currentStep++;
-          });
-          _pageController.nextPage(
-            duration: Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-          );
-        } else {
-          _submitRegistration();
-        }
-      } else {
-        _showValidationError(_getValidationMessage());
+        _submitRegistration();
       }
     } else {
-      _showValidationError('Please fill in all required fields correctly.');
+      _showValidationError(_getValidationMessage());
     }
   }
 
@@ -336,219 +358,203 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
           onPressed:
               _currentStep > 0 ? _previousStep : () => Navigator.pop(context),
         ),
-        title: Column(
-          children: [
-            Text(
-              'Worker Registration',
-              style: TextStyle(color: Colors.black, fontSize: 18),
-            ),
-            Text(
-              'Step ${_currentStep + 1} of ${_steps.length}: ${_steps[_currentStep]}',
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+        title: Text(
+          'Worker Registration',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
+        bottom: PreferredSize(
+          preferredSize: Size.fromHeight(80),
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    Text(
+                      'Step ${_currentStep + 1} of ${_steps.length}: ${_steps[_currentStep]}',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    ),
+                    SizedBox(height: 10),
+                    LinearProgressIndicator(
+                      value: (_currentStep + 1) / _steps.length,
+                      backgroundColor: Colors.grey[300],
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Theme.of(context).primaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+      body: PageView(
+        controller: _pageController,
+        physics: NeverScrollableScrollPhysics(),
+        children: [
+          _buildServiceTypeStep(),
+          _buildPersonalInfoStep(),
+          _buildBusinessInfoStep(),
+          _buildExperienceStep(),
+          _buildAvailabilityStep(),
+          _buildPricingStep(),
+          _buildLocationStep(),
+        ],
+      ),
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.3),
+              spreadRadius: 1,
+              blurRadius: 5,
+              offset: Offset(0, -3),
             ),
           ],
         ),
-        centerTitle: true,
-      ),
-      body: Column(
-        children: [
-          // Progress indicator
-          LinearProgressIndicator(
-            value: (_currentStep + 1) / _steps.length,
-            backgroundColor: Colors.grey[300],
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF9800)),
-          ),
-
-          // Content
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: NeverScrollableScrollPhysics(),
-              children: [
-                _buildServiceTypeStep(),
-                _buildPersonalInfoStep(),
-                _buildBusinessInfoStep(),
-                _buildExperienceStep(),
-                _buildAvailabilityStep(),
-                _buildPricingStep(),
-                _buildLocationStep(),
-              ],
-            ),
-          ),
-
-          // Navigation buttons
-          Container(
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: Offset(0, -2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                if (_currentStep > 0)
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _previousStep,
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        side: BorderSide(color: Color(0xFFFF9800)),
-                      ),
-                      child: Text(
-                        'Previous',
-                        style: TextStyle(color: Color(0xFFFF9800)),
-                      ),
-                    ),
-                  ),
-                if (_currentStep > 0) SizedBox(width: 16),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _nextStep,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFF9800),
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: _isLoading
-                        ? CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2)
-                        : Text(
-                            _currentStep == _steps.length - 1
-                                ? 'Complete Registration'
-                                : 'Next',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600),
-                          ),
+        child: Row(
+          children: [
+            if (_currentStep > 0)
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _previousStep,
+                  child: Text('Previous'),
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
-              ],
+              ),
+            if (_currentStep > 0) SizedBox(width: 16),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _nextStep,
+                child: _isLoading
+                    ? CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2)
+                    : Text(_currentStep == _steps.length - 1
+                        ? 'Complete Registration'
+                        : 'Next'),
+                style: ElevatedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: Theme.of(context).primaryColor,
+                  foregroundColor: Colors.white,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
+  // FIXED: Service Type Step with separate form key
   Widget _buildServiceTypeStep() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Select Your Service Type',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Choose the main service you provide',
-            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-          ),
-          SizedBox(height: 24),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.2,
+    return Form(
+      key: _serviceTypeFormKey,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'What type of service do you provide?',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
-            itemCount: _serviceTypes.length,
-            itemBuilder: (context, index) {
-              String serviceKey = _serviceTypes.keys.elementAt(index);
-              String serviceName = _serviceTypes[serviceKey]!;
-              bool isSelected = _selectedServiceType == serviceKey;
-
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedServiceType = serviceKey;
-                  });
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? Color(0xFFFF9800).withOpacity(0.1)
-                        : Colors.white,
-                    border: Border.all(
-                      color: isSelected ? Color(0xFFFF9800) : Colors.grey[300]!,
-                      width: isSelected ? 2 : 1,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _getServiceIcon(serviceKey),
-                        size: 40,
-                        color:
-                            isSelected ? Color(0xFFFF9800) : Colors.grey[600],
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        serviceName,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight:
-                              isSelected ? FontWeight.w600 : FontWeight.normal,
-                          color:
-                              isSelected ? Color(0xFFFF9800) : Colors.black87,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-          if (_selectedServiceType != null) ...[
-            SizedBox(height: 16),
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Color(0xFFFF9800).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Color(0xFFFF9800).withOpacity(0.3)),
+            SizedBox(height: 8),
+            Text(
+              'Select the main service category that best describes your expertise.',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+            SizedBox(height: 24),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 1.2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Color(0xFFFF9800)),
-                  SizedBox(width: 12),
-                  Expanded(
+              itemCount: _serviceTypes.length,
+              itemBuilder: (context, index) {
+                String key = _serviceTypes.keys.elementAt(index);
+                String value = _serviceTypes.values.elementAt(index);
+                bool isSelected = _selectedServiceType == key;
+
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedServiceType = key;
+                      _selectedServiceCategory = value;
+                      // Reset specializations when service type changes
+                      _selectedSpecializations.clear();
+                    });
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Theme.of(context).primaryColor.withOpacity(0.1)
+                          : Colors.white,
+                      border: Border.all(
+                        color: isSelected
+                            ? Theme.of(context).primaryColor
+                            : Colors.grey[300]!,
+                        width: isSelected ? 2 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        if (isSelected)
+                          BoxShadow(
+                            color:
+                                Theme.of(context).primaryColor.withOpacity(0.3),
+                            spreadRadius: 1,
+                            blurRadius: 8,
+                          ),
+                      ],
+                    ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        Icon(
+                          _getServiceIcon(key),
+                          size: 32,
+                          color: isSelected
+                              ? Theme.of(context).primaryColor
+                              : Colors.grey[600],
+                        ),
+                        SizedBox(height: 8),
                         Text(
-                          'Selected: ${_serviceTypes[_selectedServiceType!]}',
+                          value,
+                          textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.w500,
+                            color: isSelected
+                                ? Theme.of(context).primaryColor
+                                : Colors.grey[700],
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ],
-        ],
+        ),
       ),
     );
   }
 
+  // FIXED: Personal Info Step with separate form key
   Widget _buildPersonalInfoStep() {
     return Form(
-      key: _formKey,
+      key: _personalInfoFormKey,
       child: SingleChildScrollView(
         padding: EdgeInsets.all(16),
         child: Column(
@@ -645,9 +651,10 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
     );
   }
 
+  // FIXED: Business Info Step with separate form key
   Widget _buildBusinessInfoStep() {
     return Form(
-      key: _formKey,
+      key: _businessInfoFormKey,
       child: SingleChildScrollView(
         padding: EdgeInsets.all(16),
         child: Column(
@@ -773,13 +780,14 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
     );
   }
 
+  // FIXED: Experience Step with separate form key
   Widget _buildExperienceStep() {
     List<String> availableSpecializations = _selectedServiceType != null
         ? _specializationsByService[_selectedServiceType!] ?? []
         : [];
 
     return Form(
-      key: _formKey,
+      key: _experienceFormKey,
       child: SingleChildScrollView(
         padding: EdgeInsets.all(16),
         child: Column(
@@ -799,28 +807,13 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
               keyboardType: TextInputType.number,
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Please enter years of experience';
+                  return 'Please enter your years of experience';
                 }
                 return null;
               },
               onChanged: (value) {
                 setState(() {
                   _experienceYears = value;
-                });
-              },
-            ),
-            SizedBox(height: 16),
-            TextFormField(
-              decoration: InputDecoration(
-                labelText: 'Bio/Description',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.description),
-                hintText: 'Tell customers about your expertise and approach...',
-              ),
-              maxLines: 3,
-              onChanged: (value) {
-                setState(() {
-                  _bio = value;
                 });
               },
             ),
@@ -831,10 +824,10 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
             ),
             SizedBox(height: 8),
             Text(
-              'Select the services you specialize in',
+              'Select all specializations that apply to your skills',
               style: TextStyle(color: Colors.grey[600]),
             ),
-            SizedBox(height: 12),
+            SizedBox(height: 16),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -853,21 +846,22 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
                       }
                     });
                   },
-                  selectedColor: Color(0xFFFF9800).withOpacity(0.2),
-                  checkmarkColor: Color(0xFFFF9800),
+                  selectedColor:
+                      Theme.of(context).primaryColor.withOpacity(0.3),
+                  checkmarkColor: Theme.of(context).primaryColor,
                 );
               }).toList(),
             ),
             SizedBox(height: 24),
             Text(
-              'Languages',
+              'Languages Spoken',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
-            SizedBox(height: 12),
+            SizedBox(height: 16),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _languages.map((language) {
+              children: _availableLanguages.map((language) {
                 bool isSelected = _selectedLanguages.contains(language);
                 return FilterChip(
                   label: Text(language),
@@ -881,56 +875,26 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
                       }
                     });
                   },
-                  selectedColor: Color(0xFFFF9800).withOpacity(0.2),
-                  checkmarkColor: Color(0xFFFF9800),
+                  selectedColor:
+                      Theme.of(context).primaryColor.withOpacity(0.3),
+                  checkmarkColor: Theme.of(context).primaryColor,
                 );
               }).toList(),
             ),
             SizedBox(height: 24),
-            Text(
-              'Capabilities',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            SizedBox(height: 12),
-            CheckboxListTile(
-              title: Text('I have my own tools'),
-              value: _toolsOwned,
+            TextFormField(
+              decoration: InputDecoration(
+                labelText: 'Bio / Professional Summary',
+                border: OutlineInputBorder(),
+                hintText:
+                    'Describe your experience and what makes you stand out...',
+              ),
+              maxLines: 4,
               onChanged: (value) {
                 setState(() {
-                  _toolsOwned = value ?? false;
+                  _bio = value;
                 });
               },
-              activeColor: Color(0xFFFF9800),
-            ),
-            CheckboxListTile(
-              title: Text('I have a vehicle'),
-              value: _vehicleAvailable,
-              onChanged: (value) {
-                setState(() {
-                  _vehicleAvailable = value ?? false;
-                });
-              },
-              activeColor: Color(0xFFFF9800),
-            ),
-            CheckboxListTile(
-              title: Text('I am certified/licensed'),
-              value: _certified,
-              onChanged: (value) {
-                setState(() {
-                  _certified = value ?? false;
-                });
-              },
-              activeColor: Color(0xFFFF9800),
-            ),
-            CheckboxListTile(
-              title: Text('I have insurance'),
-              value: _insurance,
-              onChanged: (value) {
-                setState(() {
-                  _insurance = value ?? false;
-                });
-              },
-              activeColor: Color(0xFFFF9800),
             ),
           ],
         ),
@@ -938,142 +902,177 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
     );
   }
 
+  // FIXED: Availability Step with separate form key
   Widget _buildAvailabilityStep() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Availability',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 24),
-          Text(
-            'Working Days *',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _workingDays.map((day) {
-              bool isSelected = _selectedWorkingDays.contains(day);
-              return FilterChip(
-                label: Text(day),
-                selected: isSelected,
-                onSelected: (selected) {
-                  setState(() {
-                    if (selected) {
-                      _selectedWorkingDays.add(day);
-                    } else {
-                      _selectedWorkingDays.remove(day);
-                    }
-                  });
-                },
-                selectedColor: Color(0xFFFF9800).withOpacity(0.2),
-                checkmarkColor: Color(0xFFFF9800),
-              );
-            }).toList(),
-          ),
-          SizedBox(height: 24),
-          Text(
-            'Working Hours',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  decoration: InputDecoration(
-                    labelText: 'Start Time',
-                    border: OutlineInputBorder(),
-                  ),
-                  value: _workingHoursStart,
-                  items: _generateTimeSlots(),
-                  onChanged: (value) {
-                    setState(() {
-                      _workingHoursStart = value!;
-                    });
-                  },
-                ),
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  decoration: InputDecoration(
-                    labelText: 'End Time',
-                    border: OutlineInputBorder(),
-                  ),
-                  value: _workingHoursEnd,
-                  items: _generateTimeSlots(),
-                  onChanged: (value) {
-                    setState(() {
-                      _workingHoursEnd = value!;
-                    });
-                  },
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 24),
-          Text(
-            'Additional Availability Options',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          SizedBox(height: 12),
-          CheckboxListTile(
-            title: Text('Available on weekends'),
-            value: _availableWeekends,
-            onChanged: (value) {
-              setState(() {
-                _availableWeekends = value ?? false;
-              });
-            },
-            activeColor: Color(0xFFFF9800),
-          ),
-          CheckboxListTile(
-            title: Text('Emergency service available'),
-            value: _emergencyService,
-            onChanged: (value) {
-              setState(() {
-                _emergencyService = value ?? false;
-              });
-            },
-            activeColor: Color(0xFFFF9800),
-          ),
-          CheckboxListTile(
-            title: Text('WhatsApp available'),
-            value: _whatsappAvailable,
-            onChanged: (value) {
-              setState(() {
-                _whatsappAvailable = value ?? false;
-              });
-            },
-            activeColor: Color(0xFFFF9800),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPricingStep() {
     return Form(
-      key: _formKey,
+      key: _availabilityFormKey,
       child: SingleChildScrollView(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Pricing Information',
+              'Availability',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 24),
+            Text(
+              'Working Days *',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 16),
+            Column(
+              children: _workingDays.map((day) {
+                bool isSelected = _selectedWorkingDays.contains(day);
+                return CheckboxListTile(
+                  title: Text(day),
+                  value: isSelected,
+                  onChanged: (bool? value) {
+                    setState(() {
+                      if (value ?? false) {
+                        _selectedWorkingDays.add(day);
+                      } else {
+                        _selectedWorkingDays.remove(day);
+                      }
+                    });
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                );
+              }).toList(),
+            ),
+            SizedBox(height: 24),
+            Text(
+              'Working Hours',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    decoration: InputDecoration(
+                      labelText: 'Start Time',
+                      border: OutlineInputBorder(),
+                      hintText: '09:00',
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _workingHoursStart = value;
+                      });
+                    },
+                  ),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    decoration: InputDecoration(
+                      labelText: 'End Time',
+                      border: OutlineInputBorder(),
+                      hintText: '17:00',
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _workingHoursEnd = value;
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 24),
+            SwitchListTile(
+              title: Text('Available on Weekends'),
+              subtitle: Text('Do you work on Saturday and Sunday?'),
+              value: _availableWeekends,
+              onChanged: (bool value) {
+                setState(() {
+                  _availableWeekends = value;
+                });
+              },
+            ),
+            SwitchListTile(
+              title: Text('Emergency Services'),
+              subtitle: Text('Available for urgent/emergency calls'),
+              value: _emergencyService,
+              onChanged: (bool value) {
+                setState(() {
+                  _emergencyService = value;
+                });
+              },
+            ),
+            SwitchListTile(
+              title: Text('Own Tools'),
+              subtitle: Text('I have my own tools and equipment'),
+              value: _toolsOwned,
+              onChanged: (bool value) {
+                setState(() {
+                  _toolsOwned = value;
+                });
+              },
+            ),
+            SwitchListTile(
+              title: Text('Vehicle Available'),
+              subtitle: Text('I have transportation to job sites'),
+              value: _vehicleAvailable,
+              onChanged: (bool value) {
+                setState(() {
+                  _vehicleAvailable = value;
+                });
+              },
+            ),
+            SwitchListTile(
+              title: Text('Certified'),
+              subtitle: Text('I have relevant certifications'),
+              value: _certified,
+              onChanged: (bool value) {
+                setState(() {
+                  _certified = value;
+                });
+              },
+            ),
+            SwitchListTile(
+              title: Text('Insured'),
+              subtitle: Text('I have liability insurance'),
+              value: _insurance,
+              onChanged: (bool value) {
+                setState(() {
+                  _insurance = value;
+                });
+              },
+            ),
+            SwitchListTile(
+              title: Text('WhatsApp Available'),
+              subtitle: Text('Customers can contact me via WhatsApp'),
+              value: _whatsappAvailable,
+              onChanged: (bool value) {
+                setState(() {
+                  _whatsappAvailable = value;
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // FIXED: Pricing Step with separate form key
+  Widget _buildPricingStep() {
+    return Form(
+      key: _pricingFormKey,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Pricing',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 8),
             Text(
-              'Set your service rates (in LKR)',
-              style: TextStyle(color: Colors.grey[600]),
+              'Set your rates in Sri Lankan Rupees (LKR)',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
             SizedBox(height: 24),
             TextFormField(
@@ -1081,7 +1080,7 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
                 labelText: 'Daily Wage (LKR) *',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.monetization_on),
-                hintText: 'e.g., 5000',
+                hintText: 'e.g., 3000',
               ),
               keyboardType: TextInputType.number,
               validator: (value) {
@@ -1102,7 +1101,7 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
                 labelText: 'Half Day Rate (LKR)',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.monetization_on),
-                hintText: 'e.g., 3000',
+                hintText: 'e.g., 1500',
               ),
               keyboardType: TextInputType.number,
               onChanged: (value) {
@@ -1114,18 +1113,12 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
             SizedBox(height: 16),
             TextFormField(
               decoration: InputDecoration(
-                labelText: 'Minimum Charge (LKR) *',
+                labelText: 'Minimum Charge (LKR)',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.monetization_on),
-                hintText: 'e.g., 1500',
+                hintText: 'e.g., 500',
               ),
               keyboardType: TextInputType.number,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter minimum charge';
-                }
-                return null;
-              },
               onChanged: (value) {
                 setState(() {
                   _minimumCharge = value;
@@ -1135,10 +1128,10 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
             SizedBox(height: 16),
             TextFormField(
               decoration: InputDecoration(
-                labelText: 'Overtime Rate per Hour (LKR)',
+                labelText: 'Overtime Hourly Rate (LKR)',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.monetization_on),
-                hintText: 'e.g., 800',
+                hintText: 'e.g., 400',
               ),
               keyboardType: TextInputType.number,
               onChanged: (value) {
@@ -1147,57 +1140,23 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
                 });
               },
             ),
-            SizedBox(height: 24),
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue[200]!),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.info, color: Colors.blue[600]),
-                      SizedBox(width: 8),
-                      Text(
-                        'Pricing Tips',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blue[800],
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    '• Research market rates in your area\n'
-                    '• Consider your experience level\n'
-                    '• Include travel time in pricing\n'
-                    '• Be competitive but fair',
-                    style: TextStyle(color: Colors.blue[700]),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
     );
   }
 
+  // FIXED: Location Step with separate form key
   Widget _buildLocationStep() {
     return Form(
-      key: _formKey,
+      key: _locationFormKey,
       child: SingleChildScrollView(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Location & Contact',
+              'Location & Service Area',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 24),
@@ -1205,13 +1164,14 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
               decoration: InputDecoration(
                 labelText: 'Service Radius (km) *',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.location_searching),
-                hintText: 'e.g., 15',
+                prefixIcon: Icon(Icons.location_on),
+                hintText: 'e.g., 10',
+                helperText: 'How far are you willing to travel for jobs?',
               ),
               keyboardType: TextInputType.number,
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Please enter service radius';
+                  return 'Please enter your service radius';
                 }
                 return null;
               },
@@ -1222,42 +1182,27 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
               },
             ),
             SizedBox(height: 24),
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.green[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green[200]!),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.check_circle, color: Colors.green[600]),
-                      SizedBox(width: 8),
-                      Text(
-                        'Registration Summary',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: Colors.green[800],
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  _buildSummaryItem(
-                      'Service', _serviceTypes[_selectedServiceType] ?? ''),
-                  _buildSummaryItem('Name', '$_firstName $_lastName'),
-                  _buildSummaryItem('Business', _businessName),
-                  _buildSummaryItem('Experience', '$_experienceYears years'),
-                  _buildSummaryItem(
-                      'Specializations', _selectedSpecializations.join(', ')),
-                  _buildSummaryItem(
-                      'Working Days', _selectedWorkingDays.join(', ')),
-                  _buildSummaryItem('Daily Rate', 'LKR $_dailyWage'),
-                  _buildSummaryItem('Location', '$_city, $_state'),
-                ],
+            Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Summary',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 16),
+                    _buildSummaryRow('Service Type', _selectedServiceCategory),
+                    _buildSummaryRow('Name', '$_firstName $_lastName'),
+                    _buildSummaryRow('Business', _businessName),
+                    _buildSummaryRow('Location', '$_city, $_state'),
+                    _buildSummaryRow('Experience', '$_experienceYears years'),
+                    _buildSummaryRow('Daily Rate', 'LKR $_dailyWage'),
+                    _buildSummaryRow('Service Radius', '$_serviceRadius km'),
+                  ],
+                ),
               ),
             ),
           ],
@@ -1266,15 +1211,13 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
     );
   }
 
-  Widget _buildSummaryItem(String label, String value) {
-    if (value.isEmpty) return SizedBox.shrink();
+  Widget _buildSummaryRow(String label, String value) {
     return Padding(
-      padding: EdgeInsets.only(bottom: 4),
+      padding: EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 120,
             child: Text(
               '$label:',
               style: TextStyle(fontWeight: FontWeight.w500),
@@ -1282,28 +1225,13 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
           ),
           Expanded(
             child: Text(
-              value,
+              value.isEmpty ? 'Not specified' : value,
               style: TextStyle(color: Colors.grey[700]),
             ),
           ),
         ],
       ),
     );
-  }
-
-  List<DropdownMenuItem<String>> _generateTimeSlots() {
-    List<DropdownMenuItem<String>> items = [];
-    for (int hour = 0; hour < 24; hour++) {
-      for (int minute = 0; minute < 60; minute += 30) {
-        String time =
-            '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
-        items.add(DropdownMenuItem(
-          value: time,
-          child: Text(time),
-        ));
-      }
-    }
-    return items;
   }
 
   Future<void> _submitRegistration() async {
