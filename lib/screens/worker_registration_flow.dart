@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/worker_model.dart';
 import '../models/user_model.dart';
-import 'service_constants.dart';
+import '../constants/service_constants.dart';
 
 class WorkerRegistrationFlow extends StatefulWidget {
   @override

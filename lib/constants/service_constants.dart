@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/worker_model.dart';
 import '../models/customer_model.dart';
+import 'dart:math' as math;
 
 class WorkerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -144,16 +145,19 @@ class WorkerService {
     double dLat = _toRadians(lat2 - lat1);
     double dLon = _toRadians(lon2 - lon1);
 
-    double a = (dLat / 2).sin() * (dLat / 2).sin() +
-        lat1.cos() * lat2.cos() * (dLon / 2).sin() * (dLon / 2).sin();
+    double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_toRadians(lat1)) *
+            math.cos(_toRadians(lat2)) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
 
-    double c = 2 * (a.sqrt()).asin();
+    double c = 2 * math.asin(math.sqrt(a));
 
     return earthRadius * c;
   }
 
   static double _toRadians(double degrees) {
-    return degrees * (3.14159265359 / 180);
+    return degrees * (math.pi / 180);
   }
 }
 
@@ -237,4 +241,306 @@ class CustomerService {
       throw Exception('Failed to update customer: ${e.toString()}');
     }
   }
+}
+
+class ServiceTypes {
+  static const Map<String, Map<String, dynamic>> _serviceTypes = {
+    'plumbing': {
+      'name': 'Plumbing',
+      'specializations': [
+        'Pipe repair',
+        'Drain cleaning',
+        'Faucet installation',
+        'Toilet repair',
+        'Water heater service',
+        'Emergency plumbing'
+      ]
+    },
+    'electrical': {
+      'name': 'Electrical',
+      'specializations': [
+        'Wiring',
+        'Circuit installation',
+        'Outlet repair',
+        'Light fixture installation',
+        'Panel upgrades',
+        'Emergency electrical'
+      ]
+    },
+    'painting': {
+      'name': 'Painting',
+      'specializations': [
+        'Interior',
+        'Exterior',
+        'Wall preparation',
+        'Color consultation',
+        'Touch-ups',
+        'Spray painting'
+      ]
+    },
+    'cleaning': {
+      'name': 'Cleaning',
+      'specializations': [
+        'Regular maintenance',
+        'Deep cleaning',
+        'Post-construction',
+        'Window cleaning',
+        'Carpet cleaning',
+        'Move-in/move-out'
+      ]
+    },
+    'ac_repair': {
+      'name': 'AC Repair',
+      'specializations': [
+        'Installation',
+        'Maintenance',
+        'Repair',
+        'Central AC',
+        'Split units',
+        'Emergency service'
+      ]
+    },
+    'general_maintenance': {
+      'name': 'General Maintenance',
+      'specializations': [
+        'Home repairs',
+        'Preventive maintenance',
+        'Minor fixes',
+        'Handyman services',
+        'Property upkeep',
+        'Emergency repairs'
+      ]
+    },
+    'carpentry': {
+      'name': 'Carpentry',
+      'specializations': [
+        'Custom furniture',
+        'Cabinet installation',
+        'Door repair',
+        'Window installation',
+        'Flooring',
+        'Trim work'
+      ]
+    },
+    'gardening': {
+      'name': 'Gardening',
+      'specializations': [
+        'Lawn maintenance',
+        'Landscaping',
+        'Tree trimming',
+        'Garden design',
+        'Irrigation',
+        'Pest control'
+      ]
+    }
+  };
+
+  static List<Map<String, dynamic>> get serviceTypesList {
+    return _serviceTypes.entries
+        .map((entry) => {
+              'key': entry.key,
+              'name': entry.value['name'],
+              'specializations': entry.value['specializations']
+            })
+        .toList();
+  }
+
+  static String getServiceName(String serviceKey) {
+    return _serviceTypes[serviceKey]?['name'] ?? 'Unknown Service';
+  }
+
+  static List<String> getSpecializations(String serviceKey) {
+    return List<String>.from(
+        _serviceTypes[serviceKey]?['specializations'] ?? []);
+  }
+}
+
+class Languages {
+  static const List<String> supportedLanguages = [
+    'Sinhala',
+    'Tamil',
+    'English',
+  ];
+}
+
+class Cities {
+  static const List<String> sriLankanCities = [
+    'Colombo',
+    'Colombo 01 (Fort)',
+    'Colombo 02 (Slave Island)',
+    'Colombo 03 (Kollupitiya)',
+    'Colombo 04 (Bambalapitiya)',
+    'Colombo 05 (Narahenpita)',
+    'Colombo 06 (Wellawatta)',
+    'Colombo 07 (Cinnamon Gardens)',
+    'Colombo 08 (Borella)',
+    'Colombo 09 (Dematagoda)',
+    'Colombo 10 (Maradana)',
+    'Colombo 11 (Pettah)',
+    'Colombo 12 (Hulftsdorp)',
+    'Colombo 13 (Kotahena)',
+    'Colombo 14 (Grandpass)',
+    'Colombo 15 (Mutwal)',
+    'Dehiwala-Mount Lavinia',
+    'Mount Lavinia',
+    'Dehiwala',
+    'Moratuwa',
+    'Sri Jayawardenepura Kotte',
+    'Battaramulla',
+    'Maharagama',
+    'Kesbewa',
+    'Piliyandala',
+    'Nugegoda',
+    'Homagama',
+    'Padukka',
+    'Hanwella',
+    'Avissawella',
+    'Seethawaka',
+    'Gampaha',
+    'Negombo',
+    'Katunayake',
+    'Seeduwa',
+    'Liyanagemulla',
+    'Wattala',
+    'Kelaniya',
+    'Peliyagoda',
+    'Kandana',
+    'Ja-Ela',
+    'Ekala',
+    'Gampaha',
+    'Veyangoda',
+    'Ganemulla',
+    'Kadawatha',
+    'Ragama',
+    'Kiribathgoda',
+    'Kelaniya',
+    'Kalutara',
+    'Panadura',
+    'Horana',
+    'Matugama',
+    'Agalawatta',
+    'Bandaragama',
+    'Ingiriya',
+    'Bulathsinhala',
+    'Mathugama',
+    'Kalutara',
+    'Beruwala',
+    'Aluthgama',
+    'Bentota',
+    'Ambalangoda',
+    'Hikkaduwa',
+    'Galle',
+    'Unawatuna',
+    'Koggala',
+    'Habaraduwa',
+    'Ahangama',
+    'Midigama',
+    'Weligama',
+    'Mirissa',
+    'Matara',
+    'Dondra',
+    'Dickwella',
+    'Tangalle',
+    'Hambantota',
+    'Tissamaharama',
+    'Kataragama',
+    'Monaragala',
+    'Wellawaya',
+    'Buttala',
+    'Badulla',
+    'Bandarawela',
+    'Ella',
+    'Haputale',
+    'Diyatalawa',
+    'Welimada',
+    'Mahiyanganaya',
+    'Ampara',
+    'Kalmunai',
+    'Sammanthurai',
+    'Akkaraipattu',
+    'Pottuvil',
+    'Batticaloa',
+    'Eravur',
+    'Valaichchenai',
+    'Kattankudy',
+    'Trincomalee',
+    'Kinniya',
+    'Mutur',
+    'Kantale',
+    'Polonnaruwa',
+    'Kaduruwela',
+    'Medirigiriya',
+    'Hingurakgoda',
+    'Anuradhapura',
+    'Kekirawa',
+    'Tambuttegama',
+    'Galenbindunuwewa',
+    'Mihintale',
+    'Puttalam',
+    'Chilaw',
+    'Nattandiya',
+    'Wennappuwa',
+    'Dankotuwa',
+    'Marawila',
+    'Kurunegala',
+    'Kuliyapitiya',
+    'Narammala',
+    'Wariyapola',
+    'Pannala',
+    'Melsiripura',
+    'Kegalle',
+    'Mawanella',
+    'Warakapola',
+    'Rambukkana',
+    'Galigamuwa',
+    'Ratnapura',
+    'Embilipitiya',
+    'Balangoda',
+    'Rakwana',
+    'Eheliyagoda',
+    'Kuruwita',
+    'Pelmadulla',
+    'Kandy',
+    'Peradeniya',
+    'Gampola',
+    'Nawalapitiya',
+    'Kadugannawa',
+    'Katugastota',
+    'Akurana',
+    'Digana',
+    'Teldeniya',
+    'Matale',
+    'Dambulla',
+    'Sigiriya',
+    'Nalanda',
+    'Ukuwela',
+    'Rattota',
+    'Galewela',
+    'Nuwara Eliya',
+    'Hatton',
+    'Talawakele',
+    'Ginigathena',
+    'Kotagala',
+    'Maskeliya',
+    'Norton Bridge',
+    'Jaffna',
+    'Chavakachcheri',
+    'Point Pedro',
+    'Karainagar',
+    'Velanai',
+    'Kayts',
+    'Kilinochchi',
+    'Paranthan',
+    'Pallai',
+    'Mannar',
+    'Nanattan',
+    'Pesalai',
+    'Vavuniya',
+    'Cheddikulam',
+    'Nedunkeni',
+    'Mullaitivu',
+    'Pudukuduirippu',
+    'Maritimepattu',
+    'Oddusuddan'
+  ];
 }
