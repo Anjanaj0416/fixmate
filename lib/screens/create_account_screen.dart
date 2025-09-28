@@ -43,6 +43,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Create user with Firebase Auth
       UserCredential userCredential =
           await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
@@ -64,7 +65,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
       _showSuccessSnackBar('Account created successfully!');
 
-      // Navigate to account type selection
+      // Wait a moment then navigate to account type selection
+      await Future.delayed(Duration(seconds: 1));
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => AccountTypeScreen()),
@@ -237,10 +240,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       controller: _emailController,
                       validator: _validateEmail,
                       keyboardType: TextInputType.emailAddress,
-                      autocorrect: false,
                       decoration: InputDecoration(
                         labelText: 'Email',
-                        hintText: 'Enter your email',
+                        hintText: 'Enter your email address',
                         prefixIcon: Icon(Icons.email_outlined),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -285,7 +287,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     TextFormField(
                       controller: _addressController,
                       validator: _validateAddress,
-                      textCapitalization: TextCapitalization.words,
                       maxLines: 2,
                       decoration: InputDecoration(
                         labelText: 'Address',
@@ -318,12 +319,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
+                                ? Icons.visibility
+                                : Icons.visibility_off,
                           ),
                           onPressed: () {
-                            setState(
-                                () => _obscurePassword = !_obscurePassword);
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
                           },
                         ),
                         border: OutlineInputBorder(
@@ -344,16 +346,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     // Confirm Password Field
                     TextFormField(
                       controller: _confirmPasswordController,
-                      obscureText: _obscureConfirmPassword,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Please confirm your password';
                         }
-                        if (value != _passwordController.text) {
-                          return 'Passwords do not match';
-                        }
                         return null;
                       },
+                      obscureText: _obscureConfirmPassword,
                       decoration: InputDecoration(
                         labelText: 'Confirm Password',
                         hintText: 'Confirm your password',
@@ -361,12 +360,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscureConfirmPassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
+                                ? Icons.visibility
+                                : Icons.visibility_off,
                           ),
                           onPressed: () {
-                            setState(() => _obscureConfirmPassword =
-                                !_obscureConfirmPassword);
+                            setState(() {
+                              _obscureConfirmPassword =
+                                  !_obscureConfirmPassword;
+                            });
                           },
                         ),
                         border: OutlineInputBorder(
