@@ -188,13 +188,125 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
       ),
     );
   }
+  // Replace the _getBookingsStream method in customer_bookings_screen.dart
+// This version filters in memory instead of using complex Firestore queries
 
+  Stream<QuerySnapshot> _getBookingsStream(String type) {
+    // Base query - only filter by customer_id and order by created_at
+    // This simple query doesn't require a composite index
+    return FirebaseFirestore.instance
+        .collection('bookings')
+        .where('customer_id', isEqualTo: _customerId)
+        .orderBy('created_at', descending: true)
+        .snapshots();
+  }
+
+  Widget _buildBookingList(String type) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _getBookingsStream(type),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          print('Stream Error: ${snapshot.error}');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 60, color: Colors.red),
+                SizedBox(height: 16),
+                Text('Error loading bookings'),
+                SizedBox(height: 8),
+                Text(
+                  '${snapshot.error}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: () => setState(() {}),
+                  child: Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return _buildEmptyState(type);
+        }
+
+        // Filter bookings in memory based on type
+        List<DocumentSnapshot> filteredDocs = snapshot.data!.docs.where((doc) {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          String status = data['status'] ?? '';
+
+          switch (type) {
+            case 'active':
+              return status == 'requested' ||
+                  status == 'accepted' ||
+                  status == 'in_progress';
+            case 'completed':
+              return status == 'completed';
+            case 'cancelled':
+              return status == 'cancelled' || status == 'declined';
+            case 'all':
+            default:
+              return true;
+          }
+        }).toList();
+
+        if (filteredDocs.isEmpty) {
+          return _buildEmptyState(type);
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            setState(() {});
+          },
+          child: ListView.builder(
+            padding: EdgeInsets.all(16),
+            itemCount: filteredDocs.length,
+            itemBuilder: (context, index) {
+              DocumentSnapshot doc = filteredDocs[index];
+              BookingModel booking = BookingModel.fromFirestore(doc);
+              return _buildBookingCard(booking);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+// Also update the badge counter to use the same filtering approach
   Widget _buildBookingCountBadge(String type) {
     return StreamBuilder<QuerySnapshot>(
       stream: _getBookingsStream(type),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return SizedBox();
-        int count = snapshot.data!.docs.length;
+
+        // Filter count based on type
+        int count = snapshot.data!.docs.where((doc) {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          String status = data['status'] ?? '';
+
+          switch (type) {
+            case 'active':
+              return status == 'requested' ||
+                  status == 'accepted' ||
+                  status == 'in_progress';
+            case 'completed':
+              return status == 'completed';
+            case 'cancelled':
+              return status == 'cancelled' || status == 'declined';
+            case 'all':
+            default:
+              return true;
+          }
+        }).length;
+
         if (count == 0) return SizedBox();
 
         return Container(
@@ -211,74 +323,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
               fontWeight: FontWeight.bold,
               color: Color(0xFFFF9800),
             ),
-          ),
-        );
-      },
-    );
-  }
-
-  Stream<QuerySnapshot> _getBookingsStream(String type) {
-    Query query = FirebaseFirestore.instance
-        .collection('bookings')
-        .where('customer_id', isEqualTo: _customerId)
-        .orderBy('created_at', descending: true);
-
-    switch (type) {
-      case 'active':
-        return query.where('status',
-            whereIn: ['requested', 'accepted', 'in_progress']).snapshots();
-      case 'completed':
-        return query.where('status', isEqualTo: 'completed').snapshots();
-      case 'cancelled':
-        return query
-            .where('status', whereIn: ['cancelled', 'declined']).snapshots();
-      default:
-        return query.snapshots();
-    }
-  }
-
-  Widget _buildBookingList(String type) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _getBookingsStream(type),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 60, color: Colors.red),
-                SizedBox(height: 16),
-                Text('Error loading bookings'),
-                SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: () => setState(() {}),
-                  child: Text('Retry'),
-                ),
-              ],
-            ),
-          );
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState(type);
-        }
-
-        return RefreshIndicator(
-          onRefresh: () async {
-            setState(() {});
-          },
-          child: ListView.builder(
-            padding: EdgeInsets.all(16),
-            itemCount: snapshot.data!.docs.length,
-            itemBuilder: (context, index) {
-              DocumentSnapshot doc = snapshot.data!.docs[index];
-              BookingModel booking = BookingModel.fromFirestore(doc);
-              return _buildBookingCard(booking);
-            },
           ),
         );
       },
