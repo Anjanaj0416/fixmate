@@ -26,6 +26,30 @@ class WorkerService {
     return workerId;
   }
 
+  static Future<WorkerModel?> getWorkerByEmail(String email) async {
+    try {
+      QuerySnapshot query = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) return null;
+
+      String uid = query.docs.first.id;
+      DocumentSnapshot workerDoc =
+          await FirebaseFirestore.instance.collection('workers').doc(uid).get();
+
+      if (workerDoc.exists) {
+        return WorkerModel.fromFirestore(workerDoc);
+      }
+      return null;
+    } catch (e) {
+      print('Error fetching worker by email: $e');
+      return null;
+    }
+  }
+
   // Check if worker ID exists
   static Future<bool> _workerIdExists(String workerId) async {
     QuerySnapshot existing = await _firestore

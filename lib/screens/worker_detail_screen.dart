@@ -278,16 +278,21 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
     try {
       // Step 1: Store worker if not exists
       String workerFirebaseUid;
-      bool exists =
-          await WorkerStorageService.checkWorkerExists(widget.worker.workerId);
+      bool exists = await WorkerStorageService.checkWorkerExistsByEmail(
+          widget.worker.email);
 
       if (!exists) {
         workerFirebaseUid = await WorkerStorageService.storeWorkerFromML(
             mlWorker: widget.worker);
         _showSnackBar('Worker profile created', Colors.green);
       } else {
-        workerFirebaseUid = await WorkerStorageService.getWorkerFirebaseUid(
-            widget.worker.workerId);
+        String? tempUid =
+            await WorkerStorageService.getWorkerUidByEmail(widget.worker.email);
+        workerFirebaseUid = tempUid ?? '';
+
+        if (workerFirebaseUid.isEmpty) {
+          throw Exception('Could not retrieve worker UID');
+        }
       }
 
       // Step 2: Get customer data
