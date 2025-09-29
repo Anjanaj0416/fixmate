@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,7 +17,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
   List<ChatMessage> _messages = [];
   bool _isLoading = false;
-  XFile? _selectedImage; // Changed from File? to XFile?
+  XFile? _selectedImage;
 
   @override
   void initState() {
@@ -50,7 +51,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
       if (image != null) {
         setState(() {
-          _selectedImage = image; // Store XFile instead of File
+          _selectedImage = image;
         });
       }
     } catch (e) {
@@ -125,10 +126,9 @@ class _AIChatScreenState extends State<AIChatScreen> {
       String response;
 
       if (imageToAnalyze != null) {
-        // Convert XFile to File for the service
-        final File imageFile = File(imageToAnalyze.path);
-        response = await OpenAIService.analyzeImage(
-          imageFile: imageFile,
+        // Use the new XFile method that works on both web and mobile
+        response = await OpenAIService.analyzeImageFromXFile(
+          imageFile: imageToAnalyze,
           userMessage: message.isEmpty ? null : message,
         );
       } else {
@@ -426,7 +426,7 @@ class ChatMessage {
   final String text;
   final bool isUser;
   final DateTime timestamp;
-  final XFile? image; // Changed from File? to XFile?
+  final XFile? image;
   final bool isError;
 
   ChatMessage({

@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:image_picker/image_picker.dart';
 
 class OpenAIService {
   static String? _apiKey;
@@ -13,6 +15,83 @@ class OpenAIService {
     }
   }
 
+  // New method that accepts XFile (works on both web and mobile)
+  static Future<String> analyzeImageFromXFile({
+    required XFile imageFile,
+    String? userMessage,
+  }) async {
+    if (_apiKey == null) {
+      throw Exception(
+          'OpenAI service not initialized. Call initialize() first.');
+    }
+
+    try {
+      // Read bytes from XFile (works on both web and mobile)
+      final bytes = await imageFile.readAsBytes();
+      final base64Image = base64Encode(bytes);
+
+      // Determine image mime type
+      String mimeType = 'image/jpeg';
+      final extension = imageFile.path.split('.').last.toLowerCase();
+      if (extension == 'png') {
+        mimeType = 'image/png';
+      } else if (extension == 'jpg' || extension == 'jpeg') {
+        mimeType = 'image/jpeg';
+      } else if (extension == 'gif') {
+        mimeType = 'image/gif';
+      } else if (extension == 'webp') {
+        mimeType = 'image/webp';
+      }
+
+      // Prepare the request body
+      final requestBody = {
+        'model': 'gpt-4o-mini',
+        'messages': [
+          {
+            'role': 'user',
+            'content': [
+              {
+                'type': 'text',
+                'text': userMessage ??
+                    'Please analyze this image and describe what you see. If this appears to be a maintenance or repair issue, provide details about what might be wrong and potential solutions.',
+              },
+              {
+                'type': 'image_url',
+                'image_url': {
+                  'url': 'data:$mimeType;base64,$base64Image',
+                },
+              },
+            ],
+          },
+        ],
+        'max_tokens': 1000,
+      };
+
+      // Make API request
+      final response = await http.post(
+        Uri.parse('https://api.openai.com/v1/chat/completions'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_apiKey',
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final content = data['choices'][0]['message']['content'];
+        return content;
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(
+            'OpenAI API Error: ${error['error']['message'] ?? 'Unknown error'}');
+      }
+    } catch (e) {
+      throw Exception('Failed to analyze image: $e');
+    }
+  }
+
+  // Keep old method for backward compatibility
   static Future<String> analyzeImage({
     required File imageFile,
     String? userMessage,
