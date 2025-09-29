@@ -1565,15 +1565,19 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
         .collection('bookings')
         .where('worker_id', isEqualTo: _workerId);
 
-    // Filter by status if not 'all'
     if (statusFilter != 'all') {
-      query = query.where('status', isEqualTo: 'BookingStatus.$statusFilter');
+      query = query.where('status', isEqualTo: statusFilter);
     }
 
-    // Order by created_at (this requires the composite index)
     query = query.orderBy('created_at', descending: true);
 
-    return query.snapshots();
+    // DEBUG: Print when stream updates
+    print('🔍 Setting up stream for status: $statusFilter');
+    return query.snapshots().map((snapshot) {
+      print(
+          '📦 Stream received ${snapshot.docs.length} bookings for $statusFilter');
+      return snapshot;
+    });
   }
 
   Widget _buildEmptyState(String type) {
