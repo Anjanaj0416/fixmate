@@ -15,11 +15,81 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
   late TabController _tabController;
   String? _customerId;
 
+  // Add this to your customer bookings screen's initState
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _loadCustomerData();
+    _debugBookings();
+    ; // Add this line
+  }
+
+  Future<void> _debugBookings() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      print('\n========== BOOKING DEBUG START ==========');
+      print('1. Current Firebase Auth UID: ${user?.uid}');
+
+      // Check customer document
+      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user!.uid)
+          .get();
+
+      if (customerDoc.exists) {
+        Map<String, dynamic> customerData =
+            customerDoc.data() as Map<String, dynamic>;
+        print('2. Customer Data Found:');
+        print('   - customer_id: ${customerData['customer_id']}');
+        print(
+            '   - name: ${customerData['customer_name'] ?? customerData['first_name']}');
+
+        // Get ALL bookings first (no filter)
+        QuerySnapshot allBookings =
+            await FirebaseFirestore.instance.collection('bookings').get();
+
+        print('3. Total bookings in database: ${allBookings.docs.length}');
+
+        // Print each booking's details
+        for (var doc in allBookings.docs) {
+          Map<String, dynamic>? data = doc.data() as Map<String, dynamic>?;
+          if (data != null) {
+            print('\n   Booking ID: ${doc.id}');
+            print('   - customer_id in booking: ${data['customer_id']}');
+            print('   - worker_id in booking: ${data['worker_id']}');
+            print('   - status: ${data['status']}');
+            print('   - service: ${data['service_type']}');
+          }
+        }
+
+        // Now try filtered query
+        print(
+            '\n4. Trying to query with customer_id = ${customerData['customer_id']}');
+        QuerySnapshot myBookings = await FirebaseFirestore.instance
+            .collection('bookings')
+            .where('customer_id', isEqualTo: customerData['customer_id'])
+            .get();
+
+        print('5. My bookings found: ${myBookings.docs.length}');
+
+        if (myBookings.docs.isEmpty) {
+          print(
+              '\n❌ PROBLEM FOUND: No bookings match customer_id = ${customerData['customer_id']}');
+          print(
+              '   This means the booking was created with wrong customer_id!');
+        } else {
+          print('\n✅ Bookings found successfully!');
+        }
+      } else {
+        print('❌ Customer document not found!');
+      }
+
+      print('========== BOOKING DEBUG END ==========\n');
+    } catch (e, stackTrace) {
+      print('❌ DEBUG ERROR: $e');
+      print('Stack trace: $stackTrace');
+    }
   }
 
   @override
@@ -266,6 +336,9 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
     );
   }
 
+  // Quick fix for both screens - just change the substring line
+
+// In customer_bookings_screen.dart, find this method and update:
   Widget _buildBookingCard(BookingModel booking) {
     return Card(
       elevation: 2,
@@ -279,7 +352,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with service type and status
+              // Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -299,7 +372,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                         ),
                         SizedBox(height: 4),
                         Text(
-                          booking.subService.replaceAll('_', ' '),
+                          booking.subService,
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey[600],
@@ -347,7 +420,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'ID: ${booking.bookingId.substring(0, 8)}...',
+                          // FIXED: Handle short booking IDs properly
+                          'ID: ${booking.bookingId}',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[600],
@@ -392,6 +466,17 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
       ),
     );
   }
+
+// Helper method to safely format booking ID
+  String _formatBookingId(String bookingId) {
+    if (bookingId.length > 10) {
+      return '${bookingId.substring(0, 10)}...';
+    }
+    return bookingId;
+  }
+
+// Use this in your text widget:
+// Text('ID: ${_formatBookingId(booking.bookingId)}')
 
   Widget _buildStatusBadge(BookingStatus status) {
     return Container(
