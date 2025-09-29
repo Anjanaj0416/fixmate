@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'worker_selection_screen.dart';
+import 'enhanced_worker_selection_screen.dart';
 
 class ServiceRequestFlow extends StatefulWidget {
   final String serviceType;
@@ -783,7 +783,7 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
               Text('Your service request has been submitted successfully.'),
               SizedBox(height: 16),
               Text(
-                'Service providers will review your request and send quotes. You\'ll be notified when quotes are available.',
+                'Now you can browse and select from available service providers in your area.',
                 style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               ),
             ],
@@ -799,11 +799,11 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
       );
 
       if (confirmed == true) {
-        // Navigate to worker selection screen
+        // Navigate to enhanced worker selection screen
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => WorkerSelectionScreen(
+            builder: (context) => EnhancedWorkerSelectionScreen(
               serviceType: widget.serviceType,
               subService: widget.subService,
               issueType: _selectedIssueType ?? 'other',
