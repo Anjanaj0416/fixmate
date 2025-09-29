@@ -1,9 +1,12 @@
+// lib/screens/ai_chat_screen.dart
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/openai_service.dart';
+import '../services/ml_service.dart';
+import 'worker_results_screen.dart';
 
 class AIChatScreen extends StatefulWidget {
   @override
@@ -18,6 +21,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
   List<ChatMessage> _messages = [];
   bool _isLoading = false;
   XFile? _selectedImage;
+  String? _lastProblemDescription; // Store for ML model
 
   @override
   void initState() {
@@ -126,11 +130,13 @@ class _AIChatScreenState extends State<AIChatScreen> {
       String response;
 
       if (imageToAnalyze != null) {
-        // Use the new XFile method that works on both web and mobile
         response = await OpenAIService.analyzeImageFromXFile(
           imageFile: imageToAnalyze,
           userMessage: message.isEmpty ? null : message,
         );
+
+        // Store the problem description for ML model
+        _lastProblemDescription = response;
       } else {
         response = await OpenAIService.sendMessage(message);
       }
@@ -140,6 +146,8 @@ class _AIChatScreenState extends State<AIChatScreen> {
           text: response,
           isUser: false,
           timestamp: DateTime.now(),
+          showOptions:
+              imageToAnalyze != null, // Show options only for image analysis
         ));
         _isLoading = false;
       });
@@ -157,6 +165,179 @@ class _AIChatScreenState extends State<AIChatScreen> {
       });
       _scrollToBottom();
     }
+  }
+
+  void _handleFindWorkers() async {
+    if (_lastProblemDescription == null) {
+      _showErrorSnackBar('No problem description available');
+      return;
+    }
+
+    // Ask for location
+    final location = await _showLocationDialog();
+    if (location == null || location.isEmpty) {
+      return;
+    }
+
+    // Show loading message
+    setState(() {
+      _messages.add(ChatMessage(
+        text: 'Searching for skilled workers near $location...',
+        isUser: false,
+        timestamp: DateTime.now(),
+      ));
+      _isLoading = true;
+    });
+    _scrollToBottom();
+
+    try {
+      // Call ML service
+      final response = await MLService.searchWorkers(
+        description: _lastProblemDescription!,
+        location: location,
+      );
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (response.workers.isEmpty) {
+        setState(() {
+          _messages.add(ChatMessage(
+            text:
+                'No workers found for your location. Please try a different area.',
+            isUser: false,
+            timestamp: DateTime.now(),
+          ));
+        });
+        _scrollToBottom();
+      } else {
+        // Navigate to worker results screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WorkerResultsScreen(
+              workers: response.workers,
+              aiAnalysis: response.aiAnalysis,
+              problemDescription: _lastProblemDescription!,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _messages.add(ChatMessage(
+          text:
+              'Failed to find workers: ${e.toString()}\n\nMake sure the ML service is running.',
+          isUser: false,
+          timestamp: DateTime.now(),
+          isError: true,
+        ));
+        _isLoading = false;
+      });
+      _scrollToBottom();
+    }
+  }
+
+  void _handleGetRepairTips() {
+    setState(() {
+      _messages.add(ChatMessage(
+        text: 'Getting repair tips for your issue...',
+        isUser: false,
+        timestamp: DateTime.now(),
+      ));
+    });
+    _scrollToBottom();
+
+    // Request repair tips from OpenAI
+    _sendRepairTipsRequest();
+  }
+
+  Future<void> _sendRepairTipsRequest() async {
+    if (_lastProblemDescription == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await OpenAIService.sendMessage(
+        'Based on this problem: "$_lastProblemDescription", '
+        'provide step-by-step repair tips that a homeowner can try. '
+        'Include safety warnings if necessary.',
+      );
+
+      setState(() {
+        _messages.add(ChatMessage(
+          text: response,
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+        _isLoading = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      setState(() {
+        _messages.add(ChatMessage(
+          text: 'Failed to get repair tips: ${e.toString()}',
+          isUser: false,
+          timestamp: DateTime.now(),
+          isError: true,
+        ));
+        _isLoading = false;
+      });
+      _scrollToBottom();
+    }
+  }
+
+  Future<String?> _showLocationDialog() async {
+    final TextEditingController locationController = TextEditingController();
+
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Enter Your Location'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Please enter your city or area:',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: locationController,
+                decoration: InputDecoration(
+                  hintText: 'e.g., Colombo, Kandy, Galle',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.location_on),
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Popular locations: Colombo, Kandy, Galle, Negombo, Jaffna, Gampaha',
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final location = locationController.text.trim();
+                Navigator.pop(context, location);
+              },
+              child: Text('Search'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _scrollToBottom() {
@@ -197,7 +378,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
       ),
       body: Column(
         children: [
-          // Messages list
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
@@ -208,8 +388,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
               },
             ),
           ),
-
-          // Loading indicator
           if (_isLoading)
             Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
@@ -226,8 +404,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
                 ],
               ),
             ),
-
-          // Selected image preview
           if (_selectedImage != null)
             Container(
               margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -260,8 +436,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
                 ],
               ),
             ),
-
-          // Input area
           Container(
             padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -277,13 +451,10 @@ class _AIChatScreenState extends State<AIChatScreen> {
             child: SafeArea(
               child: Row(
                 children: [
-                  // Image picker button
                   IconButton(
                     icon: Icon(Icons.image, color: Colors.blue),
                     onPressed: _showImageSourceDialog,
                   ),
-
-                  // Text input
                   Expanded(
                     child: TextField(
                       controller: _messageController,
@@ -305,10 +476,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
                       onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
-
                   SizedBox(width: 8),
-
-                  // Send button
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.blue,
@@ -328,7 +496,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
     );
   }
 
-  // Helper method to build image widget based on platform
   Widget _buildImageWidget(XFile imageFile, double width, double height) {
     if (kIsWeb) {
       return Image.network(
@@ -392,6 +559,37 @@ class _AIChatScreenState extends State<AIChatScreen> {
                   fontSize: 15,
                 ),
               ),
+
+            // Show action buttons for AI responses with problem descriptions
+            if (message.showOptions && !message.isUser) ...[
+              SizedBox(height: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _handleFindWorkers,
+                    icon: Icon(Icons.person_search, size: 18),
+                    label: Text('Find Skilled Workers'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _handleGetRepairTips,
+                    icon: Icon(Icons.tips_and_updates, size: 18),
+                    label: Text('Get Repair Tips'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.blue,
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
             SizedBox(height: 4),
             Text(
               _formatTime(message.timestamp),
@@ -428,6 +626,7 @@ class ChatMessage {
   final DateTime timestamp;
   final XFile? image;
   final bool isError;
+  final bool showOptions;
 
   ChatMessage({
     required this.text,
@@ -435,5 +634,6 @@ class ChatMessage {
     required this.timestamp,
     this.image,
     this.isError = false,
+    this.showOptions = false,
   });
 }
