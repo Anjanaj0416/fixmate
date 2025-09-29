@@ -456,31 +456,22 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                   ),
                 ),
                 SizedBox(width: 12),
+                // In your worker_dashboard_screen.dart
+// Replace the navigation code around line 471 with this:
+
                 Expanded(
                   child: _buildActionButton(
                     'Booking Requests',
                     Icons.assignment_outlined,
                     Colors.blue,
                     () {
-                      // Add null check before navigation
-                      if (_worker?.workerId != null) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => WorkerBookingsScreen(
-                                workerId: _worker!.workerId!),
-                          ),
-                        );
-                      } else {
-                        // Handle the case where workerId is null
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                                'Worker ID not found. Please refresh and try again.'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
+                      // Simply navigate without passing workerId
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => WorkerBookingsScreen(),
+                        ),
+                      );
                     },
                   ),
                 ),

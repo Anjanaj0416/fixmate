@@ -1,38 +1,9 @@
 // lib/services/booking_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../models/booking_model.dart';
 
 class BookingService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  // Generate unique booking ID
-  static Future<String> generateBookingId() async {
-    // Get the count of existing bookings to generate sequential ID
-    QuerySnapshot bookingCount = await _firestore.collection('bookings').get();
-    int count = bookingCount.docs.length + 1;
-
-    // Format: B_XXXX (4 digits)
-    String bookingId = 'B_${count.toString().padLeft(4, '0')}';
-
-    // Check if ID already exists, if so increment
-    while (await _bookingIdExists(bookingId)) {
-      count++;
-      bookingId = 'B_${count.toString().padLeft(4, '0')}';
-    }
-
-    return bookingId;
-  }
-
-  // Check if booking ID exists
-  static Future<bool> _bookingIdExists(String bookingId) async {
-    QuerySnapshot existing = await _firestore
-        .collection('bookings')
-        .where('booking_id', isEqualTo: bookingId)
-        .get();
-    return existing.docs.isNotEmpty;
-  }
 
   // Create a new booking
   static Future<String> createBooking({
@@ -56,8 +27,8 @@ class BookingService {
     required String scheduledTime,
   }) async {
     try {
-      // Generate unique booking ID
-      String bookingId = await generateBookingId();
+      // Generate booking ID
+      String bookingId = _firestore.collection('bookings').doc().id;
 
       // Create booking model
       BookingModel booking = BookingModel(
@@ -90,8 +61,16 @@ class BookingService {
           .doc(bookingId)
           .set(booking.toFirestore());
 
-      // Send notification to worker (optional)
+      // Send notification to worker
       await _notifyWorker(workerId, bookingId, customerName, serviceType);
+
+      // Send confirmation to customer
+      await _notifyCustomer(
+        customerId,
+        bookingId,
+        workerName,
+        BookingStatus.requested,
+      );
 
       return bookingId;
     } catch (e) {
@@ -194,6 +173,20 @@ class BookingService {
     }
   }
 
+  // Cancel booking
+  static Future<void> cancelBooking(
+      String bookingId, String cancellationReason) async {
+    try {
+      await updateBookingStatus(
+        bookingId,
+        BookingStatus.cancelled,
+        cancellationReason: cancellationReason,
+      );
+    } catch (e) {
+      throw Exception('Failed to cancel booking: ${e.toString()}');
+    }
+  }
+
   // Add rating and review
   static Future<void> addRating({
     required String bookingId,
@@ -259,18 +252,10 @@ class BookingService {
         double averageRating = ratings.reduce((a, b) => a + b) / ratings.length;
 
         // Update worker's rating
-        await _firestore
-            .collection('workers')
-            .where('worker_id', isEqualTo: workerId)
-            .get()
-            .then((snapshot) {
-          if (snapshot.docs.isNotEmpty) {
-            snapshot.docs.first.reference.update({
-              'rating': averageRating,
-              'jobs_completed': ratings.length,
-              'updated_at': FieldValue.serverTimestamp(),
-            });
-          }
+        await _firestore.collection('workers').doc(workerId).update({
+          'rating': averageRating,
+          'total_reviews': ratings.length,
+          'updated_at': FieldValue.serverTimestamp(),
         });
       }
     } catch (e) {
@@ -278,43 +263,13 @@ class BookingService {
     }
   }
 
-  // Get booking by ID
-  static Future<BookingModel?> getBookingById(String bookingId) async {
-    try {
-      DocumentSnapshot doc =
-          await _firestore.collection('bookings').doc(bookingId).get();
-
-      if (doc.exists) {
-        return BookingModel.fromFirestore(doc);
-      }
-      return null;
-    } catch (e) {
-      throw Exception('Failed to get booking: ${e.toString()}');
-    }
-  }
-
-  // Cancel booking
-  static Future<void> cancelBooking(String bookingId, String reason) async {
-    try {
-      await updateBookingStatus(
-        bookingId,
-        BookingStatus.cancelled,
-        cancellationReason: reason,
-      );
-    } catch (e) {
-      throw Exception('Failed to cancel booking: ${e.toString()}');
-    }
-  }
-
-  // Send notification to worker (placeholder)
+  // Send notification to worker
   static Future<void> _notifyWorker(
     String workerId,
     String bookingId,
     String customerName,
     String serviceType,
   ) async {
-    // In a real app, this would send a push notification or SMS
-    // For now, we'll just log or create a notification record
     try {
       await _firestore.collection('notifications').add({
         'recipient_id': workerId,
@@ -332,7 +287,7 @@ class BookingService {
     }
   }
 
-  // Send notification to customer (placeholder)
+  // Send notification to customer
   static Future<void> _notifyCustomer(
     String customerId,
     String bookingId,
@@ -340,21 +295,37 @@ class BookingService {
     BookingStatus status,
   ) async {
     try {
+      String title = '';
       String message = '';
+
       switch (status) {
+        case BookingStatus.requested:
+          title = 'Booking Created';
+          message = 'Your booking request has been sent to $workerName';
+          break;
         case BookingStatus.accepted:
+          title = 'Booking Accepted';
           message = '$workerName has accepted your booking request';
           break;
         case BookingStatus.declined:
+          title = 'Booking Declined';
           message = '$workerName has declined your booking request';
           break;
+        case BookingStatus.inProgress:
+          title = 'Work Started';
+          message = '$workerName has started working on your service';
+          break;
         case BookingStatus.completed:
-          message = '$workerName has completed your service';
+          title = 'Service Completed';
+          message =
+              '$workerName has completed your service. Please rate the service.';
           break;
         case BookingStatus.cancelled:
+          title = 'Booking Cancelled';
           message = 'Your booking with $workerName has been cancelled';
           break;
         default:
+          title = 'Booking Update';
           message = 'Your booking status has been updated';
       }
 
@@ -362,7 +333,7 @@ class BookingService {
         'recipient_id': customerId,
         'recipient_type': 'customer',
         'type': 'booking_update',
-        'title': 'Booking Update',
+        'title': title,
         'message': message,
         'booking_id': bookingId,
         'created_at': FieldValue.serverTimestamp(),
@@ -370,6 +341,21 @@ class BookingService {
       });
     } catch (e) {
       print('Failed to send customer notification: ${e.toString()}');
+    }
+  }
+
+  // Get booking by ID
+  static Future<BookingModel?> getBookingById(String bookingId) async {
+    try {
+      DocumentSnapshot doc =
+          await _firestore.collection('bookings').doc(bookingId).get();
+
+      if (doc.exists) {
+        return BookingModel.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Failed to get booking: ${e.toString()}');
     }
   }
 
@@ -416,6 +402,67 @@ class BookingService {
           .toList();
     } catch (e) {
       throw Exception('Failed to get booking history: ${e.toString()}');
+    }
+  }
+
+  // Get statistics for worker
+  static Future<Map<String, dynamic>> getWorkerStats(String workerId) async {
+    try {
+      QuerySnapshot allBookings = await _firestore
+          .collection('bookings')
+          .where('worker_id', isEqualTo: workerId)
+          .get();
+
+      int totalBookings = allBookings.docs.length;
+      int completedBookings = allBookings.docs
+          .where((doc) =>
+              (doc.data() as Map<String, dynamic>)['status'] == 'completed')
+          .length;
+      int activeBookings = allBookings.docs.where((doc) {
+        String status = (doc.data() as Map<String, dynamic>)['status'];
+        return status == 'requested' ||
+            status == 'accepted' ||
+            status == 'in_progress';
+      }).length;
+
+      return {
+        'total_bookings': totalBookings,
+        'completed_bookings': completedBookings,
+        'active_bookings': activeBookings,
+      };
+    } catch (e) {
+      throw Exception('Failed to get worker stats: ${e.toString()}');
+    }
+  }
+
+  // Get statistics for customer
+  static Future<Map<String, dynamic>> getCustomerStats(
+      String customerId) async {
+    try {
+      QuerySnapshot allBookings = await _firestore
+          .collection('bookings')
+          .where('customer_id', isEqualTo: customerId)
+          .get();
+
+      int totalBookings = allBookings.docs.length;
+      int completedBookings = allBookings.docs
+          .where((doc) =>
+              (doc.data() as Map<String, dynamic>)['status'] == 'completed')
+          .length;
+      int activeBookings = allBookings.docs.where((doc) {
+        String status = (doc.data() as Map<String, dynamic>)['status'];
+        return status == 'requested' ||
+            status == 'accepted' ||
+            status == 'in_progress';
+      }).length;
+
+      return {
+        'total_bookings': totalBookings,
+        'completed_bookings': completedBookings,
+        'active_bookings': activeBookings,
+      };
+    } catch (e) {
+      throw Exception('Failed to get customer stats: ${e.toString()}');
     }
   }
 }
