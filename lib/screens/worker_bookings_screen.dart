@@ -1,5 +1,5 @@
 // lib/screens/worker_bookings_screen.dart
-import 'package:flutter/material.dart';
+/*import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/booking_model.dart';
@@ -1189,6 +1189,718 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
         content: Text(message),
         backgroundColor: Colors.blue,
         behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}*/
+
+// lib/screens/worker_bookings_screen.dart
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../models/booking_model.dart';
+import '../services/booking_service.dart';
+
+class WorkerBookingsScreen extends StatefulWidget {
+  @override
+  _WorkerBookingsScreenState createState() => _WorkerBookingsScreenState();
+}
+
+class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  String? _workerId;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 5, vsync: this);
+    _loadWorkerData();
+    _debugWorkerBookings(); // Add debug method
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  // DEBUG METHOD - Add this to check what's happening
+  Future<void> _debugWorkerBookings() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      print('\n========== WORKER BOOKING DEBUG START ==========');
+      print('1. Current Firebase Auth UID: ${user?.uid}');
+
+      // Check worker document
+      DocumentSnapshot workerDoc = await FirebaseFirestore.instance
+          .collection('workers')
+          .doc(user!.uid)
+          .get();
+
+      if (workerDoc.exists) {
+        Map<String, dynamic> workerData =
+            workerDoc.data() as Map<String, dynamic>;
+        print('2. Worker Data Found:');
+        print('   - worker_id: ${workerData['worker_id']}');
+        print('   - worker_name: ${workerData['worker_name']}');
+
+        // Get ALL bookings first (no filter)
+        QuerySnapshot allBookings =
+            await FirebaseFirestore.instance.collection('bookings').get();
+
+        print('3. Total bookings in database: ${allBookings.docs.length}');
+
+        // Print bookings that match this worker
+        int matchCount = 0;
+        for (var doc in allBookings.docs) {
+          Map<String, dynamic>? data = doc.data() as Map<String, dynamic>?;
+          if (data != null && data['worker_id'] == workerData['worker_id']) {
+            matchCount++;
+            print('\n   Found matching booking:');
+            print('   - Booking ID: ${doc.id}');
+            print('   - customer_id: ${data['customer_id']}');
+            print('   - worker_id: ${data['worker_id']}');
+            print('   - status: ${data['status']}');
+            print('   - service: ${data['service_type']}');
+          }
+        }
+
+        print('\n4. Total bookings for this worker: $matchCount');
+
+        // Now try the filtered query that the app uses
+        print('\n5. Trying query with worker_id = ${workerData['worker_id']}');
+        try {
+          QuerySnapshot myBookings = await FirebaseFirestore.instance
+              .collection('bookings')
+              .where('worker_id', isEqualTo: workerData['worker_id'])
+              .orderBy('created_at', descending: true)
+              .get();
+
+          print(
+              '6. Query successful! Found ${myBookings.docs.length} bookings');
+        } catch (e) {
+          print('6. Query FAILED with error: $e');
+          print(
+              '   This means you need to create a composite index in Firestore!');
+        }
+      } else {
+        print('ERROR: Worker document not found!');
+      }
+
+      print('========== WORKER BOOKING DEBUG END ==========\n');
+    } catch (e) {
+      print('Debug error: $e');
+    }
+  }
+
+  Future<void> _loadWorkerData() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        DocumentSnapshot workerDoc = await FirebaseFirestore.instance
+            .collection('workers')
+            .doc(user.uid)
+            .get();
+
+        if (workerDoc.exists) {
+          Map<String, dynamic> workerData =
+              workerDoc.data() as Map<String, dynamic>;
+          setState(() {
+            _workerId = workerData['worker_id'];
+            _isLoading = false;
+          });
+          print('Worker ID loaded: $_workerId');
+        } else {
+          setState(() {
+            _isLoading = false;
+          });
+          _showErrorSnackBar('Worker profile not found');
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      _showErrorSnackBar('Failed to load worker data: ${e.toString()}');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('My Bookings'),
+          backgroundColor: Color(0xFFFF9800),
+        ),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_workerId == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('My Bookings'),
+          backgroundColor: Color(0xFFFF9800),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 60, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                'Worker profile not found',
+                style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+              ),
+              SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('My Bookings'),
+        backgroundColor: Color(0xFFFF9800),
+        elevation: 0,
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
+          tabs: [
+            Tab(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('New Requests', style: TextStyle(fontSize: 13)),
+                  _buildBookingCountBadge('requested'),
+                ],
+              ),
+            ),
+            Tab(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Accepted', style: TextStyle(fontSize: 13)),
+                  _buildBookingCountBadge('accepted'),
+                ],
+              ),
+            ),
+            Tab(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('In Progress', style: TextStyle(fontSize: 13)),
+                  _buildBookingCountBadge('inProgress'),
+                ],
+              ),
+            ),
+            Tab(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Completed', style: TextStyle(fontSize: 13)),
+                  _buildBookingCountBadge('completed'),
+                ],
+              ),
+            ),
+            Tab(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('All', style: TextStyle(fontSize: 13)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildBookingList('requested'),
+          _buildBookingList('accepted'),
+          _buildBookingList('inProgress'),
+          _buildBookingList('completed'),
+          _buildBookingList('all'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBookingCountBadge(String status) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _getBookingCountStream(status),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return SizedBox.shrink();
+        int count = snapshot.data!.docs.length;
+        if (count == 0) return SizedBox.shrink();
+
+        return Container(
+          margin: EdgeInsets.only(top: 4),
+          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.red,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            count.toString(),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Stream<QuerySnapshot> _getBookingCountStream(String status) {
+    Query query = FirebaseFirestore.instance
+        .collection('bookings')
+        .where('worker_id', isEqualTo: _workerId);
+
+    if (status != 'all') {
+      query = query.where('status', isEqualTo: 'BookingStatus.$status');
+    }
+
+    return query.snapshots();
+  }
+
+  Widget _buildBookingList(String statusFilter) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _getBookingsStream(statusFilter),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          print('Stream error: ${snapshot.error}');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 60, color: Colors.red),
+                SizedBox(height: 16),
+                Text(
+                  'Error loading bookings',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 8),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    snapshot.error.toString(),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ),
+                SizedBox(height: 16),
+                if (snapshot.error
+                    .toString()
+                    .contains('requires an index')) ...[
+                  Text(
+                    'You need to create a Firestore index',
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      // The error message contains a URL to create the index
+                      print('Check console for index creation URL');
+                    },
+                    child: Text('Check Console for Index URL'),
+                  ),
+                ],
+                SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => setState(() {}),
+                  child: Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return _buildEmptyState(statusFilter);
+        }
+
+        List<BookingModel> bookings = snapshot.data!.docs
+            .map((doc) => BookingModel.fromFirestore(doc))
+            .toList();
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            setState(() {});
+          },
+          child: ListView.builder(
+            padding: EdgeInsets.all(16),
+            itemCount: bookings.length,
+            itemBuilder: (context, index) {
+              return _buildBookingCard(bookings[index]);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Stream<QuerySnapshot> _getBookingsStream(String statusFilter) {
+    Query query = FirebaseFirestore.instance
+        .collection('bookings')
+        .where('worker_id', isEqualTo: _workerId);
+
+    // Filter by status if not 'all'
+    if (statusFilter != 'all') {
+      query = query.where('status', isEqualTo: 'BookingStatus.$statusFilter');
+    }
+
+    // Order by created_at (this requires the composite index)
+    query = query.orderBy('created_at', descending: true);
+
+    return query.snapshots();
+  }
+
+  Widget _buildEmptyState(String type) {
+    String message;
+    IconData icon;
+
+    switch (type) {
+      case 'requested':
+        message = 'No new booking requests';
+        icon = Icons.inbox_outlined;
+        break;
+      case 'accepted':
+        message = 'No accepted bookings';
+        icon = Icons.check_circle_outline;
+        break;
+      case 'inProgress':
+        message = 'No jobs in progress';
+        icon = Icons.work_outline;
+        break;
+      case 'completed':
+        message = 'No completed bookings';
+        icon = Icons.done_all;
+        break;
+      default:
+        message = 'No bookings found';
+        icon = Icons.calendar_today;
+    }
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 80, color: Colors.grey[300]),
+          SizedBox(height: 16),
+          Text(
+            message,
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            type == 'requested'
+                ? 'New booking requests will appear here'
+                : 'Your $type bookings will appear here',
+            style: TextStyle(
+              color: Colors.grey[500],
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBookingCard(BookingModel booking) {
+    return Card(
+      elevation: 2,
+      margin: EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: () => _showBookingDetails(booking),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header with service and urgency
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          booking.serviceType
+                              .replaceAll('_', ' ')
+                              .toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFF9800),
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          booking.subService.replaceAll('_', ' '),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildUrgencyBadge(booking.urgency),
+                ],
+              ),
+
+              SizedBox(height: 12),
+
+              // Customer info
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: Colors.blue[100],
+                    child: Text(
+                      booking.customerName.isNotEmpty
+                          ? booking.customerName[0].toUpperCase()
+                          : 'C',
+                      style: TextStyle(
+                        color: Colors.blue[700],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          booking.customerName,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          booking.location,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildStatusBadge(booking.status),
+                ],
+              ),
+
+              SizedBox(height: 12),
+              Divider(),
+              SizedBox(height: 8),
+
+              // Booking details
+              Row(
+                children: [
+                  Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                  SizedBox(width: 8),
+                  Text(
+                    _formatDate(booking.scheduledDate),
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  SizedBox(width: 16),
+                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                  SizedBox(width: 8),
+                  Text(
+                    booking.scheduledTime,
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ],
+              ),
+
+              if (booking.budgetRange.isNotEmpty) ...[
+                SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.attach_money, size: 16, color: Colors.grey[600]),
+                    SizedBox(width: 8),
+                    Text(
+                      'Budget: ${booking.budgetRange}',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ],
+                ),
+              ],
+
+              // Action buttons for new requests
+              if (booking.status == BookingStatus.requested) ...[
+                SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => _declineBooking(booking),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: BorderSide(color: Colors.red),
+                        ),
+                        child: Text('Decline'),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => _acceptBooking(booking),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                        ),
+                        child: Text('Accept',
+                            style: TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUrgencyBadge(String urgency) {
+    Color color;
+    switch (urgency.toLowerCase()) {
+      case 'urgent':
+        color = Colors.red;
+        break;
+      case 'normal':
+        color = Colors.orange;
+        break;
+      default:
+        color = Colors.grey;
+    }
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color),
+      ),
+      child: Text(
+        urgency.toUpperCase(),
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(BookingStatus status) {
+    Color color;
+    String text;
+
+    switch (status) {
+      case BookingStatus.requested:
+        color = Colors.blue;
+        text = 'NEW';
+        break;
+      case BookingStatus.accepted:
+        color = Colors.green;
+        text = 'ACCEPTED';
+        break;
+      case BookingStatus.inProgress:
+        color = Colors.orange;
+        text = 'IN PROGRESS';
+        break;
+      case BookingStatus.completed:
+        color = Colors.purple;
+        text = 'COMPLETED';
+        break;
+      case BookingStatus.cancelled:
+        color = Colors.red;
+        text = 'CANCELLED';
+        break;
+      case BookingStatus.declined:
+        color = Colors.grey;
+        text = 'DECLINED';
+        break;
+      default:
+        color = Colors.grey;
+        text = status.toString().split('.').last.toUpperCase();
+    }
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
+  void _showBookingDetails(BookingModel booking) {
+    // TODO: Navigate to booking details screen
+    print('Show booking details: ${booking.bookingId}');
+  }
+
+  Future<void> _acceptBooking(BookingModel booking) async {
+    // TODO: Implement accept booking logic
+    print('Accept booking: ${booking.bookingId}');
+  }
+
+  Future<void> _declineBooking(BookingModel booking) async {
+    // TODO: Implement decline booking logic
+    print('Decline booking: ${booking.bookingId}');
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 3),
       ),
     );
   }
