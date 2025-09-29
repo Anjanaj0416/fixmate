@@ -365,7 +365,10 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
                   child: Text('Cancel')),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
                 child: Text('Confirm'),
               ),
             ],
