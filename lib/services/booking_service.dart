@@ -1,6 +1,7 @@
 // lib/services/booking_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/booking_model.dart';
+import 'booking_service_extension.dart';
 
 class BookingService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
