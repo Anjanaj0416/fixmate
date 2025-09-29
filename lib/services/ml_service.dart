@@ -70,7 +70,7 @@ class MLWorker {
   final int experienceYears;
   final int dailyWageLkr;
   final String phoneNumber;
-  final String email; // Email field from dataset
+  final String email;
   final String city;
   final double distanceKm;
   final double aiConfidence;
@@ -126,15 +126,58 @@ class MLWorker {
   }
 }
 
-// FIXED AIAnalysis class with ALL required fields
+// FIXED: ServicePrediction class to handle tuple format
+class ServicePrediction {
+  final String serviceType;
+  final double confidence;
+
+  ServicePrediction({
+    required this.serviceType,
+    required this.confidence,
+  });
+
+  // CRITICAL FIX: Handle tuple format [service_type, "percentage_string"]
+  factory ServicePrediction.fromJson(dynamic json) {
+    if (json is List && json.length >= 2) {
+      // Format: ["electrical", "97.1%"]
+      String serviceType = json[0].toString();
+      String confidenceStr = json[1].toString().replaceAll('%', '');
+      double confidence = double.tryParse(confidenceStr) ?? 0.0;
+
+      return ServicePrediction(
+        serviceType: serviceType,
+        confidence: confidence / 100.0, // Convert percentage to decimal
+      );
+    } else if (json is Map<String, dynamic>) {
+      // Fallback: Handle object format
+      return ServicePrediction(
+        serviceType: json['serviceType'] ?? json['service_type'] ?? '',
+        confidence: (json['confidence'] ?? 0.0).toDouble(),
+      );
+    } else {
+      // Default fallback
+      return ServicePrediction(
+        serviceType: 'unknown',
+        confidence: 0.0,
+      );
+    }
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'service_type': serviceType,
+      'confidence': confidence,
+    };
+  }
+}
+
+// FIXED: AIAnalysis class with proper parsing
 class AIAnalysis {
   final String detectedService;
   final String urgencyLevel;
   final String timePreference;
   final List<String> requiredSkills;
   final double confidence;
-
-  // Additional fields that were missing
   final String userInputLocation;
   final List<ServicePrediction> servicePredictions;
   final String timeRequirement;
@@ -151,24 +194,37 @@ class AIAnalysis {
   });
 
   factory AIAnalysis.fromJson(Map<String, dynamic> json) {
+    // CRITICAL FIX: Parse service_predictions as list of tuples
+    List<ServicePrediction> predictions = [];
+
+    if (json['service_predictions'] != null) {
+      var rawPredictions = json['service_predictions'];
+      if (rawPredictions is List) {
+        predictions =
+            rawPredictions.map((p) => ServicePrediction.fromJson(p)).toList();
+      }
+    }
+
+    // If no predictions, create a default one
+    if (predictions.isEmpty && json['detected_service'] != null) {
+      predictions.add(ServicePrediction(
+        serviceType: json['detected_service'],
+        confidence: (json['confidence'] ?? 0.0).toDouble(),
+      ));
+    }
+
     return AIAnalysis(
       detectedService: json['detected_service'] ?? '',
-      urgencyLevel: json['urgency_level'] ?? '',
-      timePreference: json['time_preference'] ?? '',
-      requiredSkills: List<String>.from(json['required_skills'] ?? []),
+      urgencyLevel: json['urgency_level'] ?? 'normal',
+      timePreference: json['time_preference'] ?? 'flexible',
+      requiredSkills: json['required_skills'] != null
+          ? List<String>.from(json['required_skills'])
+          : [],
       confidence: (json['confidence'] ?? 0.0).toDouble(),
-      userInputLocation: json['user_input_location'] ?? '',
-      servicePredictions: (json['service_predictions'] as List?)
-              ?.map((p) => ServicePrediction.fromJson(p))
-              .toList() ??
-          [
-            ServicePrediction(
-              serviceType: json['detected_service'] ?? '',
-              confidence: (json['confidence'] ?? 0.0).toDouble(),
-            )
-          ],
+      userInputLocation: json['user_input_location'] ?? 'Unknown',
+      servicePredictions: predictions,
       timeRequirement:
-          json['time_requirement'] ?? json['time_preference'] ?? '',
+          json['time_requirement'] ?? json['time_preference'] ?? 'flexible',
     );
   }
 
@@ -182,31 +238,6 @@ class AIAnalysis {
       'user_input_location': userInputLocation,
       'service_predictions': servicePredictions.map((p) => p.toJson()).toList(),
       'time_requirement': timeRequirement,
-    };
-  }
-}
-
-// ServicePrediction class for service predictions list
-class ServicePrediction {
-  final String serviceType;
-  final double confidence;
-
-  ServicePrediction({
-    required this.serviceType,
-    required this.confidence,
-  });
-
-  factory ServicePrediction.fromJson(Map<String, dynamic> json) {
-    return ServicePrediction(
-      serviceType: json['service_type'] ?? '',
-      confidence: (json['confidence'] ?? 0.0).toDouble(),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'service_type': serviceType,
-      'confidence': confidence,
     };
   }
 }
