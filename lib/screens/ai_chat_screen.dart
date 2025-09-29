@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/openai_service.dart';
@@ -15,7 +16,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
   List<ChatMessage> _messages = [];
   bool _isLoading = false;
-  File? _selectedImage;
+  XFile? _selectedImage; // Changed from File? to XFile?
 
   @override
   void initState() {
@@ -49,7 +50,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
       if (image != null) {
         setState(() {
-          _selectedImage = File(image.path);
+          _selectedImage = image; // Store XFile instead of File
         });
       }
     } catch (e) {
@@ -124,8 +125,10 @@ class _AIChatScreenState extends State<AIChatScreen> {
       String response;
 
       if (imageToAnalyze != null) {
+        // Convert XFile to File for the service
+        final File imageFile = File(imageToAnalyze.path);
         response = await OpenAIService.analyzeImage(
-          imageFile: imageToAnalyze,
+          imageFile: imageFile,
           userMessage: message.isEmpty ? null : message,
         );
       } else {
@@ -237,12 +240,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      _selectedImage!,
-                      width: 60,
-                      height: 60,
-                      fit: BoxFit.cover,
-                    ),
+                    child: _buildImageWidget(_selectedImage!, 60, 60),
                   ),
                   SizedBox(width: 12),
                   Expanded(
@@ -330,6 +328,33 @@ class _AIChatScreenState extends State<AIChatScreen> {
     );
   }
 
+  // Helper method to build image widget based on platform
+  Widget _buildImageWidget(XFile imageFile, double width, double height) {
+    if (kIsWeb) {
+      return Image.network(
+        imageFile.path,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: width,
+            height: height,
+            color: Colors.grey[300],
+            child: Icon(Icons.error),
+          );
+        },
+      );
+    } else {
+      return Image.file(
+        File(imageFile.path),
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+      );
+    }
+  }
+
   Widget _buildMessageBubble(ChatMessage message) {
     return Align(
       alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -351,10 +376,10 @@ class _AIChatScreenState extends State<AIChatScreen> {
             if (message.image != null) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.file(
+                child: _buildImageWidget(
                   message.image!,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
+                  double.infinity,
+                  200,
                 ),
               ),
               if (message.text.isNotEmpty) SizedBox(height: 8),
@@ -401,7 +426,7 @@ class ChatMessage {
   final String text;
   final bool isUser;
   final DateTime timestamp;
-  final File? image;
+  final XFile? image; // Changed from File? to XFile?
   final bool isError;
 
   ChatMessage({
