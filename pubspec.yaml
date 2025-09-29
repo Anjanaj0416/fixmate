@@ -15,6 +15,9 @@ dependencies:
   firebase_auth: ^5.7.0
   cloud_firestore: ^5.6.12
   image_picker: ^1.0.4
+  http: ^1.1.0
+  flutter_dotenv: ^5.1.0
+  path_provider: ^2.1.1
   
 
 dev_dependencies:
@@ -30,3 +33,5 @@ dependency_overrides:
 
 flutter:
   uses-material-design: true
+  assets:
+    - .env

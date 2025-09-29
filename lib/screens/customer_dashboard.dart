@@ -5,6 +5,7 @@ import '../constants/service_constants.dart';
 import 'service_request_flow.dart';
 import 'customer_profile_screen.dart';
 import 'customer_bookings_screen.dart';
+import 'ai_chat_screen.dart'; // ADD THIS IMPORT
 
 class CustomerDashboard extends StatefulWidget {
   @override
@@ -206,19 +207,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                             ),
                           ],
                         ),
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: _showEmergencyDialog,
-                              icon: Icon(Icons.warning,
-                                  color: Colors.red, size: 28),
-                            ),
-                            IconButton(
-                              onPressed: () {},
-                              icon: Icon(Icons.notifications_outlined,
-                                  color: Colors.grey[700], size: 28),
-                            ),
-                          ],
+                        IconButton(
+                          icon: Icon(Icons.notifications_outlined),
+                          onPressed: () {},
                         ),
                       ],
                     ),
@@ -228,160 +219,243 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             ),
           ),
 
-          // Search Bar
           SliverToBoxAdapter(
-            child: Container(
-              margin: EdgeInsets.all(16),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search for services...',
-                  prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: 16),
+
+                // AI ASSISTANT BANNER - NEW ADDITION
+                _buildAIAssistantBanner(),
+                SizedBox(height: 24),
+
+                // Search bar
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'What service are you looking for?',
+                      prefixIcon: Icon(Icons.search),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: EdgeInsets.symmetric(vertical: 16),
+                    ),
                   ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding:
-                      EdgeInsets.symmetric(vertical: 16, horizontal: 20),
                 ),
-              ),
-            ),
-          ),
 
-          // Emergency Banner
-          SliverToBoxAdapter(
-            child: Container(
-              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.red[400]!, Colors.red[600]!],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.emergency, color: Colors.white, size: 28),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Emergency Service',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          'Need urgent help? Get 24/7 assistance',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton(
-                    onPressed: _showEmergencyDialog,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.red[600],
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    ),
-                    child: Text('Call Now'),
-                  ),
-                ],
-              ),
-            ),
-          ),
+                SizedBox(height: 24),
 
-          // Services Grid
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Our Services',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 1.1,
-                    ),
-                    itemCount: _serviceCategories.length,
-                    itemBuilder: (context, index) {
-                      final service = _serviceCategories[index];
-                      return _buildServiceCard(service);
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Quick Actions
-          SliverToBoxAdapter(
-            child: Container(
-              margin: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Quick Actions',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  Row(
+                // Service Categories
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        child: _buildQuickActionCard(
-                          'Schedule Service',
-                          Icons.schedule,
-                          Colors.blue,
-                          _scheduleService,
+                      Text(
+                        'Services',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[800],
                         ),
                       ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: _buildQuickActionCard(
-                          'View Bookings',
-                          Icons.list_alt,
-                          Colors.green,
-                          () => setState(() => _currentIndex = 1),
-                        ),
+                      TextButton(
+                        onPressed: () {},
+                        child: Text('See all'),
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+
+                SizedBox(height: 12),
+
+                // Services Grid
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: GridView.builder(
+                    shrinkWrap: true,
+                    physics: NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 0.85,
+                    ),
+                    itemCount: _serviceCategories.length,
+                    itemBuilder: (context, index) {
+                      return _buildServiceCard(_serviceCategories[index]);
+                    },
+                  ),
+                ),
+
+                SizedBox(height: 24),
+
+                // QUICK ACTIONS WITH AI CHAT - NEW ADDITION
+                _buildQuickActions(),
+
+                SizedBox(height: 24),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  // NEW METHOD: AI Assistant Banner
+  Widget _buildAIAssistantBanner() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => AIChatScreen()),
+        );
+      },
+      child: Container(
+        margin: EdgeInsets.symmetric(horizontal: 16),
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.purple, Colors.deepPurple],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.purple.withOpacity(0.3),
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.smart_toy,
+                color: Colors.white,
+                size: 32,
+              ),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Need Help? Ask AI',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Upload a photo or chat to identify your issue',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // NEW METHOD: Quick Actions Section
+  Widget _buildQuickActions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'Quick Actions',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+            ),
+          ),
+        ),
+        SizedBox(height: 12),
+        Container(
+          height: 120,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            children: [
+              // AI ASSISTANT CARD - NEW
+              Container(
+                width: 130,
+                margin: EdgeInsets.only(right: 12),
+                child: _buildQuickActionCard(
+                  'AI Assistant',
+                  Icons.smart_toy,
+                  Colors.purple,
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => AIChatScreen()),
+                    );
+                  },
+                ),
+              ),
+              Container(
+                width: 130,
+                margin: EdgeInsets.only(right: 12),
+                child: _buildQuickActionCard(
+                  'My Bookings',
+                  Icons.calendar_today,
+                  Colors.blue,
+                  () {
+                    setState(() => _currentIndex = 1);
+                  },
+                ),
+              ),
+              Container(
+                width: 130,
+                margin: EdgeInsets.only(right: 12),
+                child: _buildQuickActionCard(
+                  'Favorites',
+                  Icons.favorite,
+                  Colors.red,
+                  () {
+                    // Navigate to favorites
+                  },
+                ),
+              ),
+              Container(
+                width: 130,
+                child: _buildQuickActionCard(
+                  'Support',
+                  Icons.help_outline,
+                  Colors.green,
+                  () {
+                    // Navigate to support
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -396,63 +470,60 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
+              blurRadius: 8,
               offset: Offset(0, 2),
             ),
           ],
         ),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: service['color'].withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  service['icon'],
-                  size: 32,
-                  color: service['color'],
-                ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: service['color'].withOpacity(0.1),
+                shape: BoxShape.circle,
               ),
-              SizedBox(height: 12),
-              Text(
-                service['name'],
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
-                ),
+              child: Icon(
+                service['icon'],
+                size: 32,
+                color: service['color'],
               ),
-              SizedBox(height: 4),
-              Text(
-                '${service['serviceCount']} services',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+            ),
+            SizedBox(height: 12),
+            Text(
+              service['name'],
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
               ),
-              SizedBox(height: 4),
-              Text(
-                service['description'],
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey[500],
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+            ),
+            SizedBox(height: 4),
+            Text(
+              '${service['serviceCount']} services',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
               ),
-            ],
-          ),
+            ),
+            SizedBox(height: 4),
+            Text(
+              service['description'],
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[500],
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );
@@ -476,6 +547,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           ],
         ),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: color, size: 32),
             SizedBox(height: 8),
@@ -624,15 +696,15 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   Widget _buildCategoryTile(
-      String serviceId, String category, String serviceName) {
-    IconData icon = _getCategoryIcon(serviceId, category);
+      String serviceType, String subService, String serviceName) {
+    IconData icon = _getCategoryIcon(serviceType, subService);
 
     return Container(
       margin: EdgeInsets.only(bottom: 12),
       child: ListTile(
         onTap: () {
           Navigator.pop(context);
-          _navigateToServiceRequest(serviceId, category, serviceName);
+          _navigateToServiceRequest(serviceType, subService, serviceName);
         },
         leading: Container(
           padding: EdgeInsets.all(8),
@@ -643,7 +715,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           child: Icon(icon, color: Colors.blue, size: 20),
         ),
         title: Text(
-          category,
+          subService,
           style: TextStyle(
             fontWeight: FontWeight.w500,
           ),
@@ -657,188 +729,19 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     );
   }
 
-  IconData _getCategoryIcon(String serviceId, String category) {
-    // Return appropriate icons based on service and category - using only standard Flutter icons
-    switch (serviceId) {
-      case 'ac_repair':
-        switch (category.toLowerCase()) {
-          case 'window units':
-            return Icons.window;
-          case 'central ac':
-            return Icons.ac_unit;
-          case 'split systems':
-            return Icons.view_column; // Fixed: replaced split_screen
-          case 'maintenance':
-            return Icons.build;
-          case 'installation':
-            return Icons.construction;
-          default:
-            return Icons.ac_unit;
-        }
-      case 'appliance_repair':
-        switch (category.toLowerCase()) {
-          case 'refrigerator':
-            return Icons.kitchen;
-          case 'dishwasher':
-            return Icons.local_laundry_service;
-          case 'microwave':
-            return Icons.microwave;
-          case 'washing machine':
-            return Icons.local_laundry_service;
-          case 'oven & stove':
-            return Icons.soup_kitchen;
-          case 'dryer':
-            return Icons.dry_cleaning;
-          case 'emergency service':
-            return Icons.emergency;
-          default:
-            return Icons.kitchen;
-        }
-      case 'carpentry':
-        switch (category.toLowerCase()) {
-          case 'custom furniture':
-            return Icons.chair;
-          case 'restoration':
-            return Icons.restore;
-          case 'repairs':
-            return Icons.build;
-          case 'decorative':
-            return Icons.palette;
-          case 'cabinet making':
-            return Icons.kitchen;
-          case 'wooden flooring':
-            return Icons.layers;
-          default:
-            return Icons.carpenter;
-        }
-      case 'cleaning':
-        switch (category.toLowerCase()) {
-          case 'deep cleaning':
-            return Icons.cleaning_services;
-          case 'post-construction':
-            return Icons.construction;
-          case 'regular maintenance':
-            return Icons.schedule;
-          case 'carpet cleaning':
-            return Icons.cleaning_services;
-          case 'upholstery cleaning':
-            return Icons.weekend;
-          default:
-            return Icons.cleaning_services;
-        }
+  IconData _getCategoryIcon(String serviceType, String subService) {
+    // Return appropriate icon based on service and category
+    switch (serviceType) {
       case 'electrical':
-        switch (category.toLowerCase()) {
-          case 'installation':
-            return Icons.electrical_services;
-          case 'wiring':
-            return Icons.cable;
-          case 'safety inspection':
-            return Icons.security;
-          case 'emergency service':
-            return Icons.emergency;
-          case 'lighting systems':
-            return Icons.lightbulb;
-          case 'solar panel setup':
-            return Icons.solar_power;
-          case 'maintenance':
-            return Icons.build;
-          default:
-            return Icons.electrical_services;
-        }
-      case 'gardening':
-        switch (category.toLowerCase()) {
-          case 'landscaping':
-            return Icons.landscape;
-          case 'lawn care':
-            return Icons.grass;
-          case 'tree trimming':
-            return Icons.park;
-          case 'irrigation systems':
-            return Icons.water_drop;
-          default:
-            return Icons.grass;
-        }
-      case 'general_maintenance':
-        switch (category.toLowerCase()) {
-          case 'property upkeep':
-            return Icons.home_repair_service;
-          case 'preventive maintenance':
-            return Icons.schedule;
-          case 'multiple repairs':
-            return Icons.build;
-          case 'furniture assembly':
-            return Icons.chair;
-          case 'small fixture replacements':
-            return Icons.settings;
-          default:
-            return Icons.handyman;
-        }
-      case 'masonry':
-        switch (category.toLowerCase()) {
-          case 'stone work':
-            return Icons.foundation;
-          case 'brick work':
-            return Icons.apartment;
-          case 'concrete':
-            return Icons.layers; // Fixed: replaced concrete
-          case 'tile setting':
-            return Icons.grid_on;
-          case 'wall finishing':
-            return Icons.format_paint;
-          default:
-            return Icons.foundation;
-        }
-      case 'painting':
-        switch (category.toLowerCase()) {
-          case 'interior':
-            return Icons.home;
-          case 'exterior':
-            return Icons.home_outlined;
-          case 'commercial':
-            return Icons.business;
-          case 'decorative':
-            return Icons.palette;
-          case 'waterproofing':
-            return Icons.water_drop;
-          case 'wall textures':
-            return Icons.texture;
-          default:
-            return Icons.format_paint;
-        }
+        return Icons.electrical_services;
       case 'plumbing':
-        switch (category.toLowerCase()) {
-          case 'installation':
-            return Icons.plumbing;
-          case 'water heater service':
-            return Icons.hot_tub;
-          case 'emergency repairs':
-            return Icons.emergency;
-          case 'maintenance':
-            return Icons.build;
-          case 'drain cleaning':
-            return Icons.cleaning_services;
-          case 'pipe replacement':
-            return Icons.straighten;
-          case 'bathroom fittings':
-            return Icons.bathroom;
-          default:
-            return Icons.plumbing;
-        }
-      case 'roofing':
-        switch (category.toLowerCase()) {
-          case 'roof installation':
-            return Icons.roofing;
-          case 'leak repair':
-            return Icons.water_drop;
-          case 'tile replacement':
-            return Icons.grid_on;
-          case 'waterproofing':
-            return Icons.umbrella;
-          case 'gutter maintenance':
-            return Icons.stairs;
-          default:
-            return Icons.roofing;
-        }
+        return Icons.plumbing;
+      case 'cleaning':
+        return Icons.cleaning_services;
+      case 'carpentry':
+        return Icons.carpenter;
+      case 'painting':
+        return Icons.format_paint;
       default:
         return Icons.build;
     }
@@ -855,44 +758,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           serviceName: serviceName,
         ),
       ),
-    );
-  }
-
-  void _showEmergencyDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.emergency, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Emergency Service'),
-          ],
-        ),
-        content: Text(
-          'Need immediate assistance? Our emergency service team is available 24/7 for urgent repairs.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // TODO: Implement emergency service request
-            },
-            child: Text('Request'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _scheduleService() {
-    // TODO: Navigate to schedule service screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Schedule service feature coming soon!')),
     );
   }
 }
