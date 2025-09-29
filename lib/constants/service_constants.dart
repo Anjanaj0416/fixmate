@@ -95,30 +95,56 @@ class WorkerService {
     double? userLng,
   }) async {
     try {
+      print('DEBUG: Searching workers with serviceType: $serviceType');
+
       Query query = _firestore.collection('workers');
 
-      // Filter by service type
-      query = query.where('service_type', isEqualTo: serviceType);
+      // Filter by service type - use the correct field name from WorkerModel
+      query = query.where('serviceType', isEqualTo: serviceType);
 
       // Filter by city if provided
       if (city != null && city.isNotEmpty) {
-        query = query.where('city', isEqualTo: city);
+        query = query.where('location.city', isEqualTo: city);
       }
 
       // Filter by service category if provided
       if (serviceCategory != null && serviceCategory.isNotEmpty) {
-        query = query.where('service_category', isEqualTo: serviceCategory);
+        query = query.where('serviceCategory', isEqualTo: serviceCategory);
       }
 
-      // Filter by availability
-      query = query.where('is_available', isEqualTo: true);
-      query = query.where('is_verified', isEqualTo: true);
+      // Remove the strict verification filter temporarily for testing
+      // Comment out these lines to see all workers first:
+      // query = query.where('availability.availableToday', isEqualTo: true);
+      // query = query.where('verified', isEqualTo: true);
 
+      print('DEBUG: Executing query...');
       QuerySnapshot querySnapshot = await query.get();
+      print('DEBUG: Found ${querySnapshot.docs.length} workers');
 
-      List<WorkerModel> workers = querySnapshot.docs
-          .map((doc) => WorkerModel.fromFirestore(doc))
-          .toList();
+      if (querySnapshot.docs.isEmpty) {
+        // Try a broader search without filters to see if there are any workers at all
+        print('DEBUG: No workers found with filters, trying broader search...');
+        QuerySnapshot allWorkers = await _firestore.collection('workers').get();
+        print('DEBUG: Total workers in database: ${allWorkers.docs.length}');
+
+        // Print first worker's data for debugging
+        if (allWorkers.docs.isNotEmpty) {
+          print('DEBUG: Sample worker data: ${allWorkers.docs.first.data()}');
+        }
+      }
+
+      List<WorkerModel> workers = [];
+
+      for (var doc in querySnapshot.docs) {
+        try {
+          WorkerModel worker = WorkerModel.fromFirestore(doc);
+          workers.add(worker);
+          print('DEBUG: Successfully parsed worker: ${worker.workerName}');
+        } catch (e) {
+          print('DEBUG: Error parsing worker ${doc.id}: $e');
+          print('DEBUG: Worker data: ${doc.data()}');
+        }
+      }
 
       // Filter by specialization if provided
       if (specialization != null && specialization.isNotEmpty) {
@@ -137,8 +163,10 @@ class WorkerService {
         }).toList();
       }
 
+      print('DEBUG: Returning ${workers.length} workers after all filters');
       return workers;
     } catch (e) {
+      print('DEBUG: Error in searchWorkers: $e');
       throw Exception('Failed to search workers: ${e.toString()}');
     }
   }
