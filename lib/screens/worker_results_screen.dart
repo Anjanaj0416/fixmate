@@ -2,12 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/ml_service.dart';
-import 'enhanced_worker_detail_screen.dart';
-import '../services/ml_worker_converter.dart';
-
-import '../models/worker_model.dart'; // ✅ Add this import
-import '../services/ml_worker_converter.dart'; // ✅ Add this import
-import '../screens/enhanced_worker_detail_screen.dart'; // ✅ Add this if not present
+import 'worker_detail_screen.dart';
 
 class WorkerResultsScreen extends StatefulWidget {
   final List<MLWorker> workers;
@@ -496,28 +491,15 @@ class _WorkerResultsScreenState extends State<WorkerResultsScreen> {
   }
 
   void _showWorkerDetails(BuildContext context, MLWorker worker) {
-    try {
-      // Convert MLWorker to WorkerModel
-      WorkerModel workerModel = MLWorkerConverter.convertToWorkerModel(worker);
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => EnhancedWorkerDetailScreen(
-            worker: workerModel,
-            problemDescription: widget.problemDescription,
-          ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WorkerDetailScreen(
+          worker: worker,
+          problemDescription: widget.problemDescription,
         ),
-      );
-    } catch (e) {
-      print('❌ Error showing worker details: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to load worker details'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+      ),
+    );
   }
 
   Widget _buildDetailCard(

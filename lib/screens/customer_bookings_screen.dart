@@ -1,5 +1,5 @@
 // lib/screens/customer_bookings_screen.dart
-// FIXED VERSION - Restores original functionality + Rating feature
+// UPDATED VERSION - Requested, Active, Completed, Cancelled tabs
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -20,7 +20,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController =
+        TabController(length: 4, vsync: this); // Changed from 4 to 4
     _loadCustomerData();
   }
 
@@ -166,8 +167,10 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
 
           switch (type) {
             case 'requested':
+              // Only show requested status
               return status == 'requested';
             case 'active':
+              // Show accepted and in_progress statuses
               return status == 'accepted' || status == 'in_progress';
             case 'completed':
               return status == 'completed';
@@ -206,6 +209,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
       builder: (context, snapshot) {
         if (!snapshot.hasData) return SizedBox();
 
+        // Filter count based on type
         int count = snapshot.data!.docs.where((doc) {
           Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
           String status = data['status'] ?? '';
@@ -338,7 +342,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
 
               SizedBox(height: 12),
 
-              // Worker info with rating display
+              // Worker info
               Row(
                 children: [
                   CircleAvatar(
@@ -365,30 +369,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                               fontSize: 13,
                             ),
                           ),
-                        // Show worker's average rating from reviews
-                        FutureBuilder<double>(
-                          future: _getWorkerAverageRating(booking.workerId),
-                          builder: (context, snapshot) {
-                            if (snapshot.hasData && snapshot.data! > 0) {
-                              return Row(
-                                children: [
-                                  Icon(Icons.star,
-                                      size: 14, color: Colors.amber),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    snapshot.data!.toStringAsFixed(1),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[700],
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }
-                            return SizedBox();
-                          },
-                        ),
                       ],
                     ),
                   ),
@@ -494,7 +474,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                 ),
               ],
 
-              // RATING BUTTON for completed bookings
               if (booking.status == BookingStatus.completed &&
                   booking.customerRating == null) ...[
                 SizedBox(height: 16),
@@ -508,65 +487,11 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                   ),
                 ),
               ],
-
-              // SHOW RATING if already rated
-              if (booking.status == BookingStatus.completed &&
-                  booking.customerRating != null) ...[
-                SizedBox(height: 12),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.amber.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.star, color: Colors.amber, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'You rated: ${booking.customerRating!.toStringAsFixed(1)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[800],
-                        ),
-                      ),
-                      Spacer(),
-                      TextButton(
-                        onPressed: () => _viewYourReview(booking),
-                        child: Text('View Review'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ],
           ),
         ),
       ),
     );
-  }
-
-  // Get worker's average rating from reviews collection
-  Future<double> _getWorkerAverageRating(String workerId) async {
-    try {
-      QuerySnapshot reviewsSnapshot = await FirebaseFirestore.instance
-          .collection('reviews')
-          .where('worker_id', isEqualTo: workerId)
-          .get();
-
-      if (reviewsSnapshot.docs.isEmpty) return 0.0;
-
-      double totalRating = 0;
-      for (var doc in reviewsSnapshot.docs) {
-        totalRating += (doc.data() as Map<String, dynamic>)['rating'] ?? 0.0;
-      }
-
-      return totalRating / reviewsSnapshot.docs.length;
-    } catch (e) {
-      print('Error getting worker rating: $e');
-      return 0.0;
-    }
   }
 
   Widget _buildStatusBadge(BookingStatus status) {
@@ -743,70 +668,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                 ),
                 child: Text(booking.problemDescription),
               ),
-
-              // Show worker's reviews section
-              SizedBox(height: 20),
-              Text(
-                'Worker Reviews',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 12),
-              FutureBuilder<List<Map<String, dynamic>>>(
-                future: _getWorkerReviews(booking.workerId),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(child: CircularProgressIndicator());
-                  }
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return Text('No reviews yet',
-                        style: TextStyle(color: Colors.grey));
-                  }
-                  return Column(
-                    children: snapshot.data!.take(3).map((review) {
-                      return Card(
-                        margin: EdgeInsets.only(bottom: 8),
-                        child: Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Row(
-                                    children: List.generate(5, (index) {
-                                      return Icon(
-                                        index < review['rating']
-                                            ? Icons.star
-                                            : Icons.star_border,
-                                        size: 16,
-                                        color: Colors.amber,
-                                      );
-                                    }),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    review['customer_name'],
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.w600),
-                                  ),
-                                ],
-                              ),
-                              if (review['review'].isNotEmpty) ...[
-                                SizedBox(height: 8),
-                                Text(review['review']),
-                              ],
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
-
               SizedBox(height: 20),
               if (booking.status == BookingStatus.accepted ||
                   booking.status == BookingStatus.inProgress)
@@ -827,25 +688,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
         ),
       ),
     );
-  }
-
-  // Get worker reviews
-  Future<List<Map<String, dynamic>>> _getWorkerReviews(String workerId) async {
-    try {
-      QuerySnapshot reviewsSnapshot = await FirebaseFirestore.instance
-          .collection('reviews')
-          .where('worker_id', isEqualTo: workerId)
-          .orderBy('created_at', descending: true)
-          .limit(10)
-          .get();
-
-      return reviewsSnapshot.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
-          .toList();
-    } catch (e) {
-      print('Error getting reviews: $e');
-      return [];
-    }
   }
 
   Widget _buildDetailRow(String label, String value) {
@@ -976,41 +818,39 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text('Rate Service'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('How was your experience with ${booking.workerName}?'),
-                SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(5, (index) {
-                    return IconButton(
-                      icon: Icon(
-                        index < rating ? Icons.star : Icons.star_border,
-                        color: Colors.amber,
-                        size: 32,
-                      ),
-                      onPressed: () {
-                        setDialogState(() {
-                          rating = index + 1.0;
-                        });
-                      },
-                    );
-                  }),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('How was your experience?'),
+              SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  return IconButton(
+                    icon: Icon(
+                      index < rating ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                      size: 32,
+                    ),
+                    onPressed: () {
+                      setDialogState(() {
+                        rating = index + 1.0;
+                      });
+                    },
+                  );
+                }),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: reviewController,
+                decoration: InputDecoration(
+                  labelText: 'Review (Optional)',
+                  border: OutlineInputBorder(),
+                  hintText: 'Share your experience...',
                 ),
-                SizedBox(height: 16),
-                TextField(
-                  controller: reviewController,
-                  decoration: InputDecoration(
-                    labelText: 'Review (Optional)',
-                    border: OutlineInputBorder(),
-                    hintText: 'Share your experience...',
-                  ),
-                  maxLines: 3,
-                ),
-              ],
-            ),
+                maxLines: 3,
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -1022,43 +862,15 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                   ? () async {
                       Navigator.pop(context);
                       try {
-                        // Save rating to booking
-                        await FirebaseFirestore.instance
-                            .collection('bookings')
-                            .doc(booking.bookingId)
-                            .update({
-                          'customer_rating': rating,
-                          'customer_review': reviewController.text,
-                          'updated_at': FieldValue.serverTimestamp(),
-                        });
-
-                        // Save to reviews collection
-                        String reviewId = FirebaseFirestore.instance
-                            .collection('reviews')
-                            .doc()
-                            .id;
-
-                        await FirebaseFirestore.instance
-                            .collection('reviews')
-                            .doc(reviewId)
-                            .set({
-                          'review_id': reviewId,
-                          'booking_id': booking.bookingId,
-                          'customer_id': booking.customerId,
-                          'customer_name': booking.customerName,
-                          'worker_id': booking.workerId,
-                          'worker_name': booking.workerName,
-                          'rating': rating,
-                          'review': reviewController.text,
-                          'service_type': booking.serviceType,
-                          'created_at': FieldValue.serverTimestamp(),
-                          'is_verified': true,
-                        });
-
+                        await BookingService.addRating(
+                          bookingId: booking.bookingId,
+                          rating: rating,
+                          review: reviewController.text,
+                          isCustomerRating: true,
+                        );
                         _showSuccessSnackBar('Thank you for your feedback!');
                       } catch (e) {
-                        _showErrorSnackBar(
-                            'Failed to submit rating: ${e.toString()}');
+                        _showErrorSnackBar('Failed to submit rating');
                       }
                     }
                   : null,
@@ -1069,60 +881,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _viewYourReview(BookingModel booking) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Your Review'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: List.generate(5, (index) {
-                return Icon(
-                  index < (booking.customerRating ?? 0)
-                      ? Icons.star
-                      : Icons.star_border,
-                  color: Colors.amber,
-                  size: 24,
-                );
-              }),
-            ),
-            SizedBox(height: 12),
-            Text(
-              'Rating: ${booking.customerRating?.toStringAsFixed(1) ?? "N/A"}',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            if (booking.customerReview != null &&
-                booking.customerReview!.isNotEmpty) ...[
-              SizedBox(height: 12),
-              Text(
-                'Your Review:',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              SizedBox(height: 8),
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(booking.customerReview!),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
-          ),
-        ],
       ),
     );
   }
