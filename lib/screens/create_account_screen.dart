@@ -15,11 +15,86 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
+  final _nearestTownController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
+  // List of Sri Lankan towns from the ML dataset
+  final List<String> _sriLankanTowns = [
+    'Colombo',
+    'Kandy',
+    'Galle',
+    'Negombo',
+    'Jaffna',
+    'Kurunegala',
+    'Anuradhapura',
+    'Matara',
+    'Ratnapura',
+    'Trincomalee',
+    'Batticaloa',
+    'Badulla',
+    'Nuwara Eliya',
+    'Ampara',
+    'Vavuniya',
+    'Mannar',
+    'Polonnaruwa',
+    'Hambantota',
+    'Puttalam',
+    'Kegalle',
+    'Monaragala',
+    'Kilinochchi',
+    'Mullativu',
+    'Koswatta',
+    'Dehiwala',
+    'Mount Lavinia',
+    'Moratuwa',
+    'Kotte',
+    'Sri Jayawardenepura Kotte',
+    'Nugegoda',
+    'Maharagama',
+    'Rajagiriya',
+    'Battaramulla',
+    'Malabe',
+    'Kaduwela',
+    'Pelawatta',
+    'Thalawathugoda',
+    'Homagama',
+    'Kottawa',
+    'Piliyandala',
+    'Boralesgamuwa',
+    'Athurugiriya',
+    'Pannipitiya',
+    'Wattala',
+    'Ja-Ela',
+    'Kiribathgoda',
+    'Kelaniya',
+    'Gampaha',
+    'Kalutara',
+    'Panadura',
+    'Beruwala',
+    'Wadduwa',
+    'Horana',
+    'Matale',
+    'Dambulla',
+    'Chilaw',
+    'Kalmunai',
+    'Wattegama',
+    'Balangoda',
+    'Embilipitiya',
+    'Tangalle',
+    'Ambalantota',
+    'Deniyaya',
+    'Tissamaharama',
+    'Haputale',
+    'Bandarawela',
+    'Wellawaya',
+  ];
+
+  List<String> _filteredTowns = [];
+  bool _showSuggestions = false;
 
   @override
   void dispose() {
@@ -27,9 +102,36 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _nearestTownController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  void _filterTowns(String query) {
+    if (query.isEmpty) {
+      setState(() {
+        _filteredTowns = [];
+        _showSuggestions = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _filteredTowns = _sriLankanTowns
+          .where((town) => town.toLowerCase().contains(query.toLowerCase()))
+          .take(5)
+          .toList();
+      _showSuggestions = _filteredTowns.isNotEmpty;
+    });
+  }
+
+  void _selectTown(String town) {
+    _nearestTownController.text = town;
+    setState(() {
+      _showSuggestions = false;
+      _filteredTowns = [];
+    });
   }
 
   Future<void> _createAccount() async {
@@ -50,7 +152,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         password: _passwordController.text,
       );
 
-      // Save user data to Firestore
+      // Save user data to Firestore with nearest town
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
@@ -59,6 +161,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
         'address': _addressController.text.trim(),
+        'nearestTown': _nearestTownController.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -170,7 +273,20 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       return 'Please enter your address';
     }
     if (value.length < 5) {
-      return 'Please enter a complete address';
+      return 'Address must be at least 5 characters';
+    }
+    return null;
+  }
+
+  String? _validateNearestTown(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter your nearest town';
+    }
+    // Check if the entered town is in our list (case-insensitive)
+    bool isValid = _sriLankanTowns
+        .any((town) => town.toLowerCase() == value.toLowerCase());
+    if (!isValid) {
+      return 'Please select a town from the suggestions';
     }
     return null;
   }
@@ -179,291 +295,355 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(height: 32),
-
-              // Header
-              Text(
-                'Create Account',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Text(
+                  'Create Account',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
                 ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Join FixMate and connect with skilled professionals',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
+                SizedBox(height: 8),
+                Text(
+                  'Sign up to get started',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
                 ),
-              ),
-              SizedBox(height: 40),
+                SizedBox(height: 40),
 
-              // Form
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    // Name Field
-                    TextFormField(
-                      controller: _nameController,
-                      validator: _validateName,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: InputDecoration(
-                        labelText: 'Full Name',
-                        hintText: 'Enter your full name',
-                        prefixIcon: Icon(Icons.person_outline),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Color(0xFF2196F3)),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Email Field
-                    TextFormField(
-                      controller: _emailController,
-                      validator: _validateEmail,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: InputDecoration(
-                        labelText: 'Email',
-                        hintText: 'Enter your email address',
-                        prefixIcon: Icon(Icons.email_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Color(0xFF2196F3)),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Phone Field
-                    TextFormField(
-                      controller: _phoneController,
-                      validator: _validatePhone,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: 'Phone Number',
-                        hintText: 'Enter your phone number',
-                        prefixIcon: Icon(Icons.phone_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Color(0xFF2196F3)),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Address Field
-                    TextFormField(
-                      controller: _addressController,
-                      validator: _validateAddress,
-                      maxLines: 2,
-                      decoration: InputDecoration(
-                        labelText: 'Address',
-                        hintText: 'Enter your address',
-                        prefixIcon: Icon(Icons.location_on_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Color(0xFF2196F3)),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Password Field
-                    TextFormField(
-                      controller: _passwordController,
-                      validator: _validatePassword,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        hintText: 'Enter your password',
-                        prefixIcon: Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility
-                                : Icons.visibility_off,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Color(0xFF2196F3)),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Confirm Password Field
-                    TextFormField(
-                      controller: _confirmPasswordController,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please confirm your password';
-                        }
-                        return null;
-                      },
-                      obscureText: _obscureConfirmPassword,
-                      decoration: InputDecoration(
-                        labelText: 'Confirm Password',
-                        hintText: 'Confirm your password',
-                        prefixIcon: Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscureConfirmPassword
-                                ? Icons.visibility
-                                : Icons.visibility_off,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _obscureConfirmPassword =
-                                  !_obscureConfirmPassword;
-                            });
-                          },
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Color(0xFF2196F3)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 32),
-
-              // Create Account Button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _createAccount,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF2196F3),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
+                // Name field
+                TextFormField(
+                  controller: _nameController,
+                  validator: _validateName,
+                  decoration: InputDecoration(
+                    labelText: 'Full Name',
+                    hintText: 'Enter your full name',
+                    prefixIcon:
+                        Icon(Icons.person_outline, color: Color(0xFF2196F3)),
+                    border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    elevation: 0,
-                    disabledBackgroundColor: Colors.grey[300],
-                  ),
-                  child: _isLoading
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : Text(
-                          'Create Account',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                ),
-              ),
-              SizedBox(height: 24),
-
-              // Sign In Link
-              Center(
-                child: TextButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => SignInScreen(),
-                            ),
-                          );
-                        },
-                  child: RichText(
-                    text: TextSpan(
-                      text: "Already have an account? ",
-                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                      children: [
-                        TextSpan(
-                          text: 'Sign in',
-                          style: TextStyle(
-                            color: Color(0xFF2196F3),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide:
+                          BorderSide(color: Color(0xFF2196F3), width: 2),
                     ),
                   ),
                 ),
-              ),
-              SizedBox(height: 32),
+                SizedBox(height: 16),
 
-              // Terms and Privacy
-              Center(
-                child: Text(
-                  'By creating an account, you agree to our Terms of Service and Privacy Policy',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                // Email field
+                TextFormField(
+                  controller: _emailController,
+                  validator: _validateEmail,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: 'Email',
+                    hintText: 'Enter your email',
+                    prefixIcon:
+                        Icon(Icons.email_outlined, color: Color(0xFF2196F3)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide:
+                          BorderSide(color: Color(0xFF2196F3), width: 2),
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                SizedBox(height: 16),
+
+                // Phone field
+                TextFormField(
+                  controller: _phoneController,
+                  validator: _validatePhone,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'Phone Number',
+                    hintText: 'Enter your phone number',
+                    prefixIcon:
+                        Icon(Icons.phone_outlined, color: Color(0xFF2196F3)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide:
+                          BorderSide(color: Color(0xFF2196F3), width: 2),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 16),
+
+                // Address field
+                TextFormField(
+                  controller: _addressController,
+                  validator: _validateAddress,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: 'Address',
+                    hintText: 'Enter your address',
+                    prefixIcon: Icon(Icons.location_on_outlined,
+                        color: Color(0xFF2196F3)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide:
+                          BorderSide(color: Color(0xFF2196F3), width: 2),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 16),
+
+                // Nearest Town field with autocomplete
+                Column(
+                  children: [
+                    TextFormField(
+                      controller: _nearestTownController,
+                      validator: _validateNearestTown,
+                      onChanged: _filterTowns,
+                      decoration: InputDecoration(
+                        labelText: 'Nearest Town',
+                        hintText: 'Start typing your nearest town',
+                        prefixIcon:
+                            Icon(Icons.location_city, color: Color(0xFF2196F3)),
+                        suffixIcon: _nearestTownController.text.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(Icons.clear),
+                                onPressed: () {
+                                  _nearestTownController.clear();
+                                  _filterTowns('');
+                                },
+                              )
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              BorderSide(color: Color(0xFF2196F3), width: 2),
+                        ),
+                      ),
+                    ),
+                    if (_showSuggestions)
+                      Container(
+                        margin: EdgeInsets.only(top: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[300]!),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _filteredTowns.length,
+                          itemBuilder: (context, index) {
+                            return ListTile(
+                              leading: Icon(Icons.location_city,
+                                  color: Color(0xFF2196F3)),
+                              title: Text(_filteredTowns[index]),
+                              onTap: () => _selectTown(_filteredTowns[index]),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+                SizedBox(height: 16),
+
+                // Password field
+                TextFormField(
+                  controller: _passwordController,
+                  validator: _validatePassword,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    hintText: 'Create a password',
+                    prefixIcon:
+                        Icon(Icons.lock_outline, color: Color(0xFF2196F3)),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide:
+                          BorderSide(color: Color(0xFF2196F3), width: 2),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 16),
+
+                // Confirm Password field
+                TextFormField(
+                  controller: _confirmPasswordController,
+                  obscureText: _obscureConfirmPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm Password',
+                    hintText: 'Re-enter your password',
+                    prefixIcon:
+                        Icon(Icons.lock_outline, color: Color(0xFF2196F3)),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword = !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide:
+                          BorderSide(color: Color(0xFF2196F3), width: 2),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 32),
+
+                // Create Account Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _createAccount,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFF2196F3),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                      disabledBackgroundColor: Colors.grey[300],
+                    ),
+                    child: _isLoading
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Text(
+                            'Create Account',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                  ),
+                ),
+                SizedBox(height: 24),
+
+                // Sign In Link
+                Center(
+                  child: TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => SignInScreen(),
+                              ),
+                            );
+                          },
+                    child: RichText(
+                      text: TextSpan(
+                        text: 'Already have an account? ',
+                        style: TextStyle(color: Colors.grey[700], fontSize: 14),
+                        children: [
+                          TextSpan(
+                            text: 'Sign In',
+                            style: TextStyle(
+                              color: Color(0xFF2196F3),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

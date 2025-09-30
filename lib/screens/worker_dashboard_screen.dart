@@ -32,24 +32,57 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
 
     try {
       User? user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        QuerySnapshot workerQuery = await FirebaseFirestore.instance
-            .collection('workers')
-            .where('contact.email', isEqualTo: user.email)
-            .limit(1)
-            .get();
+      if (user == null) {
+        throw Exception('No user logged in');
+      }
 
-        if (workerQuery.docs.isNotEmpty) {
-          _worker = WorkerModel.fromFirestore(workerQuery.docs.first);
-          _isAvailable = _worker!.availability.availableToday;
+      print('📊 Loading worker data for user: ${user.uid}');
 
-          // Load rating stats
-          _ratingStats = await RatingService.getWorkerRatingStats(
-            _worker!.workerId!,
-          );
-        }
+      // METHOD 1: Try loading by user UID (most reliable)
+      DocumentSnapshot workerDoc = await FirebaseFirestore.instance
+          .collection('workers')
+          .doc(user.uid)
+          .get();
+
+      if (workerDoc.exists) {
+        print('✅ Found worker by UID');
+        _worker = WorkerModel.fromFirestore(workerDoc);
+        _isAvailable = _worker!.availability.availableToday;
+
+        // Load rating stats
+        _ratingStats = await RatingService.getWorkerRatingStats(
+          _worker!.workerId!,
+        );
+
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      print('⚠️ Worker not found by UID, trying email query...');
+
+      // METHOD 2: Fallback - try querying by email
+      QuerySnapshot workerQuery = await FirebaseFirestore.instance
+          .collection('workers')
+          .where('contact.email', isEqualTo: user.email)
+          .limit(1)
+          .get();
+
+      if (workerQuery.docs.isNotEmpty) {
+        print('✅ Found worker by email');
+        _worker = WorkerModel.fromFirestore(workerQuery.docs.first);
+        _isAvailable = _worker!.availability.availableToday;
+
+        // Load rating stats
+        _ratingStats = await RatingService.getWorkerRatingStats(
+          _worker!.workerId!,
+        );
+      } else {
+        print('❌ Worker document not found');
+        throw Exception(
+            'Worker profile not found. Please complete registration.');
       }
     } catch (e) {
+      print('❌ Error loading worker data: $e');
       _showErrorSnackBar('Failed to load worker data: ${e.toString()}');
     } finally {
       setState(() => _isLoading = false);
