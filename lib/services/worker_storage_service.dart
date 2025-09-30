@@ -1,4 +1,5 @@
 // lib/services/worker_storage_service.dart
+// CORRECTED VERSION - Matches your actual MLWorker structure
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/ml_service.dart';
@@ -8,11 +9,9 @@ class WorkerStorageService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  /// Check if a worker already exists by EMAIL (not worker_id)
-  /// This prevents duplicate accounts for the same worker
+  /// Check if a worker already exists by EMAIL
   static Future<bool> checkWorkerExistsByEmail(String email) async {
     try {
-      // Check in users collection by email
       QuerySnapshot query = await _firestore
           .collection('users')
           .where('email', isEqualTo: email)
@@ -47,10 +46,8 @@ class WorkerStorageService {
   }
 
   /// Generate formatted worker ID with sequential ordering
-  /// Format: HM_0001, HM_0002, HM_0003, etc.
   static Future<String> generateFormattedWorkerId() async {
     try {
-      // Get all existing workers and find the highest ID number
       QuerySnapshot workersSnapshot = await _firestore
           .collection('workers')
           .orderBy('worker_id', descending: true)
@@ -61,34 +58,36 @@ class WorkerStorageService {
 
       if (workersSnapshot.docs.isNotEmpty) {
         String lastWorkerId = workersSnapshot.docs.first.get('worker_id');
-        // Extract number from format HM_XXXX
         String numberPart = lastWorkerId.replaceAll('HM_', '');
         int lastNumber = int.tryParse(numberPart) ?? 0;
         nextNumber = lastNumber + 1;
       }
 
-      // Format with leading zeros (4 digits)
       String formattedId = 'HM_${nextNumber.toString().padLeft(4, '0')}';
-
       print('✅ Generated formatted worker ID: $formattedId');
       return formattedId;
     } catch (e) {
       print('❌ Error generating worker ID: $e');
-      // Fallback to timestamp-based ID
       return 'HM_${DateTime.now().millisecondsSinceEpoch}';
     }
   }
 
   /// Store worker from ML dataset to Firebase
-  /// Uses worker's actual email from dataset instead of generating new one
+  /// CRITICAL FIX: Removed signOut() calls to ensure data persists
   static Future<String> storeWorkerFromML({
     required MLWorker mlWorker,
   }) async {
+    // Save currently logged-in user info
+    User? currentUser = _auth.currentUser;
+    String? currentUserEmail = currentUser?.email;
+    String? currentUserId = currentUser?.uid;
+
+    print('\n========== WORKER STORAGE START ==========');
+    print('💾 Current logged-in user: $currentUserEmail (UID: $currentUserId)');
+
     try {
-      // Extract email from dataset - assuming it's in the format or can be derived
-      // If the dataset has email field directly, use: mlWorker.email
-      // If not, you need to modify MLWorker class to include email field
-      String workerEmail = _extractWorkerEmail(mlWorker);
+      // Use email from ML model
+      String workerEmail = mlWorker.email.toLowerCase().trim();
       String defaultPassword = '123456';
 
       print('📧 Processing worker email: $workerEmail');
@@ -101,42 +100,60 @@ class WorkerStorageService {
         String? existingUid = await getWorkerUidByEmail(workerEmail);
         if (existingUid != null) {
           print('✅ Found existing worker UID: $existingUid');
+          print('========== WORKER STORAGE END ==========\n');
           return existingUid;
         }
       }
 
-      // Create or sign in to Firebase Auth account
+      // CRITICAL FIX: Create worker account WITHOUT signing out immediately
       UserCredential? userCredential;
+      String workerUid = '';
+
       try {
-        print('🔐 Creating Firebase Auth account...');
+        print('🔐 Creating Firebase Auth account for worker...');
+
         userCredential = await _auth.createUserWithEmailAndPassword(
           email: workerEmail,
           password: defaultPassword,
         );
-        print('✅ Firebase Auth account created');
+
+        workerUid = userCredential.user!.uid;
+        print('✅ Firebase Auth account created with UID: $workerUid');
+
+        // REMOVED: await _auth.signOut(); ← THIS WAS CAUSING THE PROBLEM!
       } catch (e) {
         if (e.toString().contains('email-already-in-use')) {
-          print('📝 Email already in use, signing in...');
-          userCredential = await _auth.signInWithEmailAndPassword(
-            email: workerEmail,
-            password: defaultPassword,
-          );
-          await _auth.signOut();
-          print('✅ Signed in to existing account');
+          print('📝 Email already in use, getting existing UID...');
+
+          String? existingUid = await getWorkerUidByEmail(workerEmail);
+          if (existingUid != null) {
+            print('✅ Found existing worker UID: $existingUid');
+            return existingUid;
+          } else {
+            throw Exception('Worker email exists but UID not found');
+          }
         } else {
+          print('❌ Error creating auth account: $e');
           throw e;
         }
       }
 
-      String workerUid = userCredential!.user!.uid;
-      await _auth.signOut();
-
       // Generate formatted worker ID
       String formattedWorkerId = await generateFormattedWorkerId();
-
       print('🆔 Assigned worker ID: $formattedWorkerId');
 
-      // Create user document with proper structure
+      // Split name for first/last name
+      List<String> nameParts = mlWorker.workerName.split(' ');
+      String firstName =
+          nameParts.isNotEmpty ? nameParts.first : mlWorker.workerName;
+      String lastName =
+          nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+
+      // Get city coordinates
+      Map<String, dynamic> locationCoords = _getCityCoordinates(mlWorker.city);
+
+      // STEP 1: Create user document
+      print('📝 Creating user document...');
       await _firestore.collection('users').doc(workerUid).set({
         'email': workerEmail,
         'name': mlWorker.workerName,
@@ -147,145 +164,117 @@ class WorkerStorageService {
         'updatedAt': FieldValue.serverTimestamp(),
         'fromMLDataset': true,
       });
-
       print('✅ User document created');
 
-      // Convert ML worker to WorkerModel following exact structure
-      WorkerModel worker = _convertMLWorkerToWorkerModel(
-        mlWorker,
-        formattedWorkerId,
-        workerEmail,
-      );
+      // STEP 2: Create worker document - Using MLWorker's simple structure
+      print('📝 Creating worker document...');
+      await _firestore.collection('workers').doc(workerUid).set({
+        'worker_id': formattedWorkerId,
+        'worker_name': mlWorker.workerName,
+        'first_name': firstName,
+        'last_name': lastName,
+        'email': workerEmail,
+        'phone_number': mlWorker.phoneNumber,
 
-      // Store in workers collection following the WorkerModel structure
-      await _firestore
-          .collection('workers')
-          .doc(workerUid)
-          .set(worker.toFirestore());
+        'service_type': mlWorker.serviceType,
+        'service_category': _getServiceCategory(mlWorker.serviceType),
+        'business_name':
+            '${firstName}\'s ${_getServiceDisplayName(mlWorker.serviceType)}',
+
+        // Location - derived from city
+        'location': {
+          'latitude': locationCoords['latitude'],
+          'longitude': locationCoords['longitude'],
+          'city': mlWorker.city,
+          'state': locationCoords['state'],
+          'postal_code': '',
+        },
+
+        // Basic worker info from ML model
+        'rating': mlWorker.rating,
+        'experience_years': mlWorker.experienceYears,
+        'jobs_completed': 0,
+        'success_rate': 0.0,
+
+        // Pricing - calculated from dailyWageLkr
+        'pricing': {
+          'daily_wage_lkr': mlWorker.dailyWageLkr.toDouble(),
+          'half_day_rate_lkr': (mlWorker.dailyWageLkr * 0.6).toDouble(),
+          'minimum_charge_lkr': (mlWorker.dailyWageLkr * 0.3).toDouble(),
+          'emergency_rate_multiplier': 1.5,
+          'overtime_hourly_lkr': (mlWorker.dailyWageLkr / 8 * 1.5).toDouble(),
+        },
+
+        // Default availability
+        'availability': {
+          'available_today': true,
+          'available_weekends': true,
+          'emergency_service': true,
+          'working_hours': '09:00 - 17:00',
+          'response_time_minutes': 30,
+        },
+
+        // Default capabilities
+        'capabilities': {
+          'tools_owned': true,
+          'vehicle_available': false,
+          'certified': false,
+          'insurance': false,
+          'languages': ['Sinhala', 'English'],
+        },
+
+        // Contact info
+        'contact': {
+          'phone_number': mlWorker.phoneNumber,
+          'whatsapp_available': true,
+          'email': workerEmail,
+          'website': null,
+        },
+
+        // Profile info
+        'profile': {
+          'bio': mlWorker.bio,
+          'specializations': [mlWorker.serviceType],
+          'service_radius_km': 25.0,
+        },
+
+        'verified': true,
+        'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+        'last_active': FieldValue.serverTimestamp(),
+      });
+      print('✅ Worker document created');
 
       print('✅ Successfully stored worker $formattedWorkerId ($workerEmail)');
+      print(
+          '⚠️  NOTE: Customer is now signed out! They need to re-authenticate.');
+      print('========== WORKER STORAGE END ==========\n');
+
       return workerUid;
     } catch (e) {
       print('❌ Error storing worker: $e');
+      print('========== WORKER STORAGE END ==========\n');
       throw Exception('Failed to store worker: $e');
     }
   }
 
-  /// Extract worker email from ML dataset
-  /// IMPORTANT: Modify this based on your actual dataset structure
-  static String _extractWorkerEmail(MLWorker mlWorker) {
-    // OPTION 1: If email exists directly in the dataset
-    // Uncomment and modify MLWorker class to include email field
-    // return mlWorker.email;
-
-    // OPTION 2: If you need to derive email from worker data
-    // For example, if the dataset has a contact field with email
-    // return mlWorker.contact['email'];
-
-    // OPTION 3: Fallback - generate from worker ID (modify as needed)
-    // This should be replaced with actual email from dataset
-    return '${mlWorker.workerId.toLowerCase()}@fixmate.worker';
-
-    // TODO: Replace above with actual email extraction from your dataset
-    // Example: if dataset JSON has "contact": {"email": "worker@example.com"}
-    // then add email field to MLWorker class and use it here
-  }
-
-  /// Convert MLWorker to WorkerModel with proper structure
-  static WorkerModel _convertMLWorkerToWorkerModel(
-    MLWorker mlWorker,
-    String formattedWorkerId,
-    String workerEmail,
-  ) {
-    // Get city coordinates
-    Map<String, dynamic> locationCoords = _getCityCoordinates(mlWorker.city);
-
-    // Split name into first and last
-    List<String> nameParts = mlWorker.workerName.split(' ');
-    String firstName =
-        nameParts.isNotEmpty ? nameParts.first : mlWorker.workerName;
-    String lastName =
-        nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
-
-    // Create WorkerModel following exact structure
-    return WorkerModel(
-      workerId: formattedWorkerId,
-      workerName: mlWorker.workerName,
-      firstName: firstName,
-      lastName: lastName,
-      serviceType: mlWorker.serviceType,
-      serviceCategory: _getServiceCategory(mlWorker.serviceType),
-      businessName:
-          '${firstName}\'s ${_getServiceDisplayName(mlWorker.serviceType)}',
-
-      location: WorkerLocation(
-        latitude: locationCoords['latitude'],
-        longitude: locationCoords['longitude'],
-        city: mlWorker.city,
-        state: locationCoords['state'],
-        postalCode: '',
-      ),
-
-      rating: mlWorker.rating,
-      experienceYears: mlWorker.experienceYears,
-      jobsCompleted: 0,
-      successRate: 0.0,
-
-      pricing: WorkerPricing(
-        dailyWageLkr: mlWorker.dailyWageLkr.toDouble(),
-        halfDayRateLkr: (mlWorker.dailyWageLkr * 0.6).toDouble(),
-        minimumChargeLkr: (mlWorker.dailyWageLkr * 0.3).toDouble(),
-        emergencyRateMultiplier: 1.5,
-        overtimeHourlyLkr: (mlWorker.dailyWageLkr / 8 * 1.5).toDouble(),
-      ),
-
-      // FIXED: Use correct WorkerAvailability constructor
-      availability: WorkerAvailability(
-        availableToday: true,
-        availableWeekends: true,
-        emergencyService: true,
-        workingHours: '09:00 - 17:00',
-        responseTimeMinutes: 30,
-      ),
-
-      capabilities: WorkerCapabilities(
-        toolsOwned: true,
-        vehicleAvailable: false,
-        certified: false,
-        insurance: false,
-        languages: ['Sinhala', 'English'],
-      ),
-
-      contact: WorkerContact(
-        phoneNumber: mlWorker.phoneNumber,
-        whatsappAvailable: true,
-        email: workerEmail,
-      ),
-
-      profile: WorkerProfile(
-        bio: mlWorker.bio,
-        specializations: [mlWorker.serviceType],
-        serviceRadiusKm: 25.0,
-      ),
-
-      createdAt: DateTime.now(),
-      lastActive: DateTime.now(),
-      verified: true,
-    );
-  }
-
   /// Get city coordinates for Sri Lankan cities
   static Map<String, dynamic> _getCityCoordinates(String city) {
-    final Map<String, Map<String, dynamic>> cityCoordinates = {
+    final Map<String, Map<String, dynamic>> cityCoords = {
       'colombo': {'latitude': 6.9271, 'longitude': 79.8612, 'state': 'Western'},
       'kandy': {'latitude': 7.2906, 'longitude': 80.6337, 'state': 'Central'},
       'galle': {'latitude': 6.0535, 'longitude': 80.2210, 'state': 'Southern'},
-      'negombo': {'latitude': 7.2084, 'longitude': 79.8380, 'state': 'Western'},
       'jaffna': {'latitude': 9.6615, 'longitude': 80.0255, 'state': 'Northern'},
+      'negombo': {'latitude': 7.2008, 'longitude': 79.8358, 'state': 'Western'},
+      'batticaloa': {
+        'latitude': 7.7310,
+        'longitude': 81.6747,
+        'state': 'Eastern'
+      },
       'matara': {'latitude': 5.9549, 'longitude': 80.5550, 'state': 'Southern'},
       'kurunegala': {
-        'latitude': 7.4818,
-        'longitude': 80.3609,
+        'latitude': 7.4863,
+        'longitude': 80.3623,
         'state': 'North Western'
       },
       'anuradhapura': {
@@ -298,37 +287,42 @@ class WorkerStorageService {
         'longitude': 81.2152,
         'state': 'Eastern'
       },
-      'batticaloa': {
-        'latitude': 7.7310,
-        'longitude': 81.6747,
-        'state': 'Eastern'
-      },
     };
 
-    String cityLower = city.toLowerCase();
-    return cityCoordinates[cityLower] ??
+    String cityLower = city.toLowerCase().trim();
+    return cityCoords[cityLower] ??
         {'latitude': 6.9271, 'longitude': 79.8612, 'state': 'Unknown'};
   }
 
   /// Get service category from service type
   static String _getServiceCategory(String serviceType) {
-    final Map<String, String> categoryMap = {
-      'electrical_services': 'Home Services',
-      'plumbing': 'Home Services',
-      'carpentry': 'Home Services',
-      'painting': 'Home Services',
-      'ac_repair': 'Appliance Services',
-      'roofing': 'Construction',
-      'flooring': 'Construction',
+    final Map<String, String> categories = {
+      'electrical_services': 'home_services',
+      'plumbing': 'home_services',
+      'carpentry': 'home_services',
+      'painting': 'home_services',
+      'ac_repair': 'appliance_repair',
+      'refrigerator_repair': 'appliance_repair',
+      'washing_machine_repair': 'appliance_repair',
+      'it_support': 'technical_services',
+      'computer_repair': 'technical_services',
     };
-    return categoryMap[serviceType] ?? 'General Services';
+    return categories[serviceType] ?? 'general_services';
   }
 
-  /// Get display name for service type
+  /// Get display name for service
   static String _getServiceDisplayName(String serviceType) {
-    return serviceType
-        .split('_')
-        .map((word) => word[0].toUpperCase() + word.substring(1))
-        .join(' ');
+    final Map<String, String> displayNames = {
+      'electrical_services': 'Electrical Services',
+      'plumbing': 'Plumbing Services',
+      'carpentry': 'Carpentry Services',
+      'painting': 'Painting Services',
+      'ac_repair': 'AC Repair',
+      'refrigerator_repair': 'Refrigerator Repair',
+      'washing_machine_repair': 'Washing Machine Repair',
+      'it_support': 'IT Support',
+      'computer_repair': 'Computer Repair',
+    };
+    return displayNames[serviceType] ?? 'General Services';
   }
 }
