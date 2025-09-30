@@ -7,6 +7,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/ml_service.dart';
 import '../services/worker_storage_service.dart';
 import '../services/booking_service.dart';
+import '../services/chat_service.dart';
+import 'chat_screen.dart';
 
 class WorkerDetailScreen extends StatefulWidget {
   final MLWorker worker;
@@ -193,26 +195,109 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
             Text('Booking Successful!'),
           ],
         ),
-        content: Text(
-          'Booking ID: ${bookingId.substring(0, 12)}...\n\n'
-          'The worker will be notified about your request.',
-          textAlign: TextAlign.center,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Booking ID: ${bookingId.substring(0, 12)}...\n\n'
+              'The worker will be notified about your request.',
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'You can now chat with ${widget.worker.workerName}',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.blue,
+              ),
+            ),
+          ],
         ),
         actions: [
-          ElevatedButton(
+          TextButton(
             onPressed: () {
               Navigator.pop(context); // Close dialog
               Navigator.pop(context); // Go back to previous screen
             },
+            child: Text('Close'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(context); // Close dialog
+              await _openChatWithWorker(bookingId);
+            },
+            icon: Icon(Icons.chat_bubble, color: Colors.white),
+            label: Text('Open Chat', style: TextStyle(color: Colors.white)),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
             ),
-            child: Text('Done'),
           ),
         ],
       ),
     );
+  }
+
+// ADD this new method to your worker_detail_screen.dart file:
+  Future<void> _openChatWithWorker(String bookingId) async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()),
+      );
+
+      // Get customer data
+      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .get();
+
+      if (!customerDoc.exists) {
+        Navigator.pop(context);
+        _showErrorDialog('Customer profile not found');
+        return;
+      }
+
+      Map<String, dynamic> customerData =
+          customerDoc.data() as Map<String, dynamic>;
+      String customerId = customerData['customer_id'] ?? user.uid;
+      String customerName = customerData['customer_name'] ??
+          '${customerData['first_name']} ${customerData['last_name']}';
+
+      // Create or get chat room
+      String chatId = await ChatService.createOrGetChatRoom(
+        bookingId: bookingId,
+        customerId: customerId,
+        customerName: customerName,
+        workerId: widget.worker.workerId,
+        workerName: widget.worker.workerName,
+      );
+
+      // Close loading
+      Navigator.pop(context);
+
+      // Open chat screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(
+            chatId: chatId,
+            bookingId: bookingId,
+            otherUserName: widget.worker.workerName,
+            currentUserType: 'customer',
+          ),
+        ),
+      );
+    } catch (e) {
+      // Close loading
+      Navigator.pop(context);
+      _showErrorDialog('Failed to open chat: $e');
+    }
   }
 
   void _showErrorDialog(String message) {

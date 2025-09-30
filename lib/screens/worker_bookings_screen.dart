@@ -6,6 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/booking_model.dart';
 import '../services/booking_service.dart';
+import '../services/chat_service.dart';
+import 'chat_screen.dart';
 
 class WorkerBookingsScreen extends StatefulWidget {
   @override
@@ -470,8 +472,8 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
     return '${date.day}/${date.month}/${date.year}';
   }
 
-  void _showBookingDetails(BookingModel booking) {
-    showDialog(
+  void _showBookingDetails(BookingModel booking) async {
+    await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Booking Details'),
@@ -495,6 +497,27 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
                   style: TextStyle(fontWeight: FontWeight.bold)),
               SizedBox(height: 4),
               Text(booking.problemDescription),
+
+              SizedBox(height: 16),
+
+              // Chat Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context); // Close dialog first
+                    _openChatWithCustomer(booking);
+                  },
+                  icon: Icon(Icons.chat_bubble_outline, color: Colors.white),
+                  label: Text(
+                    'Chat with ${booking.customerName}',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -506,6 +529,54 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
         ],
       ),
     );
+  }
+
+// ADD this new method to your worker_bookings_screen.dart file:
+  Future<void> _openChatWithCustomer(BookingModel booking) async {
+    try {
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()),
+      );
+
+      // Create or get chat room
+      String chatId = await ChatService.createOrGetChatRoom(
+        bookingId: booking.bookingId,
+        customerId: booking.customerId,
+        customerName: booking.customerName,
+        workerId: booking.workerId,
+        workerName: booking.workerName,
+      );
+
+      // Close loading
+      Navigator.pop(context);
+
+      // Open chat screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(
+            chatId: chatId,
+            bookingId: booking.bookingId,
+            otherUserName: booking.customerName,
+            currentUserType: 'worker',
+          ),
+        ),
+      );
+    } catch (e) {
+      // Close loading
+      Navigator.pop(context);
+
+      // Show error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to open chat: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _detailRow(String label, String value) {
