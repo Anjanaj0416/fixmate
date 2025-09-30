@@ -1,4 +1,6 @@
 // lib/screens/customer_bookings_screen.dart
+// UPDATED VERSION - Requested, Active, Completed, Cancelled tabs
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -15,81 +17,12 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
   late TabController _tabController;
   String? _customerId;
 
-  // Add this to your customer bookings screen's initState
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController =
+        TabController(length: 4, vsync: this); // Changed from 4 to 4
     _loadCustomerData();
-    _debugBookings();
-    ; // Add this line
-  }
-
-  Future<void> _debugBookings() async {
-    try {
-      User? user = FirebaseAuth.instance.currentUser;
-      print('\n========== BOOKING DEBUG START ==========');
-      print('1. Current Firebase Auth UID: ${user?.uid}');
-
-      // Check customer document
-      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
-          .collection('customers')
-          .doc(user!.uid)
-          .get();
-
-      if (customerDoc.exists) {
-        Map<String, dynamic> customerData =
-            customerDoc.data() as Map<String, dynamic>;
-        print('2. Customer Data Found:');
-        print('   - customer_id: ${customerData['customer_id']}');
-        print(
-            '   - name: ${customerData['customer_name'] ?? customerData['first_name']}');
-
-        // Get ALL bookings first (no filter)
-        QuerySnapshot allBookings =
-            await FirebaseFirestore.instance.collection('bookings').get();
-
-        print('3. Total bookings in database: ${allBookings.docs.length}');
-
-        // Print each booking's details
-        for (var doc in allBookings.docs) {
-          Map<String, dynamic>? data = doc.data() as Map<String, dynamic>?;
-          if (data != null) {
-            print('\n   Booking ID: ${doc.id}');
-            print('   - customer_id in booking: ${data['customer_id']}');
-            print('   - worker_id in booking: ${data['worker_id']}');
-            print('   - status: ${data['status']}');
-            print('   - service: ${data['service_type']}');
-          }
-        }
-
-        // Now try filtered query
-        print(
-            '\n4. Trying to query with customer_id = ${customerData['customer_id']}');
-        QuerySnapshot myBookings = await FirebaseFirestore.instance
-            .collection('bookings')
-            .where('customer_id', isEqualTo: customerData['customer_id'])
-            .get();
-
-        print('5. My bookings found: ${myBookings.docs.length}');
-
-        if (myBookings.docs.isEmpty) {
-          print(
-              '\n❌ PROBLEM FOUND: No bookings match customer_id = ${customerData['customer_id']}');
-          print(
-              '   This means the booking was created with wrong customer_id!');
-        } else {
-          print('\n✅ Bookings found successfully!');
-        }
-      } else {
-        print('❌ Customer document not found!');
-      }
-
-      print('========== BOOKING DEBUG END ==========\n');
-    } catch (e, stackTrace) {
-      print('❌ DEBUG ERROR: $e');
-      print('Stack trace: $stackTrace');
-    }
   }
 
   @override
@@ -142,8 +75,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('All', style: TextStyle(fontSize: 14)),
-                  _buildBookingCountBadge('all'),
+                  Text('Requested', style: TextStyle(fontSize: 14)),
+                  _buildBookingCountBadge('requested'),
                 ],
               ),
             ),
@@ -180,7 +113,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildBookingList('all'),
+          _buildBookingList('requested'),
           _buildBookingList('active'),
           _buildBookingList('completed'),
           _buildBookingList('cancelled'),
@@ -188,12 +121,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
       ),
     );
   }
-  // Replace the _getBookingsStream method in customer_bookings_screen.dart
-// This version filters in memory instead of using complex Firestore queries
 
   Stream<QuerySnapshot> _getBookingsStream(String type) {
-    // Base query - only filter by customer_id and order by created_at
-    // This simple query doesn't require a composite index
     return FirebaseFirestore.instance
         .collection('bookings')
         .where('customer_id', isEqualTo: _customerId)
@@ -210,7 +139,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
         }
 
         if (snapshot.hasError) {
-          print('Stream Error: ${snapshot.error}');
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -218,12 +146,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                 Icon(Icons.error_outline, size: 60, color: Colors.red),
                 SizedBox(height: 16),
                 Text('Error loading bookings'),
-                SizedBox(height: 8),
-                Text(
-                  '${snapshot.error}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                  textAlign: TextAlign.center,
-                ),
                 SizedBox(height: 8),
                 ElevatedButton(
                   onPressed: () => setState(() {}),
@@ -234,25 +156,26 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
           );
         }
 
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData) {
           return _buildEmptyState(type);
         }
 
-        // Filter bookings in memory based on type
+        // Filter bookings based on type
         List<DocumentSnapshot> filteredDocs = snapshot.data!.docs.where((doc) {
           Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
           String status = data['status'] ?? '';
 
           switch (type) {
+            case 'requested':
+              // Only show requested status
+              return status == 'requested';
             case 'active':
-              return status == 'requested' ||
-                  status == 'accepted' ||
-                  status == 'in_progress';
+              // Show accepted and in_progress statuses
+              return status == 'accepted' || status == 'in_progress';
             case 'completed':
               return status == 'completed';
             case 'cancelled':
               return status == 'cancelled' || status == 'declined';
-            case 'all':
             default:
               return true;
           }
@@ -280,7 +203,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
     );
   }
 
-// Also update the badge counter to use the same filtering approach
   Widget _buildBookingCountBadge(String type) {
     return StreamBuilder<QuerySnapshot>(
       stream: _getBookingsStream(type),
@@ -293,15 +215,14 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
           String status = data['status'] ?? '';
 
           switch (type) {
+            case 'requested':
+              return status == 'requested';
             case 'active':
-              return status == 'requested' ||
-                  status == 'accepted' ||
-                  status == 'in_progress';
+              return status == 'accepted' || status == 'in_progress';
             case 'completed':
               return status == 'completed';
             case 'cancelled':
               return status == 'cancelled' || status == 'declined';
-            case 'all':
             default:
               return true;
           }
@@ -332,23 +253,33 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
   Widget _buildEmptyState(String type) {
     IconData icon;
     String message;
+    String subtitle;
 
     switch (type) {
+      case 'requested':
+        icon = Icons.schedule;
+        message = 'No pending requests';
+        subtitle = 'Your booking requests will appear here';
+        break;
       case 'active':
         icon = Icons.event_available;
         message = 'No active bookings';
+        subtitle = 'Accepted bookings will appear here';
         break;
       case 'completed':
         icon = Icons.check_circle_outline;
         message = 'No completed bookings yet';
+        subtitle = 'Completed services will appear here';
         break;
       case 'cancelled':
         icon = Icons.cancel_outlined;
         message = 'No cancelled bookings';
+        subtitle = 'Cancelled services will appear here';
         break;
       default:
         icon = Icons.calendar_today;
         message = 'No bookings yet';
+        subtitle = 'Start by booking a service';
     }
 
     return Center(
@@ -367,26 +298,21 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
           ),
           SizedBox(height: 8),
           Text(
-            type == 'all'
-                ? 'Your service bookings will appear here'
-                : 'Your $type bookings will appear here',
+            subtitle,
             style: TextStyle(
-              color: Colors.grey[500],
+              fontSize: 14,
+              color: Colors.grey[400],
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
 
-  // Quick fix for both screens - just change the substring line
-
-// In customer_bookings_screen.dart, find this method and update:
   Widget _buildBookingCard(BookingModel booking) {
     return Card(
-      elevation: 2,
       margin: EdgeInsets.only(bottom: 16),
+      elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: () => _showBookingDetails(booking),
@@ -396,33 +322,18 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
+              // Header with service type and status
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          booking.serviceType
-                              .replaceAll('_', ' ')
-                              .toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF9800),
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          booking.subService,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      booking.serviceType.replaceAll('_', ' ').toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFFF9800),
+                      ),
                     ),
                   ),
                   _buildStatusBadge(booking.status),
@@ -435,18 +346,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
               Row(
                 children: [
                   CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Colors.blue[100],
-                    child: Text(
-                      booking.workerName.isNotEmpty
-                          ? booking.workerName[0].toUpperCase()
-                          : 'W',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[700],
-                      ),
-                    ),
+                    backgroundColor: Colors.orange[100],
+                    child: Icon(Icons.person, color: Colors.orange),
                   ),
                   SizedBox(width: 12),
                   Expanded(
@@ -454,23 +355,20 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          booking.workerName.isNotEmpty
-                              ? booking.workerName
-                              : 'Worker not assigned',
+                          booking.workerName,
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          // FIXED: Handle short booking IDs properly
-                          'ID: ${booking.bookingId}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
+                        if (booking.workerPhone.isNotEmpty)
+                          Text(
+                            booking.workerPhone,
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 13,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -479,12 +377,40 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
 
               SizedBox(height: 12),
               Divider(),
+              SizedBox(height: 12),
+
+              // Booking details
+              if (booking.issueType.isNotEmpty)
+                Text(
+                  booking.issueType.replaceAll('_', ' '),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[700],
+                  ),
+                ),
+
               SizedBox(height: 8),
 
-              // Quick info
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // Problem description
+              Text(
+                booking.problemDescription,
+                style: TextStyle(fontSize: 14, color: Colors.grey[800]),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+
+              SizedBox(height: 12),
+
+              // Info chips
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
+                  _buildInfoChip(
+                    Icons.location_on,
+                    booking.location.replaceAll('_', ' '),
+                  ),
                   _buildInfoChip(
                     Icons.calendar_today,
                     _formatDate(booking.scheduledDate),
@@ -493,17 +419,74 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                     Icons.access_time,
                     booking.scheduledTime,
                   ),
-                  _buildInfoChip(
-                    Icons.priority_high,
-                    booking.urgency,
-                  ),
+                  if (booking.urgency.isNotEmpty)
+                    _buildUrgencyChip(booking.urgency),
                 ],
               ),
 
-              SizedBox(height: 12),
+              // Action buttons based on status
+              if (booking.status == BookingStatus.requested) ...[
+                SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _cancelBooking(booking),
+                        icon: Icon(Icons.cancel, size: 18),
+                        label: Text('Cancel'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: BorderSide(color: Colors.red),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showBookingDetails(booking),
+                        icon: Icon(Icons.info_outline, size: 18),
+                        label: Text('View Details'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
 
-              // Action buttons
-              _buildActionButtons(booking),
+              if (booking.status == BookingStatus.accepted ||
+                  booking.status == BookingStatus.inProgress) ...[
+                SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _contactWorker(booking),
+                        icon: Icon(Icons.phone, size: 18),
+                        label: Text('Contact Worker'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
+              if (booking.status == BookingStatus.completed &&
+                  booking.customerRating == null) ...[
+                SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => _rateBooking(booking),
+                  icon: Icon(Icons.star, size: 18),
+                  label: Text('Rate Service'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -511,24 +494,13 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
     );
   }
 
-// Helper method to safely format booking ID
-  String _formatBookingId(String bookingId) {
-    if (bookingId.length > 10) {
-      return '${bookingId.substring(0, 10)}...';
-    }
-    return bookingId;
-  }
-
-// Use this in your text widget:
-// Text('ID: ${_formatBookingId(booking.bookingId)}')
-
   Widget _buildStatusBadge(BookingStatus status) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: status.color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: status.color.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: status.color),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -572,7 +544,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
 
   Widget _buildInfoChip(IconData icon, String text) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.grey[100],
         borderRadius: BorderRadius.circular(8),
@@ -594,127 +566,36 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
     );
   }
 
-  Widget _buildActionButtons(BookingModel booking) {
-    List<Widget> buttons = [];
-
-    switch (booking.status) {
-      case BookingStatus.requested:
-        buttons.add(
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _cancelBooking(booking),
-              icon: Icon(Icons.cancel, size: 18),
-              label: Text('Cancel'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: BorderSide(color: Colors.red),
-              ),
+  Widget _buildUrgencyChip(String urgency) {
+    Color color =
+        urgency.toLowerCase() == 'urgent' ? Colors.red : Colors.orange;
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.warning_amber, size: 14, color: color),
+          SizedBox(width: 4),
+          Text(
+            urgency.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: color,
             ),
           ),
-        );
-        buttons.add(SizedBox(width: 8));
-        buttons.add(
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _contactWorker(booking),
-              icon: Icon(Icons.phone, size: 18),
-              label: Text('Contact'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-              ),
-            ),
-          ),
-        );
-        break;
+        ],
+      ),
+    );
+  }
 
-      case BookingStatus.accepted:
-      case BookingStatus.inProgress:
-        buttons.add(
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _contactWorker(booking),
-              icon: Icon(Icons.phone, size: 18),
-              label: Text('Contact Worker'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-              ),
-            ),
-          ),
-        );
-        break;
-
-      case BookingStatus.completed:
-        if (booking.customerRating == null) {
-          buttons.add(
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _rateService(booking),
-                icon: Icon(Icons.star, size: 18),
-                label: Text('Rate Service'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFFF9800),
-                ),
-              ),
-            ),
-          );
-        } else {
-          buttons.add(
-            Expanded(
-              child: Container(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.green[50],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.star, size: 18, color: Colors.amber),
-                    SizedBox(width: 4),
-                    Text(
-                      'Rated: ${booking.customerRating!.toStringAsFixed(1)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.green[700],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
-        break;
-
-      case BookingStatus.declined:
-        buttons.add(
-          Expanded(
-            child: Container(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.red[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'Worker Declined',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: Colors.red[700],
-                ),
-              ),
-            ),
-          ),
-        );
-        break;
-
-      default:
-        break;
-    }
-
-    if (buttons.isEmpty) return SizedBox();
-
-    return Row(children: buttons);
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   void _showBookingDetails(BookingModel booking) {
@@ -756,99 +637,52 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
               SizedBox(height: 16),
               _buildStatusBadge(booking.status),
               SizedBox(height: 20),
-              _buildDetailSection('Service Information', [
-                _buildDetailRow(
-                    'Service Type', booking.serviceType.replaceAll('_', ' ')),
-                _buildDetailRow(
-                    'Sub Service', booking.subService.replaceAll('_', ' ')),
-                _buildDetailRow(
-                    'Issue Type', booking.issueType.replaceAll('_', ' ')),
-              ]),
-              _buildDetailSection('Worker Information', [
-                _buildDetailRow('Worker Name', booking.workerName),
-                _buildDetailRow('Worker Phone', booking.workerPhone),
-              ]),
-              _buildDetailSection('Schedule', [
-                _buildDetailRow('Date', _formatDate(booking.scheduledDate)),
-                _buildDetailRow('Time', booking.scheduledTime),
-                _buildDetailRow('Urgency', booking.urgency),
-              ]),
-              _buildDetailSection('Location', [
-                _buildDetailRow('Area', booking.location.replaceAll('_', ' ')),
-                _buildDetailRow('Address', booking.address),
-              ]),
-              _buildDetailSection('Budget', [
-                _buildDetailRow('Budget Range', booking.budgetRange),
-                if (booking.finalPrice != null)
-                  _buildDetailRow('Final Price',
-                      'LKR ${booking.finalPrice!.toStringAsFixed(2)}'),
-              ]),
-              if (booking.problemDescription.isNotEmpty) ...[
-                SizedBox(height: 16),
-                Text(
-                  'Problem Description',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+              _buildDetailRow(
+                  'Service Type', booking.serviceType.replaceAll('_', ' ')),
+              _buildDetailRow('Issue', booking.issueType.replaceAll('_', ' ')),
+              _buildDetailRow('Worker', booking.workerName),
+              _buildDetailRow('Phone', booking.workerPhone),
+              _buildDetailRow(
+                  'Location', booking.location.replaceAll('_', ' ')),
+              _buildDetailRow('Address', booking.address),
+              _buildDetailRow('Date', _formatDate(booking.scheduledDate)),
+              _buildDetailRow('Time', booking.scheduledTime),
+              _buildDetailRow('Budget', booking.budgetRange),
+              if (booking.finalPrice != null)
+                _buildDetailRow('Final Price',
+                    'LKR ${booking.finalPrice!.toStringAsFixed(2)}'),
+              SizedBox(height: 16),
+              Text(
+                'Problem Description',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
-                SizedBox(height: 8),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(booking.problemDescription),
+              ),
+              SizedBox(height: 8),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ],
-              if (booking.status == BookingStatus.completed &&
-                  booking.customerRating != null) ...[
-                SizedBox(height: 16),
-                Text(
-                  'Your Rating',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Row(
-                  children: [
-                    ...List.generate(
-                        5,
-                        (index) => Icon(
-                              Icons.star,
-                              color: index < booking.customerRating!
-                                  ? Colors.amber
-                                  : Colors.grey[300],
-                              size: 24,
-                            )),
-                    SizedBox(width: 8),
-                    Text(
-                      booking.customerRating!.toStringAsFixed(1),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                if (booking.customerReview != null &&
-                    booking.customerReview!.isNotEmpty) ...[
-                  SizedBox(height: 8),
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(booking.customerReview!),
-                  ),
-                ],
-              ],
+                child: Text(booking.problemDescription),
+              ),
               SizedBox(height: 20),
-              _buildActionButtons(booking),
+              if (booking.status == BookingStatus.accepted ||
+                  booking.status == BookingStatus.inProgress)
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _contactWorker(booking);
+                  },
+                  icon: Icon(Icons.phone),
+                  label: Text('Contact Worker'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    minimumSize: Size(double.infinity, 48),
+                  ),
+                ),
             ],
           ),
         ),
@@ -856,53 +690,26 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
     );
   }
 
-  Widget _buildDetailSection(String title, List<Widget> children) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(height: 16),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        SizedBox(height: 8),
-        Container(
-          padding: EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(children: children),
-        ),
-      ],
-    );
-  }
-
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 120,
             child: Text(
-              label,
+              '$label:',
               style: TextStyle(
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
               ),
             ),
           ),
           Expanded(
             child: Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-              ),
+              value.isEmpty ? 'N/A' : value,
+              style: TextStyle(color: Colors.grey[800]),
             ),
           ),
         ],
@@ -910,38 +717,74 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
     );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
+  void _cancelBooking(BookingModel booking) {
+    TextEditingController reasonController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Cancel Booking'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Are you sure you want to cancel this booking?'),
+            SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: InputDecoration(
+                labelText: 'Reason (Optional)',
+                border: OutlineInputBorder(),
+                hintText: 'Why are you cancelling?',
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('No'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await BookingService.cancelBooking(
+                  booking.bookingId,
+                  reasonController.text.isNotEmpty
+                      ? reasonController.text
+                      : 'Customer cancelled',
+                );
+                _showSuccessSnackBar('Booking cancelled');
+              } catch (e) {
+                _showErrorSnackBar('Failed to cancel: ${e.toString()}');
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _contactWorker(BookingModel booking) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Contact ${booking.workerName}'),
+        title: Text('Contact Worker'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(Icons.phone, color: Colors.green),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    booking.workerPhone,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 16),
             Text(
-              'You can call or message the worker to discuss your service requirements.',
-              style: TextStyle(color: Colors.grey[600]),
+              booking.workerName,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8),
+            Text(
+              booking.workerPhone,
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
           ],
         ),
@@ -966,103 +809,48 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
     );
   }
 
-  void _cancelBooking(BookingModel booking) {
-    String? cancellationReason;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Cancel Booking'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Are you sure you want to cancel this booking?'),
-            SizedBox(height: 16),
-            TextField(
-              decoration: InputDecoration(
-                labelText: 'Reason for cancellation (optional)',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 2,
-              onChanged: (value) => cancellationReason = value,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Keep Booking'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _performCancelBooking(booking.bookingId,
-                  cancellationReason ?? 'Customer cancelled');
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('Cancel Booking'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _performCancelBooking(String bookingId, String reason) async {
-    try {
-      await BookingService.cancelBooking(bookingId, reason);
-      _showSuccessSnackBar('Booking cancelled successfully');
-    } catch (e) {
-      _showErrorSnackBar('Failed to cancel booking: ${e.toString()}');
-    }
-  }
-
-  void _rateService(BookingModel booking) {
-    double rating = 5.0;
-    String review = '';
+  void _rateBooking(BookingModel booking) {
+    double rating = 0;
+    TextEditingController reviewController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
+        builder: (context, setDialogState) => AlertDialog(
           title: Text('Rate Service'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('How was your experience with ${booking.workerName}?'),
-                SizedBox(height: 16),
-                Text('Rating:'),
-                SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(5, (index) {
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          rating = (index + 1).toDouble();
-                        });
-                      },
-                      child: Icon(
-                        Icons.star,
-                        size: 40,
-                        color: index < rating ? Colors.amber : Colors.grey[300],
-                      ),
-                    );
-                  }),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('How was your experience?'),
+              SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  return IconButton(
+                    icon: Icon(
+                      index < rating ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                      size: 32,
+                    ),
+                    onPressed: () {
+                      setDialogState(() {
+                        rating = index + 1.0;
+                      });
+                    },
+                  );
+                }),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: reviewController,
+                decoration: InputDecoration(
+                  labelText: 'Review (Optional)',
+                  border: OutlineInputBorder(),
+                  hintText: 'Share your experience...',
                 ),
-                SizedBox(height: 16),
-                TextField(
-                  decoration: InputDecoration(
-                    labelText: 'Review (optional)',
-                    border: OutlineInputBorder(),
-                    hintText: 'Share your experience...',
-                  ),
-                  maxLines: 3,
-                  onChanged: (value) => review = value,
-                ),
-              ],
-            ),
+                maxLines: 3,
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -1070,31 +858,31 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
               child: Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await _submitRating(booking.bookingId, rating, review);
-              },
+              onPressed: rating > 0
+                  ? () async {
+                      Navigator.pop(context);
+                      try {
+                        await BookingService.addRating(
+                          bookingId: booking.bookingId,
+                          rating: rating,
+                          review: reviewController.text,
+                          isCustomerRating: true,
+                        );
+                        _showSuccessSnackBar('Thank you for your feedback!');
+                      } catch (e) {
+                        _showErrorSnackBar('Failed to submit rating');
+                      }
+                    }
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber,
+              ),
               child: Text('Submit'),
             ),
           ],
         ),
       ),
     );
-  }
-
-  Future<void> _submitRating(
-      String bookingId, double rating, String review) async {
-    try {
-      await BookingService.addRating(
-        bookingId: bookingId,
-        rating: rating,
-        review: review,
-        isCustomerRating: true,
-      );
-      _showSuccessSnackBar('Rating submitted successfully');
-    } catch (e) {
-      _showErrorSnackBar('Failed to submit rating: ${e.toString()}');
-    }
   }
 
   void _showSuccessSnackBar(String message) {
