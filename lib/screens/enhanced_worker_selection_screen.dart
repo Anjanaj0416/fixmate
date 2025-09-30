@@ -1,1050 +1,1066 @@
+// lib/screens/enhanced_worker_selection_screen.dart
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/worker_model.dart';
-import '../services/id_generator_service.dart';
+import '../models/booking_model.dart';
+import '../services/booking_service.dart';
 import '../constants/service_constants.dart';
 
-class WorkerRegistrationFlow extends StatefulWidget {
+class EnhancedWorkerSelectionScreen extends StatefulWidget {
+  final String serviceType;
+  final String subService;
+  final String issueType;
+  final String problemDescription;
+  final List<String> problemImageUrls;
+  final String location;
+  final String address;
+  final String urgency;
+  final String budgetRange;
+  final DateTime scheduledDate;
+  final String scheduledTime;
+
+  const EnhancedWorkerSelectionScreen({
+    Key? key,
+    required this.serviceType,
+    required this.subService,
+    required this.issueType,
+    required this.problemDescription,
+    required this.problemImageUrls,
+    required this.location,
+    required this.address,
+    required this.urgency,
+    required this.budgetRange,
+    required this.scheduledDate,
+    required this.scheduledTime,
+  }) : super(key: key);
+
   @override
-  _WorkerRegistrationFlowState createState() => _WorkerRegistrationFlowState();
+  _EnhancedWorkerSelectionScreenState createState() =>
+      _EnhancedWorkerSelectionScreenState();
 }
 
-class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
-  PageController _pageController = PageController();
-  int _currentStep = 0;
-  bool _isLoading = false;
-  bool _userDataLoaded = false;
+class _EnhancedWorkerSelectionScreenState
+    extends State<EnhancedWorkerSelectionScreen> {
+  List<WorkerModel> _allWorkers = [];
+  List<WorkerModel> _filteredWorkers = [];
+  bool _isLoading = true;
+  String _selectedSortBy = 'rating';
+  bool _showFilters = false;
 
-  // Form keys for each step
-  final _serviceTypeFormKey = GlobalKey<FormState>();
-  final _personalInfoFormKey = GlobalKey<FormState>();
-  final _businessInfoFormKey = GlobalKey<FormState>();
-  final _experienceFormKey = GlobalKey<FormState>();
-  final _availabilityFormKey = GlobalKey<FormState>();
-  final _pricingFormKey = GlobalKey<FormState>();
-  final _locationFormKey = GlobalKey<FormState>();
-
-  // Form data - pre-filled from user collection
-  String? _selectedServiceType;
-  String _selectedServiceCategory = '';
-  String _firstName = '';
-  String _lastName = '';
-  String _email = '';
-  String _phone = '';
-  String _address = '';
-  String _nearestTown = '';
-
-  // Additional worker-specific data
-  String _businessName = '';
-  String _experienceYears = '';
-  String _bio = '';
-  String _city = '';
-  String _state = '';
-  String _postalCode = '';
-
-  // Collections
-  List<String> _selectedSpecializations = [];
-  List<String> _selectedLanguages = [];
-  Set<String> _selectedWorkingDays = {};
-
-  // Time fields with default values
-  String _workingHoursStart = '09:00';
-  String _workingHoursEnd = '17:00';
-
-  // Boolean fields
-  bool _availableWeekends = false;
-  bool _emergencyService = false;
-  bool _toolsOwned = false;
-  bool _vehicleAvailable = false;
-  bool _certified = false;
-  bool _insurance = false;
-  bool _whatsappAvailable = false;
-
-  // Pricing fields
-  String _dailyWage = '';
-  String _halfDayRate = '';
-  String _minimumCharge = '';
-  String _overtimeRate = '';
-
-  // Location fields
-  String _serviceRadius = '';
-  String _website = '';
-
-  final List<String> _steps = [
-    'Service Type',
-    'Personal Info',
-    'Business Info',
-    'Experience & Skills',
-    'Availability',
-    'Pricing',
-    'Location & Contact',
-  ];
+  // FIXED: Initialize filters to show ALL workers
+  double _maxDistance = 100.0;
+  double _minRating = 0.0; // Changed from 3.0 to 0.0
+  RangeValues _experienceRange = RangeValues(0, 20);
+  RangeValues _priceRange = RangeValues(0, 100000);
+  String _locationFilter = 'all';
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    _loadWorkers();
   }
 
-  /// Load user data from Firestore to pre-fill form
-  Future<void> _loadUserData() async {
+  Future<void> _loadWorkers() async {
     try {
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      print('DEBUG: Starting to load workers...');
+      print('DEBUG: Service Type: ${widget.serviceType}');
+      print('DEBUG: Sub Service: ${widget.subService}');
 
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
+      setState(() => _isLoading = true);
 
-      if (userDoc.exists) {
-        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+      // First, try to get ALL workers to check if there are any in the database
+      QuerySnapshot allWorkersSnapshot =
+          await FirebaseFirestore.instance.collection('workers').get();
 
+      print(
+          'DEBUG: Total workers in database: ${allWorkersSnapshot.docs.length}');
+
+      if (allWorkersSnapshot.docs.isEmpty) {
         setState(() {
-          // Pre-fill personal information from user signup
-          _firstName = userData['name']?.split(' ')[0] ?? '';
-          _lastName = userData['name']?.split(' ').skip(1).join(' ') ?? '';
-          _email = userData['email'] ?? '';
-          _phone = userData['phone'] ?? '';
-          _address = userData['address'] ?? '';
-          _nearestTown = userData['nearest_town'] ?? '';
-
-          // Set location data if available
-          if (userData['location'] != null) {
-            _city = userData['location']['city'] ?? _nearestTown;
-          } else {
-            _city = _nearestTown;
-          }
-
-          _userDataLoaded = true;
+          _allWorkers = [];
+          _filteredWorkers = [];
+          _isLoading = false;
         });
-      }
-    } catch (e) {
-      print('Error loading user data: $e');
-    }
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  void _nextStep() {
-    bool isValid = false;
-
-    switch (_currentStep) {
-      case 0:
-        isValid = _serviceTypeFormKey.currentState?.validate() ?? false;
-        break;
-      case 1:
-        isValid = _personalInfoFormKey.currentState?.validate() ?? false;
-        break;
-      case 2:
-        isValid = _businessInfoFormKey.currentState?.validate() ?? false;
-        break;
-      case 3:
-        isValid = _experienceFormKey.currentState?.validate() ?? false;
-        break;
-      case 4:
-        isValid = _availabilityFormKey.currentState?.validate() ?? false;
-        break;
-      case 5:
-        isValid = _pricingFormKey.currentState?.validate() ?? false;
-        break;
-      case 6:
-        isValid = _locationFormKey.currentState?.validate() ?? false;
-        break;
-    }
-
-    if (isValid) {
-      if (_currentStep < _steps.length - 1) {
-        setState(() => _currentStep++);
-        _pageController.animateToPage(
-          _currentStep,
-          duration: Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
-      } else {
-        _submitRegistration();
-      }
-    }
-  }
-
-  void _previousStep() {
-    if (_currentStep > 0) {
-      setState(() => _currentStep--);
-      _pageController.animateToPage(
-        _currentStep,
-        duration: Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    }
-  }
-
-  Future<void> _submitRegistration() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception('User not authenticated');
+        _showErrorSnackBar('No workers found in the database.');
+        return;
       }
 
-      // Generate structured worker ID: HM_0001
-      String workerId = await IDGeneratorService.generateWorkerId();
+      // Print sample worker data for debugging
+      if (allWorkersSnapshot.docs.isNotEmpty) {
+        var sampleDoc = allWorkersSnapshot.docs.first;
+        print('DEBUG: Sample worker document ID: ${sampleDoc.id}');
+        print(
+            'DEBUG: Sample worker data keys: ${(sampleDoc.data() as Map<String, dynamic>).keys.toList()}');
+      }
 
-      // Get user document for location data
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
-      Map<String, dynamic>? userLocation = userData['location'];
-
-      // Create worker model
-      WorkerModel worker = WorkerModel(
-        workerId: workerId,
-        workerName: '$_firstName $_lastName',
-        firstName: _firstName,
-        lastName: _lastName,
-        serviceType: _selectedServiceType!,
-        serviceCategory: _selectedServiceCategory,
-        businessName: _businessName,
-        location: WorkerLocation(
-          latitude: userLocation?['latitude'] ?? 0.0,
-          longitude: userLocation?['longitude'] ?? 0.0,
-          city: _city,
-          state: _state,
-          postalCode: _postalCode,
-        ),
-        experienceYears: int.tryParse(_experienceYears) ?? 0,
-        pricing: WorkerPricing(
-          dailyWageLkr: double.tryParse(_dailyWage) ?? 0.0,
-          halfDayRateLkr: double.tryParse(_halfDayRate) ?? 0.0,
-          minimumChargeLkr: double.tryParse(_minimumCharge) ?? 0.0,
-          emergencyRateMultiplier: _emergencyService ? 1.5 : 1.0,
-          overtimeHourlyLkr: double.tryParse(_overtimeRate) ?? 0.0,
-        ),
-        availability: WorkerAvailability(
-          availableToday: true,
-          availableWeekends: _availableWeekends,
-          emergencyService: _emergencyService,
-          workingHours: '$_workingHoursStart - $_workingHoursEnd',
-          responseTimeMinutes: 30,
-        ),
-        capabilities: WorkerCapabilities(
-          toolsOwned: _toolsOwned,
-          vehicleAvailable: _vehicleAvailable,
-          certified: _certified,
-          insurance: _insurance,
-          languages: _selectedLanguages,
-        ),
-        contact: WorkerContact(
-          phoneNumber: _phone,
-          whatsappAvailable: _whatsappAvailable,
-          email: _email,
-          website: _website.isNotEmpty ? _website : null,
-        ),
-        profile: WorkerProfile(
-          bio: _bio,
-          specializations: _selectedSpecializations,
-          serviceRadiusKm: double.tryParse(_serviceRadius) ?? 10.0,
-        ),
-        verified: false,
+      // Try the filtered search
+      List<WorkerModel> workers = await WorkerService.searchWorkers(
+        serviceType: widget.serviceType,
+        serviceCategory: widget.subService,
+        userLat: 6.9271,
+        userLng: 79.8612,
+        maxDistance: 100.0,
       );
 
-      // Save worker to database
-      await FirebaseFirestore.instance
-          .collection('workers')
-          .doc(user.uid)
-          .set(worker.toFirestore());
+      print('DEBUG: Filtered search returned ${workers.length} workers');
 
-      // Update user document with worker reference
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
-        'accountType': 'service_provider',
-        'worker_id': workerId,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      // If no workers found with filters, try without filters
+      if (workers.isEmpty) {
+        print(
+            'DEBUG: No workers found with filters, trying without filters...');
 
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Registration completed successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+        // Get all workers and convert them
+        List<WorkerModel> allWorkers = [];
+        for (var doc in allWorkersSnapshot.docs) {
+          try {
+            WorkerModel worker = WorkerModel.fromFirestore(doc);
+            allWorkers.add(worker);
+            print(
+                'DEBUG: Parsed worker: ${worker.workerName} - Service: ${worker.serviceType}');
+          } catch (e) {
+            print('DEBUG: Error parsing worker ${doc.id}: $e');
+          }
+        }
 
-      // Navigate to worker dashboard
-      await Future.delayed(Duration(seconds: 1));
-      Navigator.pushNamedAndRemoveUntil(
-          context, '/worker_dashboard', (route) => false);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Registration failed: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
+        // Filter manually by service type
+        workers = allWorkers.where((worker) {
+          bool matches = worker.serviceType.toLowerCase() ==
+              widget.serviceType.toLowerCase();
+          print(
+              'DEBUG: Worker ${worker.workerName} service ${worker.serviceType} matches ${widget.serviceType}: $matches');
+          return matches;
+        }).toList();
+
+        print('DEBUG: Manual filtering found ${workers.length} workers');
+      }
+
+      // IMPORTANT: Update state with ALL workers - don't apply filters yet
       setState(() {
+        _allWorkers = workers;
+        _filteredWorkers = workers; // Show ALL workers initially
         _isLoading = false;
       });
+
+      print('DEBUG: Successfully loaded ${workers.length} workers');
+      print('DEBUG: _allWorkers.length = ${_allWorkers.length}');
+      print('DEBUG: _filteredWorkers.length = ${_filteredWorkers.length}');
+
+      if (workers.isEmpty) {
+        _showErrorSnackBar(
+            'No workers available for ${widget.serviceType.replaceAll('_', ' ')} service.');
+      }
+    } catch (e) {
+      print('DEBUG: Error in _loadWorkers: $e');
+      setState(() => _isLoading = false);
+      _showErrorSnackBar('Failed to load workers: ${e.toString()}');
     }
+  }
+
+  void _applySortingAndFilters() {
+    print('DEBUG: Applying sorting and filters...');
+    print('DEBUG: Starting with ${_allWorkers.length} workers');
+    print('DEBUG: Min rating filter: $_minRating');
+
+    List<WorkerModel> filtered = List.from(_allWorkers);
+
+    // Apply filters
+    filtered = filtered.where((worker) {
+      // Rating filter - ONLY filter if minRating > 0
+      if (_minRating > 0 && worker.rating < _minRating) {
+        print(
+            'DEBUG: Filtering out ${worker.workerName} - rating ${worker.rating} < $_minRating');
+        return false;
+      }
+
+      // Experience filter
+      if (worker.experienceYears < _experienceRange.start ||
+          worker.experienceYears > _experienceRange.end) {
+        print(
+            'DEBUG: Filtering out ${worker.workerName} - experience ${worker.experienceYears}');
+        return false;
+      }
+
+      // Price filter
+      double workerPrice = worker.pricing.minimumChargeLkr;
+      if (workerPrice < _priceRange.start || workerPrice > _priceRange.end) {
+        print('DEBUG: Filtering out ${worker.workerName} - price $workerPrice');
+        return false;
+      }
+
+      // Location filter
+      if (_locationFilter != 'all' &&
+          worker.location.city.toLowerCase() != _locationFilter.toLowerCase()) {
+        print(
+            'DEBUG: Filtering out ${worker.workerName} - location ${worker.location.city}');
+        return false;
+      }
+
+      print('DEBUG: Worker ${worker.workerName} passed all filters');
+      return true;
+    }).toList();
+
+    print('DEBUG: After filters: ${filtered.length} workers remain');
+
+    // Apply sorting
+    switch (_selectedSortBy) {
+      case 'rating':
+        filtered.sort((a, b) => b.rating.compareTo(a.rating));
+        break;
+      case 'price':
+        filtered.sort((a, b) =>
+            a.pricing.minimumChargeLkr.compareTo(b.pricing.minimumChargeLkr));
+        break;
+      case 'experience':
+        filtered.sort((a, b) => b.experienceYears.compareTo(a.experienceYears));
+        break;
+      case 'distance':
+        // Distance sorting would need user location
+        break;
+      case 'jobs':
+        filtered.sort((a, b) => b.jobsCompleted.compareTo(a.jobsCompleted));
+        break;
+    }
+
+    setState(() {
+      _filteredWorkers = filtered;
+    });
+
+    print('DEBUG: Final _filteredWorkers.length = ${_filteredWorkers.length}');
+  }
+
+  void _clearAllFilters() {
+    setState(() {
+      _maxDistance = 100.0;
+      _minRating = 0.0;
+      _experienceRange = RangeValues(0, 20);
+      _priceRange = RangeValues(0, 100000);
+      _locationFilter = 'all';
+      _filteredWorkers = List.from(_allWorkers);
+    });
+    print('DEBUG: Filters cleared, showing ${_filteredWorkers.length} workers');
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_userDataLoaded) {
-      return Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
     return Scaffold(
-      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title:
-            Text('Worker Registration', style: TextStyle(color: Colors.white)),
-        backgroundColor: Color(0xFFFF9800),
-        elevation: 0,
+        title: Text(
+            'Select ${widget.serviceType.replaceAll('_', ' ').toUpperCase()} Professional'),
+        backgroundColor: Colors.orange,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: Column(
         children: [
-          _buildProgressIndicator(),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: NeverScrollableScrollPhysics(),
-              children: [
-                _buildServiceTypeStep(),
-                _buildPersonalInfoStep(),
-                _buildBusinessInfoStep(),
-                _buildExperienceStep(),
-                _buildAvailabilityStep(),
-                _buildPricingStep(),
-                _buildLocationStep(),
-              ],
-            ),
-          ),
-          _buildNavigationButtons(),
-        ],
-      ),
-    );
-  }
+          // Sort and Filter Bar
+          _buildSortAndFilterBar(),
 
-  Widget _buildProgressIndicator() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      color: Colors.white,
-      child: Column(
-        children: [
-          Row(
-            children: List.generate(_steps.length, (index) {
-              return Expanded(
-                child: Container(
-                  height: 4,
-                  margin: EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    color: index <= _currentStep
-                        ? Color(0xFFFF9800)
-                        : Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+          // Worker Count
+          if (!_isLoading)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                '${_filteredWorkers.length} professional${_filteredWorkers.length != 1 ? 's' : ''} found',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
                 ),
-              );
-            }),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Step ${_currentStep + 1} of ${_steps.length}: ${_steps[_currentStep]}',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey[700],
+              ),
             ),
+
+          // Worker List
+          Expanded(
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator(color: Colors.orange))
+                : _buildWorkerList(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildNavigationButtons() {
+  Widget _buildSortAndFilterBar() {
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, -2),
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 3,
+            offset: Offset(0, 1),
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_currentStep > 0)
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _isLoading ? null : _previousStep,
-                style: OutlinedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  side: BorderSide(color: Color(0xFFFF9800)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+          // Sort By Row
+          Row(
+            children: [
+              Text(
+                'Sort by:',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildSortChip('Rating', 'rating', Icons.star),
+                      _buildSortChip('Price', 'price', Icons.attach_money),
+                      _buildSortChip('Experience', 'experience', Icons.work),
+                      _buildSortChip(
+                          'Jobs Completed', 'jobs', Icons.check_circle),
+                    ],
                   ),
                 ),
-                child: Text(
-                  'Back',
-                  style: TextStyle(color: Color(0xFFFF9800)),
-                ),
               ),
-            ),
-          if (_currentStep > 0) SizedBox(width: 16),
-          Expanded(
-            child: ElevatedButton(
-              onPressed: _isLoading ? null : _nextStep,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFFFF9800),
-                padding: EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              IconButton(
+                icon: Icon(
+                  _showFilters ? Icons.filter_list : Icons.filter_list_outlined,
+                  color: _showFilters ? Colors.orange : Colors.grey,
                 ),
-              ),
-              child: _isLoading
-                  ? CircularProgressIndicator(color: Colors.white)
-                  : Text(
-                      _currentStep < _steps.length - 1
-                          ? 'Next'
-                          : 'Complete Registration',
-                      style: TextStyle(color: Colors.white, fontSize: 16),
-                    ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Step 1: Service Type Selection
-  Widget _buildServiceTypeStep() {
-    final serviceTypes = ServiceTypes.allServiceKeys;
-
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(20),
-      child: Form(
-        key: _serviceTypeFormKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Select Your Primary Service',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Choose the main service you provide',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            SizedBox(height: 24),
-
-            // Service type dropdown
-            DropdownButtonFormField<String>(
-              value: _selectedServiceType,
-              decoration: InputDecoration(
-                labelText: 'Service Type *',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-              items: serviceTypes.map((serviceKey) {
-                return DropdownMenuItem(
-                  value: serviceKey,
-                  child: Text(ServiceTypes.getServiceName(serviceKey)),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedServiceType = value;
-                  _selectedServiceCategory = ServiceTypes.getCategory(value);
-                });
-              },
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please select a service type';
-                }
-                return null;
-              },
-            ),
-
-            if (_selectedServiceType != null) ...[
-              SizedBox(height: 16),
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Color(0xFFFF9800).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Color(0xFFFF9800).withOpacity(0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Category: $_selectedServiceCategory',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFFF9800),
-                      ),
-                    ),
-                  ],
-                ),
+                onPressed: () {
+                  setState(() {
+                    _showFilters = !_showFilters;
+                  });
+                },
               ),
             ],
-          ],
-        ),
-      ),
-    );
-  }
+          ),
 
-  // Step 2: Personal Info (Pre-filled)
-  Widget _buildPersonalInfoStep() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(20),
-      child: Form(
-        key: _personalInfoFormKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Personal Information',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+          // Filters Panel
+          if (_showFilters) ...[
+            SizedBox(height: 16),
+            Divider(),
             SizedBox(height: 8),
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue[200]!),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Your basic details are pre-filled from registration',
-                      style: TextStyle(color: Colors.blue[900], fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 24),
-
-            // First Name (Pre-filled, read-only)
-            TextFormField(
-              initialValue: _firstName,
-              decoration: InputDecoration(
-                labelText: 'First Name',
-                prefixIcon: Icon(Icons.person_outline),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                filled: true,
-                fillColor: Colors.grey[100],
-              ),
-              readOnly: true,
-            ),
-            SizedBox(height: 16),
-
-            // Last Name (Pre-filled, read-only)
-            TextFormField(
-              initialValue: _lastName,
-              decoration: InputDecoration(
-                labelText: 'Last Name',
-                prefixIcon: Icon(Icons.person_outline),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                filled: true,
-                fillColor: Colors.grey[100],
-              ),
-              readOnly: true,
-            ),
-            SizedBox(height: 16),
-
-            // Email (Pre-filled, read-only)
-            TextFormField(
-              initialValue: _email,
-              decoration: InputDecoration(
-                labelText: 'Email',
-                prefixIcon: Icon(Icons.email_outlined),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                filled: true,
-                fillColor: Colors.grey[100],
-              ),
-              readOnly: true,
-            ),
-            SizedBox(height: 16),
-
-            // Phone (Pre-filled, read-only)
-            TextFormField(
-              initialValue: _phone,
-              decoration: InputDecoration(
-                labelText: 'Phone Number',
-                prefixIcon: Icon(Icons.phone_outlined),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                filled: true,
-                fillColor: Colors.grey[100],
-              ),
-              readOnly: true,
-            ),
+            _buildFiltersPanel(),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSortChip(String label, String value, IconData icon) {
+    bool isSelected = _selectedSortBy == value;
+    return Padding(
+      padding: EdgeInsets.only(right: 8),
+      child: FilterChip(
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: 16, color: isSelected ? Colors.white : Colors.grey),
+            SizedBox(width: 4),
+            Text(label),
+          ],
+        ),
+        selected: isSelected,
+        onSelected: (selected) {
+          setState(() {
+            _selectedSortBy = value;
+          });
+          _applySortingAndFilters();
+        },
+        selectedColor: Colors.orange,
+        labelStyle: TextStyle(
+          color: isSelected ? Colors.white : Colors.grey[700],
         ),
       ),
     );
   }
 
-  // Step 3: Business Info
-  Widget _buildBusinessInfoStep() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(20),
-      child: Form(
-        key: _businessInfoFormKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildFiltersPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Business Information',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              'Filters',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
-            SizedBox(height: 24),
-            TextFormField(
-              initialValue: _businessName,
-              decoration: InputDecoration(
-                labelText: 'Business Name (Optional)',
-                prefixIcon: Icon(Icons.business_outlined),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-              onChanged: (value) => _businessName = value,
+            TextButton(
+              onPressed: _clearAllFilters,
+              child: Text('Clear All'),
             ),
           ],
         ),
+        SizedBox(height: 8),
+
+        // Minimum Rating
+        Text('Minimum Rating: ${_minRating.toStringAsFixed(1)}'),
+        Slider(
+          value: _minRating,
+          min: 0,
+          max: 5,
+          divisions: 10,
+          activeColor: Colors.orange,
+          onChanged: (value) {
+            setState(() {
+              _minRating = value;
+            });
+          },
+          onChangeEnd: (value) {
+            _applySortingAndFilters();
+          },
+        ),
+
+        SizedBox(height: 8),
+
+        // Experience Range
+        Text(
+            'Experience: ${_experienceRange.start.round()} - ${_experienceRange.end.round()} years'),
+        RangeSlider(
+          values: _experienceRange,
+          min: 0,
+          max: 20,
+          divisions: 20,
+          activeColor: Colors.orange,
+          onChanged: (values) {
+            setState(() {
+              _experienceRange = values;
+            });
+          },
+          onChangeEnd: (values) {
+            _applySortingAndFilters();
+          },
+        ),
+
+        SizedBox(height: 8),
+
+        // Price Range
+        Text(
+            'Price Range: LKR ${_priceRange.start.round()} - LKR ${_priceRange.end.round()}'),
+        RangeSlider(
+          values: _priceRange,
+          min: 0,
+          max: 100000,
+          divisions: 100,
+          activeColor: Colors.orange,
+          onChanged: (values) {
+            setState(() {
+              _priceRange = values;
+            });
+          },
+          onChangeEnd: (values) {
+            _applySortingAndFilters();
+          },
+        ),
+
+        SizedBox(height: 8),
+
+        // Apply Filters Button
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () {
+              _applySortingAndFilters();
+              setState(() {
+                _showFilters = false;
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              padding: EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: Text('Apply Filters', style: TextStyle(color: Colors.white)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWorkerList() {
+    print('DEBUG: Building worker list...');
+    print('DEBUG: _allWorkers.length = ${_allWorkers.length}');
+    print('DEBUG: _filteredWorkers.length = ${_filteredWorkers.length}');
+
+    // Check if we have any workers at all
+    if (_allWorkers.isEmpty) {
+      return _buildNoWorkersFound();
+    }
+
+    // Check if filtered list is empty but we have workers
+    if (_filteredWorkers.isEmpty && _allWorkers.isNotEmpty) {
+      return _buildNoWorkersMatchingFilters();
+    }
+
+    // Display the workers
+    return RefreshIndicator(
+      onRefresh: _loadWorkers,
+      color: Colors.orange,
+      child: ListView.builder(
+        padding: EdgeInsets.all(16),
+        itemCount: _filteredWorkers.length,
+        itemBuilder: (context, index) {
+          print(
+              'DEBUG: Building worker card for ${_filteredWorkers[index].workerName}');
+          return _buildWorkerCard(_filteredWorkers[index]);
+        },
       ),
     );
   }
 
-  // Step 4: Experience & Skills
-  Widget _buildExperienceStep() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(20),
-      child: Form(
-        key: _experienceFormKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Experience & Skills',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+  Widget _buildNoWorkersFound() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.search_off,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          SizedBox(height: 16),
+          Text(
+            'No Professionals Available',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[600],
             ),
-            SizedBox(height: 24),
-
-            TextFormField(
-              initialValue: _experienceYears,
-              decoration: InputDecoration(
-                labelText: 'Years of Experience *',
-                prefixIcon: Icon(Icons.work_outline),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.white,
+          ),
+          SizedBox(height: 8),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              'No workers found for ${widget.serviceType.replaceAll('_', ' ')} service.\nPlease try again later.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[500],
               ),
-              keyboardType: TextInputType.number,
-              onChanged: (value) => _experienceYears = value,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your years of experience';
-                }
-                return null;
-              },
             ),
-            SizedBox(height: 16),
-
-            TextFormField(
-              initialValue: _bio,
-              decoration: InputDecoration(
-                labelText: 'Professional Bio *',
-                prefixIcon: Icon(Icons.description_outlined),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.white,
-                hintText: 'Describe your skills and experience',
-              ),
-              maxLines: 4,
-              onChanged: (value) => _bio = value,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Please enter your professional bio';
-                }
-                return null;
-              },
+          ),
+          SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _loadWorkers,
+            icon: Icon(Icons.refresh),
+            label: Text('Retry'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
-            SizedBox(height: 16),
-
-            // Capabilities
-            Text(
-              'Capabilities',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-            SizedBox(height: 12),
-
-            CheckboxListTile(
-              title: Text('Own Tools & Equipment'),
-              value: _toolsOwned,
-              onChanged: (value) =>
-                  setState(() => _toolsOwned = value ?? false),
-              contentPadding: EdgeInsets.zero,
-            ),
-            CheckboxListTile(
-              title: Text('Vehicle Available'),
-              value: _vehicleAvailable,
-              onChanged: (value) =>
-                  setState(() => _vehicleAvailable = value ?? false),
-              contentPadding: EdgeInsets.zero,
-            ),
-            CheckboxListTile(
-              title: Text('Certified Professional'),
-              value: _certified,
-              onChanged: (value) => setState(() => _certified = value ?? false),
-              contentPadding: EdgeInsets.zero,
-            ),
-            CheckboxListTile(
-              title: Text('Insured'),
-              value: _insurance,
-              onChanged: (value) => setState(() => _insurance = value ?? false),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  // Step 5: Availability
-  Widget _buildAvailabilityStep() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(20),
-      child: Form(
-        key: _availabilityFormKey,
+  Widget _buildNoWorkersMatchingFilters() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.filter_list_off,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          SizedBox(height: 16),
+          Text(
+            'No Professionals Match Filters',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[600],
+            ),
+          ),
+          SizedBox(height: 8),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              'Try adjusting your filters or search criteria',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[500],
+              ),
+            ),
+          ),
+          SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _clearAllFilters,
+            icon: Icon(Icons.clear_all),
+            label: Text('Clear Filters'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkerCard(WorkerModel worker) {
+    return Card(
+      elevation: 2,
+      margin: EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Availability',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 24),
-
-            // Working Hours
-            Text(
-              'Working Hours',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-            SizedBox(height: 12),
-
+            // Worker Header
             Row(
               children: [
-                Expanded(
-                  child: TextFormField(
-                    initialValue: _workingHoursStart,
-                    decoration: InputDecoration(
-                      labelText: 'Start Time',
-                      prefixIcon: Icon(Icons.access_time),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      filled: true,
-                      fillColor: Colors.white,
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: Colors.orange[100],
+                  child: Text(
+                    worker.workerName.isNotEmpty
+                        ? worker.workerName[0].toUpperCase()
+                        : 'W',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange[700],
                     ),
-                    onChanged: (value) => _workingHoursStart = value,
                   ),
                 ),
                 SizedBox(width: 12),
                 Expanded(
-                  child: TextFormField(
-                    initialValue: _workingHoursEnd,
-                    decoration: InputDecoration(
-                      labelText: 'End Time',
-                      prefixIcon: Icon(Icons.access_time),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                    onChanged: (value) => _workingHoursEnd = value,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        worker.workerName,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        worker.businessName,
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                      if (worker.verified)
+                        Row(
+                          children: [
+                            Icon(Icons.verified, size: 16, color: Colors.blue),
+                            SizedBox(width: 4),
+                            Text(
+                              'Verified',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
                   ),
                 ),
               ],
             ),
-            SizedBox(height: 16),
 
-            CheckboxListTile(
-              title: Text('Available on Weekends'),
-              value: _availableWeekends,
-              onChanged: (value) =>
-                  setState(() => _availableWeekends = value ?? false),
-              contentPadding: EdgeInsets.zero,
-            ),
-            CheckboxListTile(
-              title: Text('Emergency Service Available'),
-              value: _emergencyService,
-              onChanged: (value) =>
-                  setState(() => _emergencyService = value ?? false),
-              contentPadding: EdgeInsets.zero,
-            ),
-            CheckboxListTile(
-              title: Text('WhatsApp Available'),
-              value: _whatsappAvailable,
-              onChanged: (value) =>
-                  setState(() => _whatsappAvailable = value ?? false),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+            SizedBox(height: 12),
 
-  // Step 6: Pricing
-  Widget _buildPricingStep() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(20),
-      child: Form(
-        key: _pricingFormKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Pricing',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            // Stats Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatItem(
+                  Icons.star,
+                  worker.rating > 0 ? worker.rating.toStringAsFixed(1) : 'New',
+                  'Rating',
+                ),
+                _buildStatItem(
+                  Icons.work,
+                  '${worker.experienceYears}',
+                  'Years Exp',
+                ),
+                _buildStatItem(
+                  Icons.check_circle,
+                  '${worker.jobsCompleted}',
+                  'Jobs',
+                ),
+              ],
             ),
-            SizedBox(height: 24),
-            TextFormField(
-              initialValue: _dailyWage,
-              decoration: InputDecoration(
-                labelText: 'Daily Wage (LKR) *',
-                prefixIcon: Icon(Icons.payments_outlined),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: (value) => _dailyWage = value,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your daily wage';
-                }
-                return null;
-              },
-            ),
-            SizedBox(height: 16),
-            TextFormField(
-              initialValue: _halfDayRate,
-              decoration: InputDecoration(
-                labelText: 'Half Day Rate (LKR)',
-                prefixIcon: Icon(Icons.payments_outlined),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: (value) => _halfDayRate = value,
-            ),
-            SizedBox(height: 16),
-            TextFormField(
-              initialValue: _minimumCharge,
-              decoration: InputDecoration(
-                labelText: 'Minimum Charge (LKR)',
-                prefixIcon: Icon(Icons.payments_outlined),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: (value) => _minimumCharge = value,
-            ),
-            SizedBox(height: 16),
-            TextFormField(
-              initialValue: _overtimeRate,
-              decoration: InputDecoration(
-                labelText: 'Overtime Hourly Rate (LKR)',
-                prefixIcon: Icon(Icons.payments_outlined),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: (value) => _overtimeRate = value,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
-  // Step 7: Location & Contact
-  Widget _buildLocationStep() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(20),
-      child: Form(
-        key: _locationFormKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Location & Contact',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
+            SizedBox(height: 12),
+            Divider(),
             SizedBox(height: 8),
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue[200]!),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Your address and location are pre-filled from registration',
-                      style: TextStyle(color: Colors.blue[900], fontSize: 13),
+
+            // Pricing and Location
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Minimum Charge',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
                     ),
+                    Text(
+                      'LKR ${worker.pricing.minimumChargeLkr.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.location_on, size: 14, color: Colors.grey),
+                        SizedBox(width: 4),
+                        Text(
+                          worker.location.city,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (worker.availability.availableToday)
+                      Container(
+                        margin: EdgeInsets.only(top: 4),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.green[50],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Available Today',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.green[700],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+
+            SizedBox(height: 12),
+
+            // Select Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => _selectWorker(worker),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                ],
+                ),
+                child: Text(
+                  'Select Worker',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
               ),
-            ),
-            SizedBox(height: 24),
-
-            // Address (Pre-filled, read-only)
-            TextFormField(
-              initialValue: _address,
-              decoration: InputDecoration(
-                labelText: 'Address',
-                prefixIcon: Icon(Icons.home_outlined),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.grey[100],
-              ),
-              maxLines: 2,
-              readOnly: true,
-            ),
-            SizedBox(height: 16),
-
-            // City (Pre-filled from nearest town, read-only)
-            TextFormField(
-              initialValue: _city,
-              decoration: InputDecoration(
-                labelText: 'City',
-                prefixIcon: Icon(Icons.location_city_outlined),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.grey[100],
-              ),
-              readOnly: true,
-            ),
-            SizedBox(height: 16),
-
-            // Service Radius
-            TextFormField(
-              initialValue: _serviceRadius,
-              decoration: InputDecoration(
-                labelText: 'Service Radius (km) *',
-                prefixIcon: Icon(Icons.radar_outlined),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.white,
-                hintText: 'e.g., 10',
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: (value) => _serviceRadius = value,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your service radius';
-                }
-                return null;
-              },
-            ),
-            SizedBox(height: 16),
-
-            // Postal Code (Optional)
-            TextFormField(
-              initialValue: _postalCode,
-              decoration: InputDecoration(
-                labelText: 'Postal Code (Optional)',
-                prefixIcon: Icon(Icons.markunread_mailbox_outlined),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: (value) => _postalCode = value,
-            ),
-            SizedBox(height: 16),
-
-            // Website (Optional)
-            TextFormField(
-              initialValue: _website,
-              decoration: InputDecoration(
-                labelText: 'Website (Optional)',
-                prefixIcon: Icon(Icons.language_outlined),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-              keyboardType: TextInputType.url,
-              onChanged: (value) => _website = value,
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildStatItem(IconData icon, String value, String label) {
+    return Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: Colors.grey[600]),
+            SizedBox(width: 4),
+            Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  Future<void> _selectWorker(WorkerModel worker) async {
+    bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Confirm Selection'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to select:'),
+            SizedBox(height: 12),
+            Text(
+              worker.workerName,
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            Text(worker.businessName),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.star, color: Colors.amber, size: 16),
+                SizedBox(width: 4),
+                Text(worker.rating > 0
+                    ? '${worker.rating.toStringAsFixed(1)} rating'
+                    : 'New worker'),
+                SizedBox(width: 16),
+                Text(
+                    'LKR ${worker.pricing.minimumChargeLkr.toStringAsFixed(0)}'),
+              ],
+            ),
+            SizedBox(height: 12),
+            Text(
+              'for your ${widget.serviceType.replaceAll('_', ' ')} service?',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: Text('Confirm', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _createBooking(worker);
+    }
+  }
+
+  // lib/screens/enhanced_worker_selection_screen.dart
+// FIND AND REPLACE the _createBooking method with this FIXED version
+
+// ==================== FIXED BOOKING METHOD ====================
+// Replace your existing _createBooking method with this:
+
+  Future<void> _createBooking(WorkerModel worker) async {
+    try {
+      print('\n========== BOOKING CREATION START ==========');
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(color: Colors.orange),
+              SizedBox(width: 16),
+              Text('Creating booking...'),
+            ],
+          ),
+        ),
+      );
+
+      // Get current user
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('User not authenticated');
+
+      // Get customer data
+      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .get();
+
+      if (!customerDoc.exists) throw Exception('Customer profile not found');
+
+      Map<String, dynamic> customerData =
+          customerDoc.data() as Map<String, dynamic>;
+
+      String customerId = customerData['customer_id'] ?? user.uid;
+      String customerName = customerData['customer_name'] ??
+          '${customerData['first_name'] ?? ''} ${customerData['last_name'] ?? ''}'
+              .trim();
+      String customerPhone = customerData['phone_number'] ?? '';
+      String customerEmail = customerData['email'] ?? user.email ?? '';
+
+      // CRITICAL FIX: Get worker_id from WorkerModel and handle null
+      String? nullableWorkerId = worker.workerId;
+
+      if (nullableWorkerId == null || nullableWorkerId.isEmpty) {
+        throw Exception('Worker ID is missing');
+      }
+
+      String workerId = nullableWorkerId; // Now it's non-null
+
+      print('📋 Booking details:');
+      print('   Customer ID: $customerId');
+      print('   Worker ID: $workerId'); // Should be HM_XXXX
+      print('   Service: ${widget.serviceType}');
+
+      // CRITICAL: Verify workerId format
+      if (!workerId.startsWith('HM_')) {
+        throw Exception(
+            'Invalid worker_id format: $workerId (expected HM_XXXX format)');
+      }
+
+      // Create booking using BookingService
+      String bookingId = await BookingService.createBooking(
+        customerId: customerId,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        customerEmail: customerEmail,
+        workerId: workerId, // ✅ This is HM_XXXX format
+        workerName: worker.workerName,
+        workerPhone: worker.contact.phoneNumber,
+        serviceType: widget.serviceType,
+        subService: widget.subService,
+        issueType: widget.issueType,
+        problemDescription: widget.problemDescription,
+        problemImageUrls: widget.problemImageUrls,
+        location: widget.location,
+        address: widget.address,
+        urgency: widget.urgency,
+        budgetRange: widget.budgetRange,
+        scheduledDate: widget.scheduledDate,
+        scheduledTime: widget.scheduledTime,
+      );
+
+      print('✅ Booking created successfully!');
+      print('   Booking ID: $bookingId');
+      print('   Worker ID: $workerId');
+      print('========== BOOKING CREATION END ==========\n');
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      // Show success dialog
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 60),
+              SizedBox(height: 16),
+              Text('Booking Successful!'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Your booking has been created successfully!',
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Booking ID: ${bookingId.length > 12 ? bookingId.substring(0, 12) + '...' : bookingId}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontFamily: 'monospace',
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                '${worker.workerName} will be notified about your request.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                Navigator.pop(context); // Go back to previous screen
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('Done'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      print('❌ Error creating booking: $e');
+      print('========== BOOKING CREATION END ==========\n');
+
+      // Close loading dialog if still open
+      Navigator.pop(context);
+
+      // Show error dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Booking Failed'),
+            ],
+          ),
+          content: Text(
+            'Failed to create booking: $e\n\nPlease try again.',
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 }
-
-  // Continue with remaining steps in Part 2...
