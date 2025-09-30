@@ -1,21 +1,14 @@
-// lib/services/enhanced_booking_service.dart
+// lib/services/booking_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/booking_model.dart';
-import 'dart:math' as math;
+import 'id_generator_service.dart';
 
-class EnhancedBookingService {
+class BookingService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Generate unique booking ID
-  static Future<String> _generateBookingId() async {
-    String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-    String randomSuffix = (math.Random().nextInt(9999) + 1000).toString();
-    return 'BK_${timestamp.substring(timestamp.length - 6)}$randomSuffix';
-  }
-
-  // Create a new booking
+  /// Create a new booking with structured ID: BOOK_0001
   static Future<String> createBooking({
     required String customerId,
     required String customerName,
@@ -28,7 +21,7 @@ class EnhancedBookingService {
     required String subService,
     required String issueType,
     required String problemDescription,
-    required List<String> problemImageUrls,
+    List<String> problemImageUrls = const [],
     required String location,
     required String address,
     required String urgency,
@@ -37,8 +30,15 @@ class EnhancedBookingService {
     required String scheduledTime,
   }) async {
     try {
-      String bookingId = await _generateBookingId();
+      User? user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('User not authenticated');
+      }
 
+      // Generate structured booking ID: BOOK_0001
+      String bookingId = await IDGeneratorService.generateBookingId();
+
+      // Create booking model
       BookingModel booking = BookingModel(
         bookingId: bookingId,
         customerId: customerId,
@@ -59,7 +59,7 @@ class EnhancedBookingService {
         budgetRange: budgetRange,
         scheduledDate: scheduledDate,
         scheduledTime: scheduledTime,
-        status: BookingStatus.pending,
+        status: BookingStatus.requested,
         createdAt: DateTime.now(),
       );
 
@@ -69,175 +69,43 @@ class EnhancedBookingService {
           .doc(bookingId)
           .set(booking.toFirestore());
 
-      // Update customer's booking history
-      await _firestore.collection('customers').doc(customerId).update({
-        'bookingHistory': FieldValue.arrayUnion([bookingId]),
-        'totalBookings': FieldValue.increment(1),
-        'lastBookingDate': FieldValue.serverTimestamp(),
-      });
-
-      // Update worker's booking queue
-      await _firestore.collection('workers').doc(workerId).update({
-        'pendingBookings': FieldValue.arrayUnion([bookingId]),
-        'totalBookingsReceived': FieldValue.increment(1),
-        'lastBookingReceived': FieldValue.serverTimestamp(),
-      });
-
-      // Create notification for worker
-      await _createNotification(
-        userId: workerId,
-        type: 'new_booking',
-        title: 'New Booking Request',
-        message:
-            'You have received a new booking request for $serviceType service.',
-        data: {
-          'bookingId': bookingId,
-          'serviceType': serviceType,
-          'customerName': customerName,
-          'urgency': urgency,
-        },
-      );
-
-      // Create notification for customer
-      await _createNotification(
-        userId: customerId,
-        type: 'booking_created',
-        title: 'Booking Created',
-        message: 'Your booking request has been sent to $workerName.',
-        data: {
-          'bookingId': bookingId,
-          'workerName': workerName,
-          'serviceType': serviceType,
-        },
-      );
-
       return bookingId;
     } catch (e) {
-      throw Exception('Failed to create booking: ${e.toString()}');
+      print('Error creating booking: $e');
+      rethrow;
     }
   }
 
-  // Update booking status
-  static Future<void> updateBookingStatus({
-    required String bookingId,
-    required BookingStatus status,
-    String? notes,
-    double? finalPrice,
-  }) async {
-    try {
-      Map<String, dynamic> updates = {
-        'status': status.toString().split('.').last,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      if (notes != null) {
-        updates['workerNotes'] = notes;
-      }
-
-      if (finalPrice != null) {
-        updates['finalPrice'] = finalPrice;
-      }
-
-      switch (status) {
-        case BookingStatus.accepted:
-          updates['acceptedAt'] = FieldValue.serverTimestamp();
-          break;
-        case BookingStatus.completed:
-          updates['completedAt'] = FieldValue.serverTimestamp();
-          break;
-        case BookingStatus.cancelled:
-          updates['cancelledAt'] = FieldValue.serverTimestamp();
-          break;
-        default:
-          break;
-      }
-
-      await _firestore.collection('bookings').doc(bookingId).update(updates);
-
-      // Get booking details for notifications
-      DocumentSnapshot bookingDoc =
-          await _firestore.collection('bookings').doc(bookingId).get();
-
-      if (bookingDoc.exists) {
-        Map<String, dynamic> bookingData =
-            bookingDoc.data() as Map<String, dynamic>;
-
-        // Send appropriate notifications
-        await _sendStatusUpdateNotifications(bookingData, status);
-      }
-    } catch (e) {
-      throw Exception('Failed to update booking status: ${e.toString()}');
-    }
-  }
-
-  // Add rating to booking
-  static Future<void> addRating({
-    required String bookingId,
-    required double rating,
-    required String review,
-    required bool isCustomerRating,
-  }) async {
-    try {
-      Map<String, dynamic> updates = {
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      if (isCustomerRating) {
-        updates['customerRating'] = rating;
-        updates['customerReview'] = review;
-      } else {
-        updates['workerRating'] = rating;
-        updates['workerReview'] = review;
-      }
-
-      await _firestore.collection('bookings').doc(bookingId).update(updates);
-
-      // Update worker's overall rating if customer rated
-      if (isCustomerRating) {
-        await _updateWorkerRating(bookingId, rating);
-      }
-    } catch (e) {
-      throw Exception('Failed to add rating: ${e.toString()}');
-    }
-  }
-
-  // Get bookings for customer
-  static Future<List<BookingModel>> getCustomerBookings(
-      String customerId) async {
-    try {
-      QuerySnapshot snapshot = await _firestore
-          .collection('bookings')
-          .where('customerId', isEqualTo: customerId)
-          .orderBy('createdAt', descending: true)
-          .get();
-
+  /// Get bookings for a customer
+  static Stream<List<BookingModel>> getCustomerBookings(String customerId) {
+    return _firestore
+        .collection('bookings')
+        .where('customer_id', isEqualTo: customerId)
+        .orderBy('created_at', descending: true)
+        .snapshots()
+        .map((snapshot) {
       return snapshot.docs
           .map((doc) => BookingModel.fromFirestore(doc))
           .toList();
-    } catch (e) {
-      throw Exception('Failed to fetch customer bookings: ${e.toString()}');
-    }
+    });
   }
 
-  // Get bookings for worker
-  static Future<List<BookingModel>> getWorkerBookings(String workerId) async {
-    try {
-      QuerySnapshot snapshot = await _firestore
-          .collection('bookings')
-          .where('workerId', isEqualTo: workerId)
-          .orderBy('createdAt', descending: true)
-          .get();
-
+  /// Get bookings for a worker
+  static Stream<List<BookingModel>> getWorkerBookings(String workerId) {
+    return _firestore
+        .collection('bookings')
+        .where('worker_id', isEqualTo: workerId)
+        .orderBy('created_at', descending: true)
+        .snapshots()
+        .map((snapshot) {
       return snapshot.docs
           .map((doc) => BookingModel.fromFirestore(doc))
           .toList();
-    } catch (e) {
-      throw Exception('Failed to fetch worker bookings: ${e.toString()}');
-    }
+    });
   }
 
-  // Get booking by ID
-  static Future<BookingModel?> getBookingById(String bookingId) async {
+  /// Get a single booking by ID
+  static Future<BookingModel?> getBooking(String bookingId) async {
     try {
       DocumentSnapshot doc =
           await _firestore.collection('bookings').doc(bookingId).get();
@@ -247,190 +115,108 @@ class EnhancedBookingService {
       }
       return null;
     } catch (e) {
-      throw Exception('Failed to fetch booking: ${e.toString()}');
+      print('Error getting booking: $e');
+      return null;
     }
   }
 
-  // Cancel booking
-  static Future<void> cancelBooking({
+  /// Update booking status
+  static Future<void> updateBookingStatus({
     required String bookingId,
-    required String reason,
-    required bool isCancelledByCustomer,
+    required BookingStatus newStatus,
+    String? notes,
   }) async {
     try {
-      Map<String, dynamic> updates = {
-        'status': BookingStatus.cancelled.toString().split('.').last,
-        'cancelledAt': FieldValue.serverTimestamp(),
-        'cancellationReason': reason,
-        'updatedAt': FieldValue.serverTimestamp(),
+      Map<String, dynamic> updateData = {
+        'status': newStatus.toString(),
+        'updated_at': FieldValue.serverTimestamp(),
       };
 
-      await _firestore.collection('bookings').doc(bookingId).update(updates);
-
-      // Get booking details
-      DocumentSnapshot bookingDoc =
-          await _firestore.collection('bookings').doc(bookingId).get();
-
-      if (bookingDoc.exists) {
-        Map<String, dynamic> bookingData =
-            bookingDoc.data() as Map<String, dynamic>;
-
-        // Send cancellation notifications
-        String notificationTitle = 'Booking Cancelled';
-        String customerMessage =
-            'Your booking has been cancelled. Reason: $reason';
-        String workerMessage =
-            'A booking has been cancelled by the customer. Reason: $reason';
-
-        if (isCancelledByCustomer) {
-          // Notify worker
-          await _createNotification(
-            userId: bookingData['workerId'],
-            type: 'booking_cancelled',
-            title: notificationTitle,
-            message: workerMessage,
-            data: {
-              'bookingId': bookingId,
-              'reason': reason,
-            },
-          );
-        } else {
-          // Notify customer
-          await _createNotification(
-            userId: bookingData['customerId'],
-            type: 'booking_cancelled',
-            title: notificationTitle,
-            message: customerMessage,
-            data: {
-              'bookingId': bookingId,
-              'reason': reason,
-            },
-          );
-        }
+      // Add notes if provided
+      if (notes != null && notes.isNotEmpty) {
+        updateData['status_notes'] = notes;
       }
+
+      // Add timestamp fields based on status
+      switch (newStatus) {
+        case BookingStatus.accepted:
+          updateData['accepted_at'] = FieldValue.serverTimestamp();
+          break;
+        case BookingStatus.inProgress:
+          updateData['started_at'] = FieldValue.serverTimestamp();
+          break;
+        case BookingStatus.completed:
+          updateData['completed_at'] = FieldValue.serverTimestamp();
+          break;
+        case BookingStatus.cancelled:
+          updateData['cancelled_at'] = FieldValue.serverTimestamp();
+          break;
+        case BookingStatus.declined:
+          updateData['declined_at'] = FieldValue.serverTimestamp();
+          if (notes != null) {
+            updateData['cancellation_reason'] = notes;
+          }
+          break;
+        default:
+          break;
+      }
+
+      await _firestore.collection('bookings').doc(bookingId).update(updateData);
     } catch (e) {
-      throw Exception('Failed to cancel booking: ${e.toString()}');
+      print('Error updating booking status: $e');
+      rethrow;
     }
   }
 
-  // Private helper methods
-  static Future<void> _createNotification({
-    required String userId,
-    required String type,
-    required String title,
-    required String message,
-    Map<String, dynamic>? data,
+  /// Cancel booking
+  static Future<void> cancelBooking(
+    String bookingId,
+    String cancellationReason,
+  ) async {
+    try {
+      await _firestore.collection('bookings').doc(bookingId).update({
+        'status': BookingStatus.cancelled.toString(),
+        'cancelled_at': FieldValue.serverTimestamp(),
+        'cancellation_reason': cancellationReason,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error cancelling booking: $e');
+      rethrow;
+    }
+  }
+
+  /// Add rating and review
+  static Future<void> addCustomerReview({
+    required String bookingId,
+    required double rating,
+    String? review,
   }) async {
     try {
-      await _firestore.collection('notifications').add({
-        'userId': userId,
-        'type': type,
-        'title': title,
-        'message': message,
-        'data': data ?? {},
-        'isRead': false,
-        'createdAt': FieldValue.serverTimestamp(),
+      await _firestore.collection('bookings').doc(bookingId).update({
+        'customer_rating': rating,
+        'customer_review': review,
+        'updated_at': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print('Failed to create notification: $e');
+      print('Error adding customer review: $e');
+      rethrow;
     }
   }
 
-  static Future<void> _sendStatusUpdateNotifications(
-    Map<String, dynamic> bookingData,
-    BookingStatus status,
-  ) async {
-    String customerId = bookingData['customerId'];
-    String workerId = bookingData['workerId'];
-    String serviceType = bookingData['serviceType'];
-    String workerName = bookingData['workerName'];
-    String customerName = bookingData['customerName'];
-
-    switch (status) {
-      case BookingStatus.accepted:
-        await _createNotification(
-          userId: customerId,
-          type: 'booking_accepted',
-          title: 'Booking Accepted',
-          message:
-              '$workerName has accepted your $serviceType service request.',
-          data: {'bookingId': bookingData['bookingId']},
-        );
-        break;
-      case BookingStatus.inProgress:
-        await _createNotification(
-          userId: customerId,
-          type: 'booking_started',
-          title: 'Service Started',
-          message:
-              '$workerName has started working on your $serviceType service.',
-          data: {'bookingId': bookingData['bookingId']},
-        );
-        break;
-      case BookingStatus.completed:
-        await _createNotification(
-          userId: customerId,
-          type: 'booking_completed',
-          title: 'Service Completed',
-          message:
-              'Your $serviceType service has been completed. Please rate your experience.',
-          data: {'bookingId': bookingData['bookingId']},
-        );
-        await _createNotification(
-          userId: workerId,
-          type: 'booking_completed',
-          title: 'Service Completed',
-          message:
-              'You have completed the $serviceType service for $customerName.',
-          data: {'bookingId': bookingData['bookingId']},
-        );
-        break;
-      default:
-        break;
-    }
-  }
-
-  static Future<void> _updateWorkerRating(
-      String bookingId, double newRating) async {
+  /// Update final price
+  static Future<void> updateFinalPrice({
+    required String bookingId,
+    required double finalPrice,
+  }) async {
     try {
-      // Get booking details
-      DocumentSnapshot bookingDoc =
-          await _firestore.collection('bookings').doc(bookingId).get();
-
-      if (!bookingDoc.exists) return;
-
-      Map<String, dynamic> bookingData =
-          bookingDoc.data() as Map<String, dynamic>;
-      String workerId = bookingData['workerId'];
-
-      // Get worker's current ratings
-      DocumentSnapshot workerDoc =
-          await _firestore.collection('workers').doc(workerId).get();
-
-      if (!workerDoc.exists) return;
-
-      Map<String, dynamic> workerData =
-          workerDoc.data() as Map<String, dynamic>;
-      double currentRating = (workerData['rating'] ?? 0.0).toDouble();
-      int totalRatings = workerData['totalRatings'] ?? 0;
-
-      // Calculate new average rating
-      double newAverageRating;
-      if (totalRatings == 0) {
-        newAverageRating = newRating;
-      } else {
-        newAverageRating =
-            ((currentRating * totalRatings) + newRating) / (totalRatings + 1);
-      }
-
-      // Update worker's rating
-      await _firestore.collection('workers').doc(workerId).update({
-        'rating': newAverageRating,
-        'totalRatings': totalRatings + 1,
-        'updatedAt': FieldValue.serverTimestamp(),
+      await _firestore.collection('bookings').doc(bookingId).update({
+        'final_price': finalPrice,
+        'updated_at': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print('Failed to update worker rating: $e');
+      print('Error updating final price: $e');
+      rethrow;
     }
   }
 }

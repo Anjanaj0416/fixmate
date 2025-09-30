@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/worker_model.dart';
 import '../models/customer_model.dart';
 import 'dart:math' as math;
+import '../services/id_generator_service.dart';
 
 class WorkerService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -10,20 +11,7 @@ class WorkerService {
 
   // Generate unique worker ID
   static Future<String> generateWorkerId() async {
-    // Get the count of existing workers to generate sequential ID
-    QuerySnapshot workerCount = await _firestore.collection('workers').get();
-    int count = workerCount.docs.length + 1;
-
-    // Format: HM_XXXX (4 digits)
-    String workerId = 'HM_${count.toString().padLeft(4, '0')}';
-
-    // Check if ID already exists, if so increment
-    while (await _workerIdExists(workerId)) {
-      count++;
-      workerId = 'HM_${count.toString().padLeft(4, '0')}';
-    }
-
-    return workerId;
+    return await IDGeneratorService.generateWorkerId();
   }
 
   static Future<WorkerModel?> getWorkerByEmail(String email) async {
@@ -98,14 +86,78 @@ class WorkerService {
   }
 
   // Update worker profile
-  static Future<void> updateWorker(
-      String userId, Map<String, dynamic> updates) async {
+
+  // Get worker by ID
+  static Future<WorkerModel?> getWorkerById(String workerId) async {
     try {
-      updates['last_active'] = FieldValue.serverTimestamp();
-      await _firestore.collection('workers').doc(userId).update(updates);
+      QuerySnapshot query = await _firestore
+          .collection('workers')
+          .where('worker_id', isEqualTo: workerId)
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) return null;
+
+      return WorkerModel.fromFirestore(query.docs.first);
     } catch (e) {
-      throw Exception('Failed to update worker: ${e.toString()}');
+      print('Error fetching worker by ID: $e');
+      return null;
     }
+  }
+
+  // Get worker by user UID
+  static Future<WorkerModel?> getWorkerByUid(String uid) async {
+    try {
+      DocumentSnapshot doc =
+          await _firestore.collection('workers').doc(uid).get();
+
+      if (doc.exists) {
+        return WorkerModel.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      print('Error fetching worker by UID: $e');
+      return null;
+    }
+  }
+
+  // Update worker profile
+  static Future<void> updateWorker(
+      String uid, Map<String, dynamic> updates) async {
+    try {
+      updates['updatedAt'] = FieldValue.serverTimestamp();
+      await _firestore.collection('workers').doc(uid).update(updates);
+    } catch (e) {
+      print('Error updating worker: $e');
+      rethrow;
+    }
+  }
+
+  // Calculate distance between two coordinates
+  static double calculateDistance(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    const R = 6371; // Earth's radius in kilometers
+
+    double dLat = _toRadians(lat2 - lat1);
+    double dLon = _toRadians(lon2 - lon1);
+
+    double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_toRadians(lat1)) *
+            math.cos(_toRadians(lat2)) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
+
+    double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+
+    return R * c;
+  }
+
+  static double _toRadians(double degree) {
+    return degree * math.pi / 180;
   }
 
   // Search workers
