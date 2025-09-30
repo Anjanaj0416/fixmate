@@ -118,18 +118,29 @@ class RatingService {
   }
 
   /// Get all reviews for a worker
+  /// FIXED: Removed orderBy to avoid index requirement
   static Future<List<ReviewModel>> getWorkerReviews(String workerId) async {
     try {
+      print('📊 Fetching reviews for worker: $workerId');
+
+      // Query without orderBy to avoid index requirement
       QuerySnapshot snapshot = await _firestore
           .collection('reviews')
           .where('worker_id', isEqualTo: workerId)
-          .orderBy('created_at', descending: true)
           .get();
 
-      return snapshot.docs
-          .map((doc) => ReviewModel.fromFirestore(doc))
-          .toList();
+      print('✅ Found ${snapshot.docs.length} reviews');
+
+      // Convert to ReviewModel list
+      List<ReviewModel> reviews =
+          snapshot.docs.map((doc) => ReviewModel.fromFirestore(doc)).toList();
+
+      // Sort in memory by created_at (descending - newest first)
+      reviews.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      return reviews;
     } catch (e) {
+      print('❌ Error fetching reviews: $e');
       throw Exception('Failed to fetch reviews: $e');
     }
   }
@@ -138,10 +149,14 @@ class RatingService {
   static Future<Map<String, dynamic>> getWorkerRatingStats(
       String workerId) async {
     try {
+      print('📊 Fetching rating stats for worker: $workerId');
+
       QuerySnapshot reviewsSnapshot = await _firestore
           .collection('reviews')
           .where('worker_id', isEqualTo: workerId)
           .get();
+
+      print('✅ Found ${reviewsSnapshot.docs.length} reviews for stats');
 
       if (reviewsSnapshot.docs.isEmpty) {
         return {
@@ -172,17 +187,53 @@ class RatingService {
 
       double averageRating = totalRating / reviewsSnapshot.docs.length;
 
-      return {
+      Map<String, dynamic> stats = {
         'average_rating': averageRating,
         'total_reviews': reviewsSnapshot.docs.length,
         'rating_breakdown': ratingBreakdown,
       };
+
+      print(
+          '✅ Stats calculated: avg=${averageRating.toStringAsFixed(1)}, total=${reviewsSnapshot.docs.length}');
+
+      return stats;
     } catch (e) {
-      throw Exception('Failed to fetch rating stats: $e');
+      print('❌ Error getting rating stats: $e');
+      return {
+        'average_rating': 0.0,
+        'total_reviews': 0,
+        'rating_breakdown': {
+          5: 0,
+          4: 0,
+          3: 0,
+          2: 0,
+          1: 0,
+        },
+      };
     }
   }
 
-  /// Check if a booking has been rated by the customer
+  /// Get reviews by customer
+  static Future<List<ReviewModel>> getCustomerReviews(String customerId) async {
+    try {
+      QuerySnapshot snapshot = await _firestore
+          .collection('reviews')
+          .where('customer_id', isEqualTo: customerId)
+          .get();
+
+      // Sort in memory
+      List<ReviewModel> reviews =
+          snapshot.docs.map((doc) => ReviewModel.fromFirestore(doc)).toList();
+
+      reviews.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      return reviews;
+    } catch (e) {
+      throw Exception('Failed to fetch customer reviews: $e');
+    }
+  }
+
+  /// Check if a booking has been rated
   static Future<bool> isBookingRated(String bookingId) async {
     try {
       DocumentSnapshot bookingDoc =
@@ -193,6 +244,7 @@ class RatingService {
       Map<String, dynamic> data = bookingDoc.data() as Map<String, dynamic>;
       return data['customer_rating'] != null;
     } catch (e) {
+      print('Error checking if booking is rated: $e');
       return false;
     }
   }
