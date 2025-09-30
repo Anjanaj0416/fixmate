@@ -1,5 +1,6 @@
 // lib/screens/worker_detail_screen.dart
-// COPY THIS ENTIRE FILE
+// COMPLETE FIXED VERSION - Replace your entire file with this
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -23,6 +24,228 @@ class WorkerDetailScreen extends StatefulWidget {
 
 class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
   bool _isBooking = false;
+
+  // ==================== FIXED BOOKING METHOD ====================
+  Future<void> _handleBooking() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showErrorDialog('Please login to book a worker');
+      return;
+    }
+
+    final confirmed = await _showBookingConfirmationDialog();
+    if (!confirmed) return;
+
+    setState(() => _isBooking = true);
+
+    try {
+      print('\n========== BOOKING CREATION START ==========');
+
+      // Step 1: Check if worker exists or create new one
+      // CRITICAL FIX: This now returns worker_id (HM_XXXX), not Firebase UID
+      String? existingWorkerId = await WorkerStorageService.getExistingWorkerId(
+        email: widget.worker.email,
+        phoneNumber: widget.worker.phoneNumber,
+      );
+
+      String workerId;
+
+      if (existingWorkerId != null) {
+        // Worker already exists, use existing worker_id
+        workerId = existingWorkerId;
+        print('✅ Using existing worker: $workerId');
+        _showSnackBar('Using existing worker profile', Colors.blue);
+      } else {
+        // Worker doesn't exist, create new worker
+        print('📝 Creating new worker account...');
+        _showSnackBar('Creating worker profile...', Colors.orange);
+
+        // CRITICAL FIX: storeWorkerFromML now returns worker_id (HM_XXXX)
+        workerId = await WorkerStorageService.storeWorkerFromML(
+          mlWorker: widget.worker,
+        );
+        print('✅ New worker created: $workerId');
+        _showSnackBar('Worker profile created', Colors.green);
+      }
+
+      // CRITICAL: Verify workerId format
+      if (!workerId.startsWith('HM_')) {
+        throw Exception(
+            'Invalid worker_id format: $workerId (expected HM_XXXX format)');
+      }
+
+      print('✅ Worker ID verified: $workerId');
+
+      // Step 2: Get customer data
+      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .get();
+
+      if (!customerDoc.exists) {
+        throw Exception('Customer profile not found');
+      }
+
+      Map<String, dynamic> customerData =
+          customerDoc.data() as Map<String, dynamic>;
+
+      String customerId = customerData['customer_id'] ?? user.uid;
+      String customerName = customerData['customer_name'] ??
+          '${customerData['first_name']} ${customerData['last_name']}';
+      String customerPhone =
+          customerData['phone'] ?? customerData['phone_number'] ?? '';
+      String customerEmail = customerData['email'] ?? user.email ?? '';
+
+      print('📋 Customer details:');
+      print('   ID: $customerId');
+      print('   Name: $customerName');
+
+      // Step 3: Create booking with worker_id (HM_XXXX format)
+      print('📝 Creating booking with worker_id: $workerId');
+
+      // CRITICAL FIX: Pass worker_id (HM_XXXX), not Firebase UID
+      String bookingId = await BookingService.createBooking(
+        customerId: customerId,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        customerEmail: customerEmail,
+        workerId: workerId, // ✅ This is HM_XXXX format now
+        workerName: widget.worker.workerName,
+        workerPhone: widget.worker.phoneNumber,
+        serviceType: widget.worker.serviceType,
+        subService: widget.worker.serviceType,
+        issueType: 'general',
+        problemDescription: widget.problemDescription,
+        problemImageUrls: [],
+        location: widget.worker.city,
+        address: widget.worker.city,
+        urgency: 'normal',
+        budgetRange: 'LKR ${widget.worker.dailyWageLkr}',
+        scheduledDate: DateTime.now().add(Duration(days: 1)),
+        scheduledTime: '09:00 AM',
+      );
+
+      print('✅ Booking created successfully!');
+      print('   Booking ID: $bookingId');
+      print('   Worker ID: $workerId');
+      print('========== BOOKING CREATION END ==========\n');
+
+      setState(() => _isBooking = false);
+      _showSuccessDialog(bookingId);
+    } catch (e) {
+      print('❌ Error creating booking: $e');
+      print('========== BOOKING CREATION END ==========\n');
+      setState(() => _isBooking = false);
+      _showErrorDialog('Booking failed: $e');
+    }
+  }
+
+  // ==================== UI METHODS ====================
+
+  Future<bool> _showBookingConfirmationDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Confirm Booking'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('You are about to book:'),
+                SizedBox(height: 16),
+                Text('Worker: ${widget.worker.workerName}',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('Service: ${widget.worker.serviceType}'),
+                Text('Rate: LKR ${widget.worker.dailyWageLkr}/day'),
+                SizedBox(height: 8),
+                Text('Location: ${widget.worker.city}',
+                    style: TextStyle(color: Colors.grey[600])),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text('Confirm Booking'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  void _showSuccessDialog(String bookingId) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Column(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 60),
+            SizedBox(height: 16),
+            Text('Booking Successful!'),
+          ],
+        ),
+        content: Text(
+          'Booking ID: ${bookingId.substring(0, 12)}...\n\n'
+          'The worker will be notified about your request.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Go back to previous screen
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Error'),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,18 +272,27 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
                       child: Text(
                         widget.worker.workerName.substring(0, 1).toUpperCase(),
                         style: TextStyle(
-                            fontSize: 40,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue),
+                          fontSize: 40,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
                       ),
                     ),
                     SizedBox(height: 12),
                     Text(
                       widget.worker.workerName,
                       style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white),
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      widget.worker.serviceType,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white70,
+                      ),
                     ),
                   ],
                 ),
@@ -75,90 +307,85 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Quick Stats
-                  Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildQuickStat(Icons.star,
-                            widget.worker.rating.toString(), 'Rating'),
-                        _buildQuickStat(Icons.location_on,
-                            '${widget.worker.distanceKm} km', 'Distance'),
-                        _buildQuickStat(Icons.verified,
-                            '${widget.worker.aiConfidence.toInt()}%', 'Match'),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 24),
-
-                  // About
-                  Text('About',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 12),
-                  _buildInfoCard(
-                      Icons.person_outline, 'Bio', widget.worker.bio),
-                  SizedBox(height: 24),
-
-                  // Contact
-                  Text('Contact Information',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 12),
-                  _buildInfoCard(
-                      Icons.phone, 'Phone', widget.worker.phoneNumber),
-                  SizedBox(height: 8),
-                  _buildInfoCard(
-                      Icons.location_on, 'Location', widget.worker.city),
-                  SizedBox(height: 24),
-
-                  // Pricing
-                  Text('Pricing & Experience',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 12),
+                  // Rating and Experience
                   Row(
                     children: [
-                      Expanded(
-                        child: _buildStatCard(
-                            Icons.work_outline,
-                            '${widget.worker.experienceYears} Years',
-                            'Experience',
-                            Colors.orange),
+                      Icon(Icons.star, color: Colors.amber, size: 24),
+                      SizedBox(width: 4),
+                      Text(
+                        widget.worker.rating.toStringAsFixed(1),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                            Icons.attach_money,
-                            'LKR ${widget.worker.dailyWageLkr}',
-                            'Daily Rate',
-                            Colors.green),
+                      SizedBox(width: 20),
+                      Icon(Icons.work, color: Colors.blue, size: 24),
+                      SizedBox(width: 4),
+                      Text(
+                        '${widget.worker.experienceYears} years',
+                        style: TextStyle(fontSize: 16),
                       ),
                     ],
                   ),
                   SizedBox(height: 24),
 
-                  // Problem
-                  Text('Your Problem',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 12),
+                  // Location
+                  _buildInfoCard(
+                    Icons.location_on,
+                    'Location',
+                    widget.worker.city,
+                    Colors.red,
+                  ),
+
+                  // Phone
+                  _buildInfoCard(
+                    Icons.phone,
+                    'Phone',
+                    widget.worker.phoneNumber,
+                    Colors.green,
+                  ),
+
+                  // Email
+                  _buildInfoCard(
+                    Icons.email,
+                    'Email',
+                    widget.worker.email,
+                    Colors.orange,
+                  ),
+
+                  // Daily Rate
+                  _buildInfoCard(
+                    Icons.attach_money,
+                    'Daily Rate',
+                    'LKR ${widget.worker.dailyWageLkr}',
+                    Colors.purple,
+                  ),
+
+                  SizedBox(height: 24),
+
+                  // Problem Description
+                  Text(
+                    'Your Problem',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 8),
                   Container(
                     padding: EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
+                      color: Colors.grey[100],
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue.shade200),
                     ),
-                    child: Text(widget.problemDescription,
-                        style: TextStyle(fontSize: 15, height: 1.5)),
+                    child: Text(
+                      widget.problemDescription,
+                      style: TextStyle(fontSize: 15),
+                    ),
                   ),
-                  SizedBox(height: 100),
+
+                  SizedBox(height: 100), // Space for button
                 ],
               ),
             ),
@@ -166,263 +393,97 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
         ],
       ),
 
-      // Book Button
-      floatingActionButton: Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(horizontal: 20),
-        child: FloatingActionButton.extended(
-          onPressed: _isBooking ? null : _handleBooking,
-          backgroundColor: Colors.blue,
-          icon: _isBooking
-              ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2))
-              : Icon(Icons.calendar_today),
-          label: Text(_isBooking ? 'Processing...' : 'Book This Worker',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-    );
-  }
-
-  Widget _buildQuickStat(IconData icon, String value, String label) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.blue, size: 28),
-        SizedBox(height: 8),
-        Text(value,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        SizedBox(height: 4),
-        Text(label,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-      ],
-    );
-  }
-
-  Widget _buildInfoCard(IconData icon, String title, String value) {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: EdgeInsets.all(10),
-            decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: Colors.blue, size: 24),
-          ),
-          SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style:
-                        TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                SizedBox(height: 4),
-                Text(value,
-                    style:
-                        TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-              ],
+      // Book Now Button
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 8,
+              offset: Offset(0, -2),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatCard(
-      IconData icon, String value, String label, Color color) {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 32),
-          SizedBox(height: 8),
-          Text(value,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          SizedBox(height: 4),
-          Text(label,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleBooking() async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      _showErrorDialog('Please login to book a worker');
-      return;
-    }
-
-    final confirmed = await _showBookingConfirmationDialog();
-    if (!confirmed) return;
-
-    setState(() => _isBooking = true);
-
-    try {
-      // Step 1: Store worker if not exists
-      String workerFirebaseUid;
-      bool exists = await WorkerStorageService.checkWorkerExistsByEmail(
-          widget.worker.email);
-
-      if (!exists) {
-        workerFirebaseUid = await WorkerStorageService.storeWorkerFromML(
-            mlWorker: widget.worker);
-        _showSnackBar('Worker profile created', Colors.green);
-      } else {
-        String? tempUid =
-            await WorkerStorageService.getWorkerUidByEmail(widget.worker.email);
-        workerFirebaseUid = tempUid ?? '';
-
-        if (workerFirebaseUid.isEmpty) {
-          throw Exception('Could not retrieve worker UID');
-        }
-      }
-
-      // Step 2: Get customer data
-      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
-          .collection('customers')
-          .doc(user.uid)
-          .get();
-      if (!customerDoc.exists) throw Exception('Customer profile not found');
-
-      Map<String, dynamic> customerData =
-          customerDoc.data() as Map<String, dynamic>;
-      String customerId = customerData['customer_id'] ?? user.uid;
-      String customerName = customerData['customer_name'] ??
-          customerData['first_name'] ??
-          'Customer';
-      String customerPhone =
-          customerData['phone'] ?? customerData['phone_number'] ?? '';
-      String customerEmail = customerData['email'] ?? user.email ?? '';
-
-      // Step 3: Create booking
-      String bookingId = await BookingService.createBooking(
-        customerId: customerId,
-        customerName: customerName,
-        customerPhone: customerPhone,
-        customerEmail: customerEmail,
-        workerId: widget.worker.workerId,
-        workerName: widget.worker.workerName,
-        workerPhone: widget.worker.phoneNumber,
-        serviceType: widget.worker.serviceType,
-        subService: widget.worker.serviceType,
-        issueType: 'general',
-        problemDescription: widget.problemDescription,
-        problemImageUrls: [],
-        location: widget.worker.city,
-        address: widget.worker.city,
-        urgency: 'normal',
-        budgetRange: 'LKR ${widget.worker.dailyWageLkr}',
-        scheduledDate: DateTime.now().add(Duration(days: 1)),
-        scheduledTime: '09:00 AM',
-      );
-
-      setState(() => _isBooking = false);
-      _showSuccessDialog(bookingId);
-    } catch (e) {
-      setState(() => _isBooking = false);
-      _showErrorDialog('Booking failed: $e');
-    }
-  }
-
-  Future<bool> _showBookingConfirmationDialog() async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text('Confirm Booking'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('You are about to book:'),
-                SizedBox(height: 16),
-                Text('Worker: ${widget.worker.workerName}',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                Text('Service: ${widget.worker.serviceType}'),
-                Text('Rate: LKR ${widget.worker.dailyWageLkr}'),
-              ],
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text('Cancel')),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-                child: Text('Confirm'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
-  void _showSuccessDialog(String bookingId) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Column(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 60),
-            SizedBox(height: 16),
-            Text('Booking Successful!'),
           ],
         ),
-        content: Text(
-            'Booking ID: ${bookingId.substring(0, 12)}...\n\nThe worker will be notified.',
-            textAlign: TextAlign.center),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: Text('Back to Chat'),
+        child: SafeArea(
+          child: ElevatedButton(
+            onPressed: _isBooking ? null : _handleBooking,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: _isBooking
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Creating Booking...',
+                          style: TextStyle(fontSize: 16)),
+                    ],
+                  )
+                : Text('Book Now', style: TextStyle(fontSize: 16)),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Error'),
-        content: Text(message),
-        actions: [
-          ElevatedButton(
-              onPressed: () => Navigator.pop(context), child: Text('OK')),
-        ],
+  Widget _buildInfoCard(
+      IconData icon, String label, String value, Color color) {
+    return Card(
+      margin: EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-    );
-  }
-
-  void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: color),
     );
   }
 }

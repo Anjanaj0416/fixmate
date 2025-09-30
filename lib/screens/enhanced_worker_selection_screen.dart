@@ -818,6 +818,16 @@ class _EnhancedWorkerSelectionScreenState
     );
   }
 
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
   Future<void> _selectWorker(WorkerModel worker) async {
     bool? confirmed = await showDialog<bool>(
       context: context,
@@ -873,8 +883,16 @@ class _EnhancedWorkerSelectionScreenState
     }
   }
 
+  // lib/screens/enhanced_worker_selection_screen.dart
+// FIND AND REPLACE the _createBooking method with this FIXED version
+
+// ==================== FIXED BOOKING METHOD ====================
+// Replace your existing _createBooking method with this:
+
   Future<void> _createBooking(WorkerModel worker) async {
     try {
+      print('\n========== BOOKING CREATION START ==========');
+
       // Show loading dialog
       showDialog(
         context: context,
@@ -905,14 +923,40 @@ class _EnhancedWorkerSelectionScreenState
       Map<String, dynamic> customerData =
           customerDoc.data() as Map<String, dynamic>;
 
+      String customerId = customerData['customer_id'] ?? user.uid;
+      String customerName = customerData['customer_name'] ??
+          '${customerData['first_name'] ?? ''} ${customerData['last_name'] ?? ''}'
+              .trim();
+      String customerPhone = customerData['phone_number'] ?? '';
+      String customerEmail = customerData['email'] ?? user.email ?? '';
+
+      // CRITICAL FIX: Get worker_id from WorkerModel and handle null
+      String? nullableWorkerId = worker.workerId;
+
+      if (nullableWorkerId == null || nullableWorkerId.isEmpty) {
+        throw Exception('Worker ID is missing');
+      }
+
+      String workerId = nullableWorkerId; // Now it's non-null
+
+      print('📋 Booking details:');
+      print('   Customer ID: $customerId');
+      print('   Worker ID: $workerId'); // Should be HM_XXXX
+      print('   Service: ${widget.serviceType}');
+
+      // CRITICAL: Verify workerId format
+      if (!workerId.startsWith('HM_')) {
+        throw Exception(
+            'Invalid worker_id format: $workerId (expected HM_XXXX format)');
+      }
+
       // Create booking using BookingService
       String bookingId = await BookingService.createBooking(
-        customerId: customerData['customer_id'] ?? user.uid,
-        customerName: customerData['customer_name'] ??
-            '${customerData['first_name']} ${customerData['last_name']}',
-        customerPhone: customerData['phone_number'] ?? '',
-        customerEmail: customerData['email'] ?? user.email ?? '',
-        workerId: worker.workerId!,
+        customerId: customerId,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        customerEmail: customerEmail,
+        workerId: workerId, // ✅ This is HM_XXXX format
         workerName: worker.workerName,
         workerPhone: worker.contact.phoneNumber,
         serviceType: widget.serviceType,
@@ -928,33 +972,48 @@ class _EnhancedWorkerSelectionScreenState
         scheduledTime: widget.scheduledTime,
       );
 
+      print('✅ Booking created successfully!');
+      print('   Booking ID: $bookingId');
+      print('   Worker ID: $workerId');
+      print('========== BOOKING CREATION END ==========\n');
+
       // Close loading dialog
       Navigator.pop(context);
 
-      // Show success dialog and navigate
-      showDialog(
+      // Show success dialog
+      await showDialog(
         context: context,
+        barrierDismissible: false,
         builder: (context) => AlertDialog(
-          title: Row(
+          title: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.check_circle, color: Colors.green),
-              SizedBox(width: 8),
-              Text('Booking Created!'),
+              Icon(Icons.check_circle, color: Colors.green, size: 60),
+              SizedBox(height: 16),
+              Text('Booking Successful!'),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Your booking has been created successfully.'),
-              SizedBox(height: 8),
-              Text('Booking ID: $bookingId'),
-              SizedBox(height: 8),
-              Text('Worker: ${worker.workerName}'),
-              SizedBox(height: 16),
               Text(
-                'The service provider will contact you shortly to confirm the appointment.',
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                'Your booking has been created successfully!',
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Booking ID: ${bookingId.length > 12 ? bookingId.substring(0, 12) + '...' : bookingId}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontFamily: 'monospace',
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                '${worker.workerName} will be notified about your request.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14),
               ),
             ],
           ),
@@ -962,34 +1021,46 @@ class _EnhancedWorkerSelectionScreenState
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context); // Close dialog
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  '/customer_home',
-                  (route) => false,
-                );
+                Navigator.pop(context); // Go back to previous screen
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: Text('OK', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('Done'),
             ),
           ],
         ),
       );
     } catch (e) {
-      // Close loading dialog if open
-      Navigator.pop(context);
-      _showErrorSnackBar('Failed to create booking: ${e.toString()}');
-    }
-  }
+      print('❌ Error creating booking: $e');
+      print('========== BOOKING CREATION END ==========\n');
 
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
+      // Close loading dialog if still open
+      Navigator.pop(context);
+
+      // Show error dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Booking Failed'),
+            ],
+          ),
+          content: Text(
+            'Failed to create booking: $e\n\nPlease try again.',
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 }
