@@ -1,5 +1,7 @@
 // lib/screens/worker_bookings_screen.dart
-/*import 'package:flutter/material.dart';
+// COMPLETE FIXED VERSION - Replace your entire file with this
+
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/booking_model.dart';
@@ -14,6 +16,7 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String? _workerId;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -42,17 +45,20 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
               workerDoc.data() as Map<String, dynamic>;
           setState(() {
             _workerId = workerData['worker_id'];
+            _isLoading = false;
           });
+          print('✅ Worker loaded: $_workerId');
         }
       }
     } catch (e) {
+      setState(() => _isLoading = false);
       _showErrorSnackBar('Failed to load worker data: ${e.toString()}');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_workerId == null) {
+    if (_isLoading || _workerId == null) {
       return Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
@@ -69,118 +75,30 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
           indicatorColor: Colors.white,
           indicatorWeight: 3,
           tabs: [
-            Tab(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('New Requests', style: TextStyle(fontSize: 13)),
-                  _buildBookingCountBadge('requested'),
-                ],
-              ),
-            ),
-            Tab(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Accepted', style: TextStyle(fontSize: 13)),
-                  _buildBookingCountBadge('accepted'),
-                ],
-              ),
-            ),
-            Tab(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('In Progress', style: TextStyle(fontSize: 13)),
-                  _buildBookingCountBadge('in_progress'),
-                ],
-              ),
-            ),
-            Tab(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Completed', style: TextStyle(fontSize: 13)),
-                  _buildBookingCountBadge('completed'),
-                ],
-              ),
-            ),
-            Tab(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('All', style: TextStyle(fontSize: 13)),
-                  _buildBookingCountBadge('all'),
-                ],
-              ),
-            ),
+            Tab(text: 'New Requests'),
+            Tab(text: 'Accepted'),
+            Tab(text: 'In Progress'),
+            Tab(text: 'Completed'),
+            Tab(text: 'All'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildBookingList('requested'),
-          _buildBookingList('accepted'),
-          _buildBookingList('in_progress'),
-          _buildBookingList('completed'),
-          _buildBookingList('all'),
+          _buildBookingsList('requested'),
+          _buildBookingsList('accepted'),
+          _buildBookingsList('in_progress'),
+          _buildBookingsList('completed'),
+          _buildBookingsList('all'),
         ],
       ),
     );
   }
 
-  Widget _buildBookingCountBadge(String type) {
+  Widget _buildBookingsList(String statusFilter) {
     return StreamBuilder<QuerySnapshot>(
-      stream: _getBookingsStream(type),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return SizedBox();
-        int count = snapshot.data!.docs.length;
-        if (count == 0) return SizedBox();
-
-        return Container(
-          margin: EdgeInsets.only(top: 2),
-          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            count.toString(),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFFFF9800),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Stream<QuerySnapshot> _getBookingsStream(String type) {
-    Query query = FirebaseFirestore.instance
-        .collection('bookings')
-        .where('worker_id', isEqualTo: _workerId)
-        .orderBy('created_at', descending: true);
-
-    switch (type) {
-      case 'requested':
-        return query.where('status', isEqualTo: 'requested').snapshots();
-      case 'accepted':
-        return query.where('status', isEqualTo: 'accepted').snapshots();
-      case 'in_progress':
-        return query.where('status', isEqualTo: 'in_progress').snapshots();
-      case 'completed':
-        return query.where('status', isEqualTo: 'completed').snapshots();
-      default:
-        return query.snapshots();
-    }
-  }
-
-  Widget _buildBookingList(String type) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _getBookingsStream(type),
+      stream: _getBookingsStream(statusFilter),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(child: CircularProgressIndicator());
@@ -193,7 +111,7 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
               children: [
                 Icon(Icons.error_outline, size: 60, color: Colors.red),
                 SizedBox(height: 16),
-                Text('Error loading bookings'),
+                Text('Error: ${snapshot.error}'),
                 SizedBox(height: 8),
                 ElevatedButton(
                   onPressed: () => setState(() {}),
@@ -205,51 +123,61 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState(type);
+          return _buildEmptyState(statusFilter);
         }
 
+        List<BookingModel> bookings = snapshot.data!.docs
+            .map((doc) => BookingModel.fromFirestore(doc))
+            .toList();
+
         return RefreshIndicator(
-          onRefresh: () async {
-            setState(() {});
-          },
+          onRefresh: () async => setState(() {}),
           child: ListView.builder(
             padding: EdgeInsets.all(16),
-            itemCount: snapshot.data!.docs.length,
-            itemBuilder: (context, index) {
-              DocumentSnapshot doc = snapshot.data!.docs[index];
-              BookingModel booking = BookingModel.fromFirestore(doc);
-              return _buildBookingCard(booking);
-            },
+            itemCount: bookings.length,
+            itemBuilder: (context, index) => _buildBookingCard(bookings[index]),
           ),
         );
       },
     );
   }
 
+  Stream<QuerySnapshot> _getBookingsStream(String statusFilter) {
+    Query query = FirebaseFirestore.instance
+        .collection('bookings')
+        .where('worker_id', isEqualTo: _workerId);
+
+    if (statusFilter != 'all') {
+      query = query.where('status', isEqualTo: statusFilter);
+    }
+
+    return query.orderBy('created_at', descending: true).snapshots();
+  }
+
   Widget _buildEmptyState(String type) {
-    IconData icon;
     String message;
+    IconData icon;
 
     switch (type) {
       case 'requested':
-        icon = Icons.notifications_none;
         message = 'No new booking requests';
+        icon = Icons.inbox_outlined;
         break;
       case 'accepted':
-        icon = Icons.check_circle_outline;
         message = 'No accepted bookings';
+        icon = Icons.check_circle_outline;
         break;
       case 'in_progress':
+        message = 'No jobs in progress';
         icon = Icons.work_outline;
-        message = 'No bookings in progress';
         break;
       case 'completed':
+        message = 'No completed bookings';
         icon = Icons.done_all;
-        message = 'No completed bookings yet';
         break;
       default:
+        message = 'No bookings found';
         icon = Icons.calendar_today;
-        message = 'No bookings yet';
     }
 
     return Center(
@@ -262,19 +190,16 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
             message,
             style: TextStyle(
               fontSize: 18,
-              fontWeight: FontWeight.w500,
               color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
             ),
           ),
           SizedBox(height: 8),
           Text(
             type == 'requested'
-                ? 'New booking requests will appear here'
-                : 'Your $type bookings will appear here',
-            style: TextStyle(
-              color: Colors.grey[500],
-            ),
-            textAlign: TextAlign.center,
+                ? 'New requests will appear here'
+                : 'Bookings will appear here',
+            style: TextStyle(color: Colors.grey[400]),
           ),
         ],
       ),
@@ -283,8 +208,8 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
 
   Widget _buildBookingCard(BookingModel booking) {
     return Card(
-      elevation: 2,
       margin: EdgeInsets.only(bottom: 16),
+      elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: () => _showBookingDetails(booking),
@@ -294,36 +219,13 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with service and urgency
+              // Header with status and urgency
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          booking.serviceType
-                              .replaceAll('_', ' ')
-                              .toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF9800),
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          booking.subService.replaceAll('_', ' '),
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _buildUrgencyBadge(booking.urgency),
+                  _buildStatusBadge(booking.status),
+                  if (booking.urgency.isNotEmpty)
+                    _buildUrgencyBadge(booking.urgency),
                 ],
               ),
 
@@ -333,18 +235,8 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
               Row(
                 children: [
                   CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Colors.green[100],
-                    child: Text(
-                      booking.customerName.isNotEmpty
-                          ? booking.customerName[0].toUpperCase()
-                          : 'C',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green[700],
-                      ),
-                    ),
+                    backgroundColor: Colors.orange[100],
+                    child: Icon(Icons.person, color: Colors.orange),
                   ),
                   SizedBox(width: 12),
                   Expanded(
@@ -355,92 +247,144 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
                           booking.customerName,
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          booking.customerPhone,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
+                        if (booking.customerPhone.isNotEmpty)
+                          Text(
+                            booking.customerPhone,
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 13,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
-                  _buildStatusBadge(booking.status),
                 ],
               ),
 
               SizedBox(height: 12),
               Divider(),
-              SizedBox(height: 8),
+              SizedBox(height: 12),
 
-              // Quick info
+              // Service details
+              Text(
+                booking.serviceType.replaceAll('_', ' ').toUpperCase(),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange[700],
+                ),
+              ),
+              SizedBox(height: 4),
+              if (booking.issueType.isNotEmpty)
+                Text(
+                  booking.issueType,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              SizedBox(height: 8),
+              Text(
+                booking.problemDescription,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[800],
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+
+              SizedBox(height: 12),
+
+              // Location and schedule
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
                   _buildInfoChip(
                     Icons.location_on,
-                    booking.location.replaceAll('_', ' '),
+                    booking.location,
                     Colors.blue,
                   ),
                   _buildInfoChip(
                     Icons.calendar_today,
-                    _formatDate(booking.scheduledDate),
-                    Colors.purple,
-                  ),
-                  _buildInfoChip(
-                    Icons.access_time,
-                    booking.scheduledTime,
-                    Colors.orange,
-                  ),
-                  _buildInfoChip(
-                    Icons.attach_money,
-                    booking.budgetRange,
+                    '${_formatDate(booking.scheduledDate)} ${booking.scheduledTime}',
                     Colors.green,
                   ),
+                  if (booking.budgetRange.isNotEmpty)
+                    _buildInfoChip(
+                      Icons.attach_money,
+                      booking.budgetRange,
+                      Colors.purple,
+                    ),
                 ],
               ),
 
-              if (booking.problemDescription.isNotEmpty) ...[
-                SizedBox(height: 12),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[200]!),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Problem Description:',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[600],
+              // Action buttons based on status
+              if (booking.status == BookingStatus.requested) ...[
+                SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _declineBooking(booking),
+                        icon: Icon(Icons.close, size: 18),
+                        label: Text('Decline'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: BorderSide(color: Colors.red),
+                          padding: EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
-                      SizedBox(height: 4),
-                      Text(
-                        booking.problemDescription,
-                        style: TextStyle(fontSize: 13),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _acceptBooking(booking),
+                        icon: Icon(Icons.check, size: 18),
+                        label: Text('Accept'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                        ),
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+              ],
+
+              if (booking.status == BookingStatus.accepted) ...[
+                SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => _startWork(booking),
+                  icon: Icon(Icons.play_arrow),
+                  label: Text('Start Work'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    minimumSize: Size(double.infinity, 44),
                   ),
                 ),
               ],
 
-              SizedBox(height: 12),
-
-              // Action buttons
-              _buildActionButtons(booking),
+              if (booking.status == BookingStatus.inProgress) ...[
+                SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => _completeBooking(booking),
+                  icon: Icon(Icons.done_all),
+                  label: Text('Complete Work'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                    foregroundColor: Colors.white,
+                    minimumSize: Size(double.infinity, 44),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -450,52 +394,38 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
 
   Widget _buildStatusBadge(BookingStatus status) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: status.color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: status.color.withOpacity(0.3)),
+        border: Border.all(color: status.color),
       ),
       child: Text(
         status.displayName.toUpperCase(),
         style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
           color: status.color,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );
   }
 
   Widget _buildUrgencyBadge(String urgency) {
-    Color color;
-    IconData icon;
-
-    switch (urgency.toLowerCase()) {
-      case 'urgent':
-        color = Colors.red;
-        icon = Icons.warning;
-        break;
-      case 'normal':
-        color = Colors.orange;
-        icon = Icons.info;
-        break;
-      default:
-        color = Colors.blue;
-        icon = Icons.schedule;
-    }
+    Color color =
+        urgency.toLowerCase() == 'urgent' ? Colors.red : Colors.orange;
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
+          Icon(Icons.warning_amber, size: 14, color: color),
           SizedBox(width: 4),
           Text(
             urgency.toUpperCase(),
@@ -536,297 +466,49 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
     );
   }
 
-  Widget _buildActionButtons(BookingModel booking) {
-    List<Widget> buttons = [];
-
-    switch (booking.status) {
-      case BookingStatus.requested:
-        buttons.add(
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _declineBooking(booking),
-              icon: Icon(Icons.close, size: 18),
-              label: Text('Decline'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: BorderSide(color: Colors.red),
-              ),
-            ),
-          ),
-        );
-        buttons.add(SizedBox(width: 8));
-        buttons.add(
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _acceptBooking(booking),
-              icon: Icon(Icons.check, size: 18),
-              label: Text('Accept'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-              ),
-            ),
-          ),
-        );
-        break;
-
-      case BookingStatus.accepted:
-        buttons.add(
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _startWork(booking),
-              icon: Icon(Icons.play_arrow, size: 18),
-              label: Text('Start Work'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-              ),
-            ),
-          ),
-        );
-        buttons.add(SizedBox(width: 8));
-        buttons.add(
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _contactCustomer(booking),
-              icon: Icon(Icons.phone, size: 18),
-              label: Text('Contact'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.green,
-              ),
-            ),
-          ),
-        );
-        break;
-
-      case BookingStatus.inProgress:
-        buttons.add(
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _completeBooking(booking),
-              icon: Icon(Icons.done_all, size: 18),
-              label: Text('Mark Complete'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-              ),
-            ),
-          ),
-        );
-        break;
-
-      case BookingStatus.completed:
-        if (booking.workerRating == null) {
-          buttons.add(
-            Expanded(
-              child: Container(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.green[50],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '✓ Service Completed',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.green[700],
-                  ),
-                ),
-              ),
-            ),
-          );
-        } else {
-          buttons.add(
-            Expanded(
-              child: Container(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.amber[50],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.star, size: 18, color: Colors.amber),
-                    SizedBox(width: 4),
-                    Text(
-                      'Rated: ${booking.workerRating!.toStringAsFixed(1)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.amber[900],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
-        break;
-
-      default:
-        break;
-    }
-
-    if (buttons.isEmpty) return SizedBox();
-
-    return Row(children: buttons);
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   void _showBookingDetails(BookingModel booking) {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => SingleChildScrollView(
-          controller: scrollController,
-          padding: EdgeInsets.all(20),
+      builder: (context) => AlertDialog(
+        title: Text('Booking Details'),
+        content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              SizedBox(height: 20),
-              Text(
-                'Booking Details',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 16),
-              Row(
-                children: [
-                  _buildStatusBadge(booking.status),
-                  SizedBox(width: 8),
-                  _buildUrgencyBadge(booking.urgency),
-                ],
-              ),
-              SizedBox(height: 20),
-              _buildDetailSection('Customer Information', [
-                _buildDetailRow('Name', booking.customerName),
-                _buildDetailRow('Phone', booking.customerPhone),
-                _buildDetailRow('Email', booking.customerEmail),
-              ]),
-              _buildDetailSection('Service Details', [
-                _buildDetailRow(
-                    'Service Type', booking.serviceType.replaceAll('_', ' ')),
-                _buildDetailRow(
-                    'Sub Service', booking.subService.replaceAll('_', ' ')),
-                _buildDetailRow(
-                    'Issue Type', booking.issueType.replaceAll('_', ' ')),
-              ]),
-              _buildDetailSection('Schedule', [
-                _buildDetailRow('Date', _formatDate(booking.scheduledDate)),
-                _buildDetailRow('Time', booking.scheduledTime),
-                _buildDetailRow('Urgency', booking.urgency),
-              ]),
-              _buildDetailSection('Location', [
-                _buildDetailRow('Area', booking.location.replaceAll('_', ' ')),
-                _buildDetailRow('Address', booking.address),
-              ]),
-              _buildDetailSection('Budget', [
-                _buildDetailRow('Budget Range', booking.budgetRange),
-                if (booking.finalPrice != null)
-                  _buildDetailRow('Final Price',
-                      'LKR ${booking.finalPrice!.toStringAsFixed(2)}'),
-              ]),
-              if (booking.problemDescription.isNotEmpty) ...[
-                SizedBox(height: 16),
-                Text(
-                  'Problem Description',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(booking.problemDescription),
-                ),
-              ],
-              if (booking.problemImageUrls.isNotEmpty) ...[
-                SizedBox(height: 16),
-                Text(
-                  'Problem Images',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 8),
-                SizedBox(
-                  height: 100,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: booking.problemImageUrls.length,
-                    itemBuilder: (context, index) => Container(
-                      margin: EdgeInsets.only(right: 8),
-                      width: 100,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        image: DecorationImage(
-                          image: NetworkImage(booking.problemImageUrls[index]),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-              SizedBox(height: 20),
-              _buildActionButtons(booking),
+              _detailRow('Customer', booking.customerName),
+              _detailRow('Phone', booking.customerPhone),
+              _detailRow('Service', booking.serviceType.replaceAll('_', ' ')),
+              _detailRow('Issue', booking.issueType),
+              _detailRow('Location', booking.location),
+              _detailRow('Address', booking.address),
+              _detailRow('Date', _formatDate(booking.scheduledDate)),
+              _detailRow('Time', booking.scheduledTime),
+              _detailRow('Budget', booking.budgetRange),
+              _detailRow('Status', booking.status.displayName),
+              SizedBox(height: 8),
+              Text('Problem Description:',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 4),
+              Text(booking.problemDescription),
             ],
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close'),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildDetailSection(String title, List<Widget> children) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(height: 16),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        SizedBox(height: 8),
-        Container(
-          padding: EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(children: children),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
+  Widget _detailRow(String label, String value) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -835,30 +517,19 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
           SizedBox(
             width: 100,
             child: Text(
-              label,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
+              '$label:',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
           Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            child: Text(value.isEmpty ? 'N/A' : value),
           ),
         ],
       ),
     );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
-  }
-
+  // ==================== ACCEPT BOOKING ====================
   void _acceptBooking(BookingModel booking) {
     TextEditingController priceController = TextEditingController();
     TextEditingController notesController = TextEditingController();
@@ -872,20 +543,15 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Customer: ${booking.customerName}'),
-              SizedBox(height: 4),
-              Text(
-                'Service: ${booking.serviceType.replaceAll('_', ' ')}',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
+              Text('Accept booking from ${booking.customerName}?'),
               SizedBox(height: 16),
               TextField(
                 controller: priceController,
                 decoration: InputDecoration(
                   labelText: 'Final Price (Optional)',
-                  prefixText: 'LKR ',
                   border: OutlineInputBorder(),
-                  hintText: 'Enter price',
+                  prefixText: 'LKR ',
+                  hintText: 'Enter agreed price',
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -895,7 +561,7 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
                 decoration: InputDecoration(
                   labelText: 'Notes (Optional)',
                   border: OutlineInputBorder(),
-                  hintText: 'Any additional information...',
+                  hintText: 'Add any notes for the customer',
                 ),
                 maxLines: 2,
               ),
@@ -933,17 +599,24 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
   Future<void> _performAcceptBooking(
       String bookingId, double? price, String notes) async {
     try {
+      print('🔄 Accepting booking: $bookingId');
+
       await BookingService.updateBookingStatus(
-        bookingId,
-        BookingStatus.accepted,
+        bookingId: bookingId,
+        newStatus: BookingStatus.accepted,
         finalPrice: price,
+        notes: notes.isNotEmpty ? notes : null,
       );
+
+      print('✅ Booking accepted successfully');
       _showSuccessSnackBar('Booking accepted successfully!');
     } catch (e) {
+      print('❌ Failed to accept booking: $e');
       _showErrorSnackBar('Failed to accept booking: ${e.toString()}');
     }
   }
 
+  // ==================== DECLINE BOOKING ====================
   void _declineBooking(BookingModel booking) {
     TextEditingController reasonController = TextEditingController();
 
@@ -992,17 +665,24 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
 
   Future<void> _performDeclineBooking(String bookingId, String reason) async {
     try {
+      print('🔄 Declining booking: $bookingId');
+
+      // CRITICAL: Use 'declined' status with reason
       await BookingService.updateBookingStatus(
-        bookingId,
-        BookingStatus.declined,
-        cancellationReason: reason,
+        bookingId: bookingId,
+        newStatus: BookingStatus.declined,
+        notes: reason,
       );
+
+      print('✅ Booking declined successfully');
       _showSuccessSnackBar('Booking declined');
     } catch (e) {
+      print('❌ Failed to decline booking: $e');
       _showErrorSnackBar('Failed to decline booking: ${e.toString()}');
     }
   }
 
+  // ==================== START WORK ====================
   void _startWork(BookingModel booking) {
     showDialog(
       context: context,
@@ -1019,8 +699,8 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
               Navigator.pop(context);
               try {
                 await BookingService.updateBookingStatus(
-                  booking.bookingId,
-                  BookingStatus.inProgress,
+                  bookingId: booking.bookingId,
+                  newStatus: BookingStatus.inProgress,
                 );
                 _showSuccessSnackBar('Work started!');
               } catch (e) {
@@ -1035,6 +715,7 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
     );
   }
 
+  // ==================== COMPLETE WORK ====================
   void _completeBooking(BookingModel booking) {
     TextEditingController notesController = TextEditingController();
 
@@ -1068,87 +749,26 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
               Navigator.pop(context);
               try {
                 await BookingService.updateBookingStatus(
-                  booking.bookingId,
-                  BookingStatus.completed,
+                  bookingId: booking.bookingId,
+                  newStatus: BookingStatus.completed,
+                  notes: notesController.text.isNotEmpty
+                      ? notesController.text
+                      : null,
                 );
                 _showSuccessSnackBar('Booking marked as completed!');
               } catch (e) {
                 _showErrorSnackBar('Failed: ${e.toString()}');
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: Text('Mark Complete'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+            child: Text('Complete'),
           ),
         ],
       ),
     );
   }
 
-  void _contactCustomer(BookingModel booking) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Contact ${booking.customerName}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.phone, color: Colors.green),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    booking.customerPhone,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(Icons.email, color: Colors.blue),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    booking.customerEmail,
-                    style: TextStyle(fontSize: 14),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 16),
-            Text(
-              'You can call or message the customer to discuss service details.',
-              style: TextStyle(color: Colors.grey[600], fontSize: 13),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              _showInfoSnackBar('Opening dialer...');
-            },
-            icon: Icon(Icons.phone),
-            label: Text('Call Now'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
+  // ==================== SNACKBAR HELPERS ====================
   void _showSuccessSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1178,732 +798,6 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
         ),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 3),
-      ),
-    );
-  }
-
-  void _showInfoSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.blue,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-}*/
-
-// lib/screens/worker_bookings_screen.dart
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import '../models/booking_model.dart';
-import '../services/booking_service.dart';
-
-class WorkerBookingsScreen extends StatefulWidget {
-  @override
-  _WorkerBookingsScreenState createState() => _WorkerBookingsScreenState();
-}
-
-class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  String? _workerId;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 5, vsync: this);
-    _loadWorkerData();
-    _debugWorkerBookings(); // Add debug method
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  // DEBUG METHOD - Add this to check what's happening
-  Future<void> _debugWorkerBookings() async {
-    try {
-      User? user = FirebaseAuth.instance.currentUser;
-      print('\n========== WORKER BOOKING DEBUG START ==========');
-      print('1. Current Firebase Auth UID: ${user?.uid}');
-
-      // Check worker document
-      DocumentSnapshot workerDoc = await FirebaseFirestore.instance
-          .collection('workers')
-          .doc(user!.uid)
-          .get();
-
-      if (workerDoc.exists) {
-        Map<String, dynamic> workerData =
-            workerDoc.data() as Map<String, dynamic>;
-        print('2. Worker Data Found:');
-        print('   - worker_id: ${workerData['worker_id']}');
-        print('   - worker_name: ${workerData['worker_name']}');
-
-        // Get ALL bookings first (no filter)
-        QuerySnapshot allBookings =
-            await FirebaseFirestore.instance.collection('bookings').get();
-
-        print('3. Total bookings in database: ${allBookings.docs.length}');
-
-        // Print bookings that match this worker
-        int matchCount = 0;
-        for (var doc in allBookings.docs) {
-          Map<String, dynamic>? data = doc.data() as Map<String, dynamic>?;
-          if (data != null && data['worker_id'] == workerData['worker_id']) {
-            matchCount++;
-            print('\n   Found matching booking:');
-            print('   - Booking ID: ${doc.id}');
-            print('   - customer_id: ${data['customer_id']}');
-            print('   - worker_id: ${data['worker_id']}');
-            print('   - status: ${data['status']}');
-            print('   - service: ${data['service_type']}');
-          }
-        }
-
-        print('\n4. Total bookings for this worker: $matchCount');
-
-        // Now try the filtered query that the app uses
-        print('\n5. Trying query with worker_id = ${workerData['worker_id']}');
-        try {
-          QuerySnapshot myBookings = await FirebaseFirestore.instance
-              .collection('bookings')
-              .where('worker_id', isEqualTo: workerData['worker_id'])
-              .orderBy('created_at', descending: true)
-              .get();
-
-          print(
-              '6. Query successful! Found ${myBookings.docs.length} bookings');
-        } catch (e) {
-          print('6. Query FAILED with error: $e');
-          print(
-              '   This means you need to create a composite index in Firestore!');
-        }
-      } else {
-        print('ERROR: Worker document not found!');
-      }
-
-      print('========== WORKER BOOKING DEBUG END ==========\n');
-    } catch (e) {
-      print('Debug error: $e');
-    }
-  }
-
-  Future<void> _loadWorkerData() async {
-    try {
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        DocumentSnapshot workerDoc = await FirebaseFirestore.instance
-            .collection('workers')
-            .doc(user.uid)
-            .get();
-
-        if (workerDoc.exists) {
-          Map<String, dynamic> workerData =
-              workerDoc.data() as Map<String, dynamic>;
-          setState(() {
-            _workerId = workerData['worker_id'];
-            _isLoading = false;
-          });
-          print('Worker ID loaded: $_workerId');
-        } else {
-          setState(() {
-            _isLoading = false;
-          });
-          _showErrorSnackBar('Worker profile not found');
-        }
-      }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      _showErrorSnackBar('Failed to load worker data: ${e.toString()}');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(
-          title: Text('My Bookings'),
-          backgroundColor: Color(0xFFFF9800),
-        ),
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_workerId == null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: Text('My Bookings'),
-          backgroundColor: Color(0xFFFF9800),
-        ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 60, color: Colors.grey),
-              SizedBox(height: 16),
-              Text(
-                'Worker profile not found',
-                style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-              ),
-              SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text('Go Back'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('My Bookings'),
-        backgroundColor: Color(0xFFFF9800),
-        elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          tabs: [
-            Tab(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('New Requests', style: TextStyle(fontSize: 13)),
-                  _buildBookingCountBadge('requested'),
-                ],
-              ),
-            ),
-            Tab(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Accepted', style: TextStyle(fontSize: 13)),
-                  _buildBookingCountBadge('accepted'),
-                ],
-              ),
-            ),
-            Tab(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('In Progress', style: TextStyle(fontSize: 13)),
-                  _buildBookingCountBadge('inProgress'),
-                ],
-              ),
-            ),
-            Tab(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Completed', style: TextStyle(fontSize: 13)),
-                  _buildBookingCountBadge('completed'),
-                ],
-              ),
-            ),
-            Tab(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('All', style: TextStyle(fontSize: 13)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildBookingList('requested'),
-          _buildBookingList('accepted'),
-          _buildBookingList('inProgress'),
-          _buildBookingList('completed'),
-          _buildBookingList('all'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBookingCountBadge(String status) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _getBookingCountStream(status),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return SizedBox.shrink();
-        int count = snapshot.data!.docs.length;
-        if (count == 0) return SizedBox.shrink();
-
-        return Container(
-          margin: EdgeInsets.only(top: 4),
-          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: Colors.red,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            count.toString(),
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Stream<QuerySnapshot> _getBookingCountStream(String status) {
-    Query query = FirebaseFirestore.instance
-        .collection('bookings')
-        .where('worker_id', isEqualTo: _workerId);
-
-    if (status != 'all') {
-      query = query.where('status', isEqualTo: 'BookingStatus.$status');
-    }
-
-    return query.snapshots();
-  }
-
-  Widget _buildBookingList(String statusFilter) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _getBookingsStream(statusFilter),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasError) {
-          print('Stream error: ${snapshot.error}');
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 60, color: Colors.red),
-                SizedBox(height: 16),
-                Text(
-                  'Error loading bookings',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 8),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 32),
-                  child: Text(
-                    snapshot.error.toString(),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                ),
-                SizedBox(height: 16),
-                if (snapshot.error
-                    .toString()
-                    .contains('requires an index')) ...[
-                  Text(
-                    'You need to create a Firestore index',
-                    style: TextStyle(
-                      color: Colors.orange,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      // The error message contains a URL to create the index
-                      print('Check console for index creation URL');
-                    },
-                    child: Text('Check Console for Index URL'),
-                  ),
-                ],
-                SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => setState(() {}),
-                  child: Text('Retry'),
-                ),
-              ],
-            ),
-          );
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState(statusFilter);
-        }
-
-        List<BookingModel> bookings = snapshot.data!.docs
-            .map((doc) => BookingModel.fromFirestore(doc))
-            .toList();
-
-        return RefreshIndicator(
-          onRefresh: () async {
-            setState(() {});
-          },
-          child: ListView.builder(
-            padding: EdgeInsets.all(16),
-            itemCount: bookings.length,
-            itemBuilder: (context, index) {
-              return _buildBookingCard(bookings[index]);
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  Stream<QuerySnapshot> _getBookingsStream(String statusFilter) {
-    Query query = FirebaseFirestore.instance
-        .collection('bookings')
-        .where('worker_id', isEqualTo: _workerId);
-
-    if (statusFilter != 'all') {
-      query = query.where('status', isEqualTo: statusFilter);
-    }
-
-    query = query.orderBy('created_at', descending: true);
-
-    // DEBUG: Print when stream updates
-    print('🔍 Setting up stream for status: $statusFilter');
-    return query.snapshots().map((snapshot) {
-      print(
-          '📦 Stream received ${snapshot.docs.length} bookings for $statusFilter');
-      return snapshot;
-    });
-  }
-
-  Widget _buildEmptyState(String type) {
-    String message;
-    IconData icon;
-
-    switch (type) {
-      case 'requested':
-        message = 'No new booking requests';
-        icon = Icons.inbox_outlined;
-        break;
-      case 'accepted':
-        message = 'No accepted bookings';
-        icon = Icons.check_circle_outline;
-        break;
-      case 'inProgress':
-        message = 'No jobs in progress';
-        icon = Icons.work_outline;
-        break;
-      case 'completed':
-        message = 'No completed bookings';
-        icon = Icons.done_all;
-        break;
-      default:
-        message = 'No bookings found';
-        icon = Icons.calendar_today;
-    }
-
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 80, color: Colors.grey[300]),
-          SizedBox(height: 16),
-          Text(
-            message,
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            type == 'requested'
-                ? 'New booking requests will appear here'
-                : 'Your $type bookings will appear here',
-            style: TextStyle(
-              color: Colors.grey[500],
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBookingCard(BookingModel booking) {
-    return Card(
-      elevation: 2,
-      margin: EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: () => _showBookingDetails(booking),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header with service and urgency
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          booking.serviceType
-                              .replaceAll('_', ' ')
-                              .toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF9800),
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          booking.subService.replaceAll('_', ' '),
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _buildUrgencyBadge(booking.urgency),
-                ],
-              ),
-
-              SizedBox(height: 12),
-
-              // Customer info
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Colors.blue[100],
-                    child: Text(
-                      booking.customerName.isNotEmpty
-                          ? booking.customerName[0].toUpperCase()
-                          : 'C',
-                      style: TextStyle(
-                        color: Colors.blue[700],
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          booking.customerName,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          booking.location,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _buildStatusBadge(booking.status),
-                ],
-              ),
-
-              SizedBox(height: 12),
-              Divider(),
-              SizedBox(height: 8),
-
-              // Booking details
-              Row(
-                children: [
-                  Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
-                  SizedBox(width: 8),
-                  Text(
-                    _formatDate(booking.scheduledDate),
-                    style: TextStyle(fontSize: 14),
-                  ),
-                  SizedBox(width: 16),
-                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
-                  SizedBox(width: 8),
-                  Text(
-                    booking.scheduledTime,
-                    style: TextStyle(fontSize: 14),
-                  ),
-                ],
-              ),
-
-              if (booking.budgetRange.isNotEmpty) ...[
-                SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.attach_money, size: 16, color: Colors.grey[600]),
-                    SizedBox(width: 8),
-                    Text(
-                      'Budget: ${booking.budgetRange}',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  ],
-                ),
-              ],
-
-              // Action buttons for new requests
-              if (booking.status == BookingStatus.requested) ...[
-                SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => _declineBooking(booking),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: BorderSide(color: Colors.red),
-                        ),
-                        child: Text('Decline'),
-                      ),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _acceptBooking(booking),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                        ),
-                        child: Text('Accept',
-                            style: TextStyle(color: Colors.white)),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUrgencyBadge(String urgency) {
-    Color color;
-    switch (urgency.toLowerCase()) {
-      case 'urgent':
-        color = Colors.red;
-        break;
-      case 'normal':
-        color = Colors.orange;
-        break;
-      default:
-        color = Colors.grey;
-    }
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color),
-      ),
-      child: Text(
-        urgency.toUpperCase(),
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusBadge(BookingStatus status) {
-    Color color;
-    String text;
-
-    switch (status) {
-      case BookingStatus.requested:
-        color = Colors.blue;
-        text = 'NEW';
-        break;
-      case BookingStatus.accepted:
-        color = Colors.green;
-        text = 'ACCEPTED';
-        break;
-      case BookingStatus.inProgress:
-        color = Colors.orange;
-        text = 'IN PROGRESS';
-        break;
-      case BookingStatus.completed:
-        color = Colors.purple;
-        text = 'COMPLETED';
-        break;
-      case BookingStatus.cancelled:
-        color = Colors.red;
-        text = 'CANCELLED';
-        break;
-      case BookingStatus.declined:
-        color = Colors.grey;
-        text = 'DECLINED';
-        break;
-      default:
-        color = Colors.grey;
-        text = status.toString().split('.').last.toUpperCase();
-    }
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
-  }
-
-  void _showBookingDetails(BookingModel booking) {
-    // TODO: Navigate to booking details screen
-    print('Show booking details: ${booking.bookingId}');
-  }
-
-  Future<void> _acceptBooking(BookingModel booking) async {
-    // TODO: Implement accept booking logic
-    print('Accept booking: ${booking.bookingId}');
-  }
-
-  Future<void> _declineBooking(BookingModel booking) async {
-    // TODO: Implement decline booking logic
-    print('Decline booking: ${booking.bookingId}');
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
         duration: Duration(seconds: 3),
       ),
     );
