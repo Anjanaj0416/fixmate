@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../constants/service_constants.dart';
 import 'service_request_flow.dart';
 import 'customer_profile_screen.dart';
-import 'customer_bookings_screen.dart';
+import 'updated_customer_bookings_screen.dart';
 import 'ai_chat_screen.dart'; // ADD THIS IMPORT
 
 class CustomerDashboard extends StatefulWidget {
@@ -567,7 +567,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   Widget _buildBookingsScreen() {
-    return CustomerBookingsScreen();
+    return UpdatedCustomerBookingsScreen();
   }
 
   Widget _buildInboxScreen() {

@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/ml_service.dart';
-import 'worker_detail_screen.dart';
+import 'enhanced_worker_detail_screen.dart';
 
 class WorkerResultsScreen extends StatefulWidget {
   final List<MLWorker> workers;
@@ -494,9 +494,8 @@ class _WorkerResultsScreenState extends State<WorkerResultsScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => WorkerDetailScreen(
+        builder: (context) => EnhancedWorkerDetailScreen(
           worker: worker,
-          problemDescription: widget.problemDescription,
         ),
       ),
     );
