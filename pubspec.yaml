@@ -20,10 +20,8 @@ dependencies:
   path_provider: ^2.1.1
   url_launcher: ^6.2.4
   intl: ^0.18.0
-  firebase_storage: ^12.3.2  
-  path: ^1.8.3
-  cloud_functions: 5.6.2 
-                
+  firebase_storage: ^12.3.2  # Add this line
+  path: ^1.8.3               # Add this line
   
 
 dev_dependencies:

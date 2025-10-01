@@ -1,7 +1,4 @@
 // lib/screens/worker_results_screen.dart
-// COMPLETE FIXED VERSION - Replace entire file
-// Added "See Pictures of the Issue" button functionality
-
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/ml_service.dart';
@@ -86,17 +83,80 @@ class _WorkerResultsScreenState extends State<WorkerResultsScreen> {
                     ),
                   ],
                 ),
+                SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildCompactInfo(
+                        Icons.schedule,
+                        widget.aiAnalysis.timeRequirement,
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: _buildCompactInfo(
+                        Icons.people,
+                        '${widget.workers.length} workers',
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
 
-          // Problem Description Section
-          if (widget.problemDescription.isNotEmpty)
+          // Collapsible Issue Description Button
+          InkWell(
+            onTap: () {
+              setState(() {
+                _isDescriptionExpanded = !_isDescriptionExpanded;
+              });
+            },
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey[300]!),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.description,
+                    color: Colors.blue,
+                    size: 20,
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Issue Description',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    _isDescriptionExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: Colors.blue,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Expandable Description Content
+          if (_isDescriptionExpanded)
             Container(
               width: double.infinity,
               padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: Colors.white,
                 border: Border(
                   bottom: BorderSide(color: Colors.grey[300]!),
                 ),
@@ -105,109 +165,61 @@ class _WorkerResultsScreenState extends State<WorkerResultsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Problem Description:',
+                    widget.problemDescription,
                     style: TextStyle(
-                      fontWeight: FontWeight.bold,
                       fontSize: 14,
                       color: Colors.grey[700],
+                      height: 1.5,
                     ),
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    widget.problemDescription,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    maxLines: _isDescriptionExpanded ? null : 3,
-                    overflow: _isDescriptionExpanded
-                        ? TextOverflow.visible
-                        : TextOverflow.ellipsis,
+                  SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _isDescriptionExpanded = false;
+                      });
+                    },
+                    icon: Icon(Icons.keyboard_arrow_up, size: 18),
+                    label: Text('Hide Description'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[300],
+                      foregroundColor: Colors.grey[800],
+                      elevation: 0,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
                   ),
-                  if (widget.problemDescription.length > 100)
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _isDescriptionExpanded = !_isDescriptionExpanded;
-                        });
-                      },
-                      child: Text(
-                        _isDescriptionExpanded ? 'Show less' : 'Read more',
-                        style: TextStyle(color: Colors.blue),
-                      ),
-                    ),
-                  // ✅ ADDED: "See Pictures" button
-                  if (widget.problemImageUrls.isNotEmpty)
-                    Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: ElevatedButton.icon(
-                        onPressed: _viewIssuePhotos,
-                        icon: Icon(Icons.photo_library, size: 18),
-                        label: Text('See Pictures of the Issue'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
 
-          // Worker List
+          // Workers List Header
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: Colors.white,
+            child: Text(
+              'Available Workers',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+          ),
+
+          // Workers List
           Expanded(
-            child: widget.workers.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.search_off, size: 80, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text(
-                          'No workers found',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: EdgeInsets.all(16),
-                    itemCount: widget.workers.length,
-                    itemBuilder: (context, index) {
-                      return _buildWorkerCard(
-                        context,
-                        widget.workers[index],
-                        index + 1,
-                      );
-                    },
-                  ),
+            child: ListView.builder(
+              padding: EdgeInsets.all(16),
+              itemCount: widget.workers.length,
+              itemBuilder: (context, index) {
+                return _buildWorkerCard(
+                    context, widget.workers[index], index + 1);
+              },
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  // ✅ ADDED: Method to view issue photos
-  void _viewIssuePhotos() {
-    if (widget.problemImageUrls.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('No photos available for this issue'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => IssuePhotoViewerScreen(
-          imageUrls: widget.problemImageUrls,
-          problemDescription: widget.problemDescription,
-        ),
       ),
     );
   }
@@ -215,7 +227,7 @@ class _WorkerResultsScreenState extends State<WorkerResultsScreen> {
   Widget _buildCompactInfo(IconData icon, String text) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: Colors.white),
+        Icon(icon, color: Colors.white70, size: 16),
         SizedBox(width: 6),
         Expanded(
           child: Text(
@@ -318,11 +330,22 @@ class _WorkerResultsScreenState extends State<WorkerResultsScreen> {
                           ),
                         ),
                         SizedBox(height: 4),
-                        Text(
-                          _formatServiceType(worker.serviceType),
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            worker.serviceType.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue.shade700,
+                            ),
                           ),
                         ),
                       ],
@@ -330,105 +353,119 @@ class _WorkerResultsScreenState extends State<WorkerResultsScreen> {
                   ),
                 ],
               ),
-
               SizedBox(height: 16),
 
-              // Stats Section
+              // Worker Stats Row
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  Expanded(
-                    child: _buildStatItem(
-                      Icons.star,
-                      '${worker.rating.toStringAsFixed(1)}',
-                      Colors.amber,
-                    ),
+                  _buildStatItem(
+                    Icons.star,
+                    '${worker.rating}',
+                    Colors.amber,
                   ),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: _buildStatItem(
-                      Icons.work,
-                      '${worker.experienceYears} yrs',
-                      Colors.blue,
-                    ),
+                  Container(
+                    width: 1,
+                    height: 30,
+                    color: Colors.grey[300],
                   ),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: _buildStatItem(
-                      Icons.location_on,
-                      '${worker.distanceKm.toStringAsFixed(1)} km',
-                      Colors.green,
-                    ),
+                  _buildStatItem(
+                    Icons.work,
+                    '${worker.experienceYears} yrs',
+                    Colors.blue,
+                  ),
+                  Container(
+                    width: 1,
+                    height: 30,
+                    color: Colors.grey[300],
+                  ),
+                  _buildStatItem(
+                    Icons.location_on,
+                    '${worker.distanceKm} km',
+                    Colors.green,
                   ),
                 ],
               ),
-
-              SizedBox(height: 12),
-
-              // Price
-              Container(
-                padding: EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.payments, color: Colors.orange, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'LKR ${worker.dailyWageLkr}/day',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orange.shade700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
               SizedBox(height: 16),
 
-              // Action Buttons
+              // Bio (truncated)
+              Text(
+                worker.bio,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey[600],
+                  height: 1.4,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              SizedBox(height: 16),
+
+              // Divider
+              Divider(height: 1, color: Colors.grey[300]),
+              SizedBox(height: 12),
+
+              // Price and Action Button Row
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _showWorkerDetails(context, worker),
-                      icon: Icon(Icons.info_outline, size: 18),
-                      label: Text('Details'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Daily Rate',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
                         ),
                       ),
-                    ),
+                      SizedBox(height: 2),
+                      Text(
+                        'LKR ${worker.dailyWageLkr}',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _callWorker(context, worker),
-                      icon: Icon(Icons.phone, size: 18),
-                      label: Text('Call'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () => _showWorkerDetails(context, worker),
+                        icon: Icon(Icons.info_outline, size: 18),
+                        label: Text('Details'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
-                    ),
+                      SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: () => _callWorker(context, worker),
+                        icon: Icon(Icons.phone, size: 18),
+                        label: Text('Call'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -468,6 +505,44 @@ class _WorkerResultsScreenState extends State<WorkerResultsScreen> {
     );
   }
 
+  Widget _buildDetailCard(
+    IconData icon,
+    String label,
+    String value,
+    Color color,
+  ) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey[600],
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
   void _callWorker(BuildContext context, MLWorker worker) async {
     final Uri phoneUri = Uri(scheme: 'tel', path: worker.phoneNumber);
     try {
@@ -481,177 +556,32 @@ class _WorkerResultsScreenState extends State<WorkerResultsScreen> {
     }
   }
 
+  void _sendSMS(BuildContext context, MLWorker worker) async {
+    final Uri smsUri = Uri(
+      scheme: 'sms',
+      path: worker.phoneNumber,
+      queryParameters: {
+        'body':
+            'Hi ${worker.workerName}, I found your profile on FixMate and would like to discuss a ${worker.serviceType} service.',
+      },
+    );
+    try {
+      if (await canLaunchUrl(smsUri)) {
+        await launchUrl(smsUri);
+      } else {
+        _showErrorSnackBar(context, 'Cannot send SMS');
+      }
+    } catch (e) {
+      _showErrorSnackBar(context, 'Error: $e');
+    }
+  }
+
   void _showErrorSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  String _formatServiceType(String serviceType) {
-    return serviceType
-        .split('_')
-        .map((word) => word[0].toUpperCase() + word.substring(1))
-        .join(' ');
-  }
-}
-
-// ✅ ADDED: New Issue Photo Viewer Screen
-class IssuePhotoViewerScreen extends StatefulWidget {
-  final List<String> imageUrls;
-  final String problemDescription;
-
-  const IssuePhotoViewerScreen({
-    Key? key,
-    required this.imageUrls,
-    required this.problemDescription,
-  }) : super(key: key);
-
-  @override
-  State<IssuePhotoViewerScreen> createState() => _IssuePhotoViewerScreenState();
-}
-
-class _IssuePhotoViewerScreenState extends State<IssuePhotoViewerScreen> {
-  int _currentImageIndex = 0;
-  final PageController _pageController = PageController();
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: Text(
-          'Issue Photos (${_currentImageIndex + 1}/${widget.imageUrls.length})',
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Colors.black87,
-        iconTheme: IconThemeData(color: Colors.white),
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          // Problem description banner
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.2),
-              border: Border(
-                bottom: BorderSide(color: Colors.blue.withOpacity(0.5)),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.description, color: Colors.blue, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'Problem Description',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 8),
-                Text(
-                  widget.problemDescription,
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-
-          // Image viewer with zoom
-          Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: widget.imageUrls.length,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentImageIndex = index;
-                });
-              },
-              itemBuilder: (context, index) {
-                return InteractiveViewer(
-                  minScale: 0.5,
-                  maxScale: 4.0,
-                  child: Center(
-                    child: Image.network(
-                      widget.imageUrls[index],
-                      fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                            color: Colors.blue,
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.error_outline,
-                                  size: 60, color: Colors.red),
-                              SizedBox(height: 16),
-                              Text(
-                                'Failed to load image',
-                                style: TextStyle(color: Colors.white70),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Image navigation dots
-          if (widget.imageUrls.length > 1)
-            Container(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  widget.imageUrls.length,
-                  (index) => Container(
-                    margin: EdgeInsets.symmetric(horizontal: 4),
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: index == _currentImageIndex
-                          ? Colors.blue
-                          : Colors.grey,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
       ),
     );
   }

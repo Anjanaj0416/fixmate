@@ -24,6 +24,7 @@
   },
   "functions": [
     {
+      "source": "functions",
       "codebase": "default",
       "ignore": [
         "node_modules",
@@ -34,35 +35,22 @@
       ],
       "predeploy": [
         "npm --prefix \"$RESOURCE_DIR\" run lint"
-      ],
-      "source": "functions",
-      "runtime": "nodejs18"
+      ]
     }
   ],
   "emulators": {
-    "auth": {
-      "port": 9099
-    },
     "functions": {
       "port": 5001
     },
-    "firestore": {
-      "port": 8080
-    },
     "ui": {
       "enabled": true,
-      "port": 4040
-    },
-    "hub": {
-      "port": 4402
-    },
-    "logging": {
-      "port": 4502
+      "port": 4000
     },
     "singleProjectMode": true,
     "storage": {
-      "port": 9299
+      "port": 9199
     }
+    
   },
   "storage": {
     "rules": "storage.rules"

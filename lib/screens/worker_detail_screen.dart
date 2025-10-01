@@ -10,7 +10,6 @@ import '../services/booking_service.dart';
 import '../services/chat_service.dart';
 import 'chat_screen.dart';
 import '../utils/string_utils.dart';
-import '../services/worker_creation_service.dart';
 
 class WorkerDetailScreen extends StatefulWidget {
   final MLWorker worker;
@@ -48,12 +47,12 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
       print('\n========== BOOKING CREATION START ==========');
 
       // Step 1: Check if worker exists or create new one
+      // CRITICAL FIX: This now returns worker_id (HM_XXXX), not Firebase UID
       String? existingWorkerId = await WorkerStorageService.getExistingWorkerId(
         email: widget.worker.email,
         phoneNumber: widget.worker.phoneNumber,
       );
 
-      // CRITICAL FIX: Declare workerId ONCE and assign properly
       String workerId;
 
       if (existingWorkerId != null) {
@@ -66,8 +65,8 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
         print('📝 Creating new worker account...');
         _showSnackBar('Creating worker profile...', Colors.orange);
 
-        // ✅ FIX: Assign to workerId, don't declare a new variable
-        workerId = await WorkerCreationService.createWorkerFromML(
+        // CRITICAL FIX: storeWorkerFromML now returns worker_id (HM_XXXX)
+        workerId = await WorkerStorageService.storeWorkerFromML(
           mlWorker: widget.worker,
         );
         print('✅ New worker created: $workerId');
@@ -109,6 +108,7 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
       // Step 3: Create booking with worker_id (HM_XXXX format)
       print('📝 Creating booking with worker_id: $workerId');
 
+      // CRITICAL FIX: Pass worker_id (HM_XXXX), not Firebase UID
       String bookingId = await BookingService.createBooking(
         customerId: customerId,
         customerName: customerName,

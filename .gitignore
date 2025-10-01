@@ -48,5 +48,3 @@ app.*.map.json
 .env
 .env.local
 .env.production
-
-.firebase.json
