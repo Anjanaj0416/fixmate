@@ -8,12 +8,14 @@ class WorkerResultsScreen extends StatefulWidget {
   final List<MLWorker> workers;
   final AIAnalysis aiAnalysis;
   final String problemDescription;
+  final List<String> problemImageUrls;
 
   const WorkerResultsScreen({
     Key? key,
     required this.workers,
     required this.aiAnalysis,
     required this.problemDescription,
+    this.problemImageUrls = const [],
   }) : super(key: key);
 
   @override

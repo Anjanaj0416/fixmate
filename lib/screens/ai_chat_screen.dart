@@ -11,6 +11,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/storage_service.dart';
 import 'enhanced_worker_selection_screen.dart';
+import 'worker_results_screen.dart';
 
 class ChatMessage {
   final String text;
@@ -336,47 +337,23 @@ class _AIChatScreenState extends State<AIChatScreen> {
           '📊 Confidence: ${(mlResponse.aiAnalysis.servicePredictions.first.confidence * 100).toStringAsFixed(1)}%');
 
       // Get the top prediction
-      var topPrediction = mlResponse.aiAnalysis.servicePredictions.first;
-      String predictedServiceType = topPrediction.serviceType;
-
-      // Extract sub-service and issue type from service type
-      List<String> serviceParts = predictedServiceType.split('_');
-      String serviceType =
-          serviceParts.isNotEmpty ? serviceParts[0] : predictedServiceType;
-      String subService =
-          serviceParts.length > 1 ? serviceParts[1] : serviceType;
-      String issueType = serviceParts.length > 2 ? serviceParts[2] : 'general';
-
-      print('🎯 Using service type: $serviceType');
-      print('🎯 Using sub-service: $subService');
-      print('🎯 Using issue type: $issueType');
-
-      setState(() => _isLoading = false);
-
-      // Step 3: Navigate to enhanced worker selection
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => EnhancedWorkerSelectionScreen(
-            serviceType: serviceType,
-            subService: subService,
-            issueType: issueType,
+          builder: (context) => WorkerResultsScreen(
+            workers: mlResponse.workers, // Workers from ML model dataset
+            aiAnalysis: mlResponse.aiAnalysis,
             problemDescription: _lastProblemDescription!,
-            problemImageUrls: uploadedPhotoUrls,
-            location: location,
-            address: location,
-            urgency: _determineUrgency(mlResponse.aiAnalysis),
-            budgetRange: 'negotiable',
-            scheduledDate: DateTime.now().add(Duration(days: 1)),
-            scheduledTime: '09:00 AM',
+            problemImageUrls: uploadedPhotoUrls, // ✅ ADD THIS LINE
           ),
         ),
       );
 
       setState(() {
         _messages.add(ChatMessage(
-          text: '✅ Found workers matching your needs!\n'
-              '🔧 Service: ${_formatServiceType(serviceType)}\n'
+          text:
+              '✅ Found ${mlResponse.workers.length} workers matching your needs!\n'
+              '🔧 Service: ${_formatServiceType(mlResponse.aiAnalysis.servicePredictions.first.serviceType)}\n'
               '📍 Location: $location',
           isUser: false,
           timestamp: DateTime.now(),
@@ -387,7 +364,8 @@ class _AIChatScreenState extends State<AIChatScreen> {
       print('❌ Error finding workers: $e');
       setState(() {
         _messages.add(ChatMessage(
-          text: 'Failed to find workers: ${e.toString()}',
+          text:
+              'Failed to find workers: ${e.toString()}\n\nPlease make sure the ML service is running on http://localhost:8000',
           isUser: false,
           timestamp: DateTime.now(),
           isError: true,
