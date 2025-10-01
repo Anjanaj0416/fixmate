@@ -1,11 +1,13 @@
 // lib/screens/service_request_flow.dart
+// COMPLETE FIXED VERSION - Works on Flutter Web with Firebase Storage Emulator
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'enhanced_worker_selection_screen.dart';
 import '../services/ml_service.dart';
+import '../services/storage_service.dart';
 import 'worker_results_screen.dart';
 
 class ServiceRequestFlow extends StatefulWidget {
@@ -28,7 +30,6 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
   int _currentStep = 0;
   final int _totalSteps = 4;
 
-  // Add these missing variables:
   bool _isLoading = false;
   String _currentAddress = '';
 
@@ -39,10 +40,9 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
   String? _waterSupplyStatus;
   String _urgency = 'Same day';
   String _budgetRange = 'LKR 10000-LKR 15000';
-  List<File> _selectedImages = [];
-
-  final TextEditingController _descriptionController = TextEditingController();
+  final List<XFile> _selectedImages = []; // ✅ Changed to XFile
   final ImagePicker _picker = ImagePicker();
+  final TextEditingController _descriptionController = TextEditingController();
 
   @override
   void dispose() {
@@ -50,157 +50,193 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
     super.dispose();
   }
 
+  bool _canProceed() {
+    switch (_currentStep) {
+      case 0:
+        return _selectedIssueType != null;
+      case 1:
+        return _selectedLocation != null;
+      case 2:
+        return _problemDescription.trim().isNotEmpty;
+      case 3:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  void _nextStep() {
+    if (_canProceed() && _currentStep < _totalSteps - 1) {
+      setState(() => _currentStep++);
+    }
+  }
+
+  void _previousStep() {
+    if (_currentStep > 0) {
+      setState(() => _currentStep--);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: Text('${widget.serviceName} Services'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        bottom: PreferredSize(
-          preferredSize: Size.fromHeight(8),
-          child: Container(
-            margin: EdgeInsets.symmetric(horizontal: 16),
-            child: LinearProgressIndicator(
-              value: (_currentStep + 1) / _totalSteps,
-              backgroundColor: Colors.grey[300],
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-            ),
-          ),
-        ),
+        title: Text(widget.serviceName),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: _isLoading
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Uploading photos and finding workers...'),
+                ],
+              ),
+            )
+          : Column(
               children: [
-                Text(
-                  _getStepTitle(),
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  'Step ${_currentStep + 1} of $_totalSteps',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                  ),
-                ),
+                _buildProgressIndicator(),
+                Expanded(child: _buildStepContent()),
+                _buildNavigationButtons(),
               ],
             ),
-          ),
-          Expanded(
-            child: _buildCurrentStep(),
-          ),
-          _buildBottomNavigation(),
-        ],
+    );
+  }
+
+  Widget _buildProgressIndicator() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      color: Colors.blue.shade50,
+      child: Row(
+        children: List.generate(_totalSteps, (index) {
+          bool isCompleted = index < _currentStep;
+          bool isCurrent = index == _currentStep;
+          return Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isCompleted || isCurrent
+                          ? Colors.blue
+                          : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                if (index < _totalSteps - 1) SizedBox(width: 4),
+              ],
+            ),
+          );
+        }),
       ),
     );
   }
 
-  String _getStepTitle() {
+  Widget _buildStepContent() {
     switch (_currentStep) {
       case 0:
-        return 'Issue Details';
-      case 1:
-        return 'Location & Details';
-      case 2:
-        return 'Additional Information';
-      case 3:
-        return 'Review & Confirm';
-      default:
-        return 'Service Request';
-    }
-  }
-
-  Widget _buildCurrentStep() {
-    switch (_currentStep) {
-      case 0:
-        return _buildIssueDetailsStep();
+        return _buildIssueTypeStep();
       case 1:
         return _buildLocationStep();
       case 2:
-        return _buildAdditionalInfoStep();
+        return _buildDescriptionStep();
       case 3:
-        return _buildReviewStep();
+        return _buildAdditionalInfoStep();
       default:
         return Container();
     }
   }
 
-  Widget _buildIssueDetailsStep() {
-    List<Map<String, String>> issueTypes = _getIssueTypes();
-
+  Widget _buildIssueTypeStep() {
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'What type of ${widget.serviceName.toLowerCase()} issue are you experiencing?',
+            'What type of issue are you experiencing?',
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          SizedBox(height: 20),
-          ...issueTypes.map((issue) => _buildRadioOption(
+          SizedBox(height: 8),
+          Text(
+            'Step ${_currentStep + 1} of $_totalSteps',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+          SizedBox(height: 24),
+          ..._getIssueTypes().map((issue) => _buildRadioOption(
                 issue['label']!,
                 issue['value']!,
                 _selectedIssueType,
                 (value) => setState(() => _selectedIssueType = value),
               )),
-          SizedBox(height: 16),
-          _buildInfoBox(),
         ],
       ),
     );
   }
 
   Widget _buildLocationStep() {
-    List<Map<String, String>> locations = _getLocationOptions();
-
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Where is the ${widget.serviceName.toLowerCase()} service needed?',
+            'Where is the issue located?',
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          SizedBox(height: 20),
-          ...locations.map((location) => _buildRadioOption(
+          SizedBox(height: 8),
+          Text(
+            'Step ${_currentStep + 1} of $_totalSteps',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+          SizedBox(height: 24),
+          ..._getLocationOptions().map((location) => _buildRadioOption(
                 location['label']!,
                 location['value']!,
                 _selectedLocation,
                 (value) => setState(() => _selectedLocation = value),
               )),
-          SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDescriptionStep() {
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
-            'Problem Description',
+            'Describe the Problem',
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
           ),
           SizedBox(height: 8),
+          Text(
+            'Step ${_currentStep + 1} of $_totalSteps',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+          SizedBox(height: 24),
           Container(
-            padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[300]!),
             ),
+            padding: EdgeInsets.all(12),
             child: TextField(
               controller: _descriptionController,
               maxLines: 4,
@@ -242,6 +278,19 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
+            'Additional Information',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Step ${_currentStep + 1} of $_totalSteps',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+          SizedBox(height: 24),
+          Text(
             'Service Urgency',
             style: TextStyle(
               fontSize: 16,
@@ -252,13 +301,7 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
           _buildDropdown(
             value: _urgency,
             hint: 'Select urgency',
-            items: [
-              'Emergency (ASAP)',
-              'Same day',
-              'Within 2-3 days',
-              'Within a week',
-              'Flexible'
-            ],
+            items: ['Same day', 'Within 2-3 days', 'Within a week', 'Flexible'],
             onChanged: (value) =>
                 setState(() => _urgency = value ?? 'Same day'),
           ),
@@ -284,7 +327,7 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
             onChanged: (value) =>
                 setState(() => _budgetRange = value ?? 'LKR 10000-LKR 15000'),
           ),
-          SizedBox(height: 24),
+          SizedBox(height: 20),
           Text(
             'Upload photos (optional)',
             style: TextStyle(
@@ -295,124 +338,401 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
           SizedBox(height: 8),
           Text(
             'Photos help service providers understand your needs better',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 14,
-            ),
+            style: TextStyle(color: Colors.grey[600], fontSize: 14),
           ),
-          SizedBox(height: 16),
-          _buildImageUploadSection(),
-          SizedBox(height: 16),
-          _buildInfoBox(),
+          SizedBox(height: 12),
+          _buildPhotoUploadSection(),
         ],
       ),
     );
   }
 
-  Widget _buildReviewStep() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Job Summary',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+  // ✅ FIXED: Photo upload section that works on Web
+  Widget _buildPhotoUploadSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ElevatedButton.icon(
+          onPressed: () => _showImageSourceDialog(),
+          icon: Icon(Icons.add_photo_alternate),
+          label: Text('Choose from Gallery'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue.shade50,
+            foregroundColor: Colors.blue,
+            elevation: 0,
           ),
-          SizedBox(height: 20),
-          _buildSummaryContainer(),
-          SizedBox(height: 24),
-          _buildInfoBox(),
-          SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _canProceed() ? _submitRequest : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: Text(
-                'Confirm & Get Quotes',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-            ),
+        ),
+        SizedBox(height: 12),
+        if (_selectedImages.isNotEmpty)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: List.generate(_selectedImages.length, (index) {
+              return Stack(
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: kIsWeb
+                          ? Image.network(
+                              _selectedImages[index].path,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                // ✅ For Web, use FutureBuilder to read bytes
+                                return FutureBuilder<Uint8List>(
+                                  future: _selectedImages[index].readAsBytes(),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.hasData) {
+                                      return Image.memory(
+                                        snapshot.data!,
+                                        fit: BoxFit.cover,
+                                      );
+                                    }
+                                    return Center(
+                                      child: CircularProgressIndicator(),
+                                    );
+                                  },
+                                );
+                              },
+                            )
+                          : Image.file(
+                              File(_selectedImages[index].path),
+                              fit: BoxFit.cover,
+                            ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: GestureDetector(
+                      onTap: () => _removeImage(index),
+                      child: Container(
+                        padding: EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.close,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }),
           ),
-        ],
+      ],
+    );
+  }
+
+  void _showImageSourceDialog() {
+    if (kIsWeb) {
+      // On web, only gallery is available
+      _pickImage(ImageSource.gallery);
+    } else {
+      // On mobile, show both options
+      showModalBottomSheet(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: Icon(Icons.photo_library),
+                title: Text('Choose from Gallery'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.camera_alt),
+                title: Text('Take a Photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? image = await _picker.pickImage(source: source);
+      if (image != null) {
+        setState(() {
+          _selectedImages.add(image);
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error picking image: $e')),
+      );
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
+    });
+  }
+
+  // ✅ FIXED: Upload photos using XFile (works with emulator)
+  Future<void> _submitRequest() async {
+    if (!_canProceed()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    List<String> uploadedImageUrls = [];
+
+    try {
+      // Get current user
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('Please login to continue');
+      }
+
+      // ✅ STEP 1: Upload photos to Firebase Storage (Emulator)
+      if (_selectedImages.isNotEmpty) {
+        print(
+            '📸 Uploading ${_selectedImages.length} photos to Firebase Storage Emulator...');
+
+        for (XFile imageFile in _selectedImages) {
+          try {
+            // Upload to Firebase Storage (will use emulator if configured)
+            String downloadUrl = await StorageService.uploadIssuePhoto(
+              imageFile: imageFile,
+            );
+
+            uploadedImageUrls.add(downloadUrl);
+            print('✅ Photo uploaded: $downloadUrl');
+          } catch (e) {
+            print('❌ Failed to upload photo: $e');
+            // Continue with other photos even if one fails
+          }
+        }
+
+        print('✅ Successfully uploaded ${uploadedImageUrls.length} photos');
+      }
+
+      // ✅ STEP 2: Get user's location from database
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      String userLocation = 'colombo'; // Default
+      if (userDoc.exists) {
+        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+        userLocation =
+            (userData['nearestTown'] ?? 'colombo').toString().toLowerCase();
+      }
+
+      print('\n========== MANUAL BOOKING ML SEARCH ==========');
+      print('📝 Description: $_problemDescription');
+      print('📍 Location: $userLocation');
+      print('🔧 Category: ${widget.serviceType}');
+      print('📸 Photos: ${uploadedImageUrls.length} uploaded');
+
+      // ✅ STEP 3: Call ML service to get worker recommendations
+      MLRecommendationResponse mlResponse = await MLService.searchWorkers(
+        description: _problemDescription,
+        location: userLocation,
+      );
+
+      print('✅ ML Analysis complete!');
+      print('📊 Found ${mlResponse.workers.length} workers');
+      print('========== MANUAL BOOKING ML SEARCH END ==========\n');
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      // ✅ STEP 4: Navigate to worker results screen WITH uploaded photos
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => WorkerResultsScreen(
+            workers: mlResponse.workers,
+            aiAnalysis: mlResponse.aiAnalysis,
+            problemDescription: _problemDescription,
+            problemImageUrls: uploadedImageUrls, // ✅ Pass uploaded photos
+          ),
+        ),
+      );
+    } catch (e) {
+      print('❌ Error in manual booking flow: $e');
+      _showErrorSnackBar('Failed to process request: ${e.toString()}');
+
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
 
-  Widget _buildSummaryContainer() {
+  Widget _buildNavigationButtons() {
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 2),
+            color: Colors.grey.shade300,
+            blurRadius: 4,
+            offset: Offset(0, -2),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          _buildSummaryRow('Issue Type:',
-              _selectedIssueType?.replaceAll('_', ' ') ?? 'Not specified'),
-          _buildSummaryRow('Location:',
-              _selectedLocation?.replaceAll('_', ' ') ?? 'Not specified'),
-          _buildSummaryRow(
-              'Description:',
-              _problemDescription.isNotEmpty
-                  ? _problemDescription
-                  : 'No description provided'),
-          if (widget.serviceType == 'plumbing' && _waterSupplyStatus != null)
-            _buildSummaryRow('Water Supply Status:', _waterSupplyStatus!),
-          _buildSummaryRow('Urgency:', _urgency),
-          _buildSummaryRow('Budget Range:', _budgetRange),
-          if (_selectedImages.isNotEmpty)
-            _buildSummaryRow(
-                'Photos:', '${_selectedImages.length} image(s) attached'),
+          if (_currentStep > 0)
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _previousStep,
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  side: BorderSide(color: Colors.blue),
+                ),
+                child: Text('Back & Edit'),
+              ),
+            ),
+          if (_currentStep > 0) SizedBox(width: 12),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: _canProceed()
+                  ? (_currentStep == _totalSteps - 1
+                      ? _submitRequest
+                      : _nextStep)
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                padding: EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: Text(
+                _currentStep == _totalSteps - 1 ? 'Next' : 'Next',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryRow(String label, String value) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
+  Widget _buildDropdown({
+    required String? value,
+    required String hint,
+    required List<String> items,
+    required Function(String?) onChanged,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: EdgeInsets.symmetric(horizontal: 12),
+      child: DropdownButton<String>(
+        value: value,
+        hint: Text(hint),
+        isExpanded: true,
+        underline: SizedBox(),
+        items: items.map((item) {
+          return DropdownMenuItem(
+            value: item,
+            child: Text(item),
+          );
+        }).toList(),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _buildRadioOption(
+    String label,
+    String value,
+    String? groupValue,
+    Function(String?) onChanged,
+  ) {
+    return InkWell(
+      onTap: () => onChanged(value),
+      child: Container(
+        margin: EdgeInsets.only(bottom: 12),
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: groupValue == value ? Colors.blue : Colors.grey.shade300,
+            width: groupValue == value ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(8),
+          color: groupValue == value ? Colors.blue.shade50 : Colors.white,
+        ),
+        child: Row(
+          children: [
+            Radio<String>(
+              value: value,
+              groupValue: groupValue,
+              onChanged: onChanged,
+              activeColor: Colors.blue,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight:
+                      groupValue == value ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoBox() {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[700],
-              ),
-            ),
-          ),
+          Icon(Icons.info_outline, color: Colors.blue, size: 20),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.w400,
-              ),
+              'Provide as much detail as possible to help us match you with the right service provider.',
+              style: TextStyle(color: Colors.blue.shade900, fontSize: 13),
             ),
           ),
         ],
@@ -462,381 +782,5 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
       {'label': 'Outdoor area', 'value': 'outdoor_area'},
       {'label': 'Other', 'value': 'other'},
     ];
-  }
-
-  Widget _buildRadioOption(String label, String value, String? selectedValue,
-      Function(String) onChanged) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      child: RadioListTile<String>(
-        value: value,
-        groupValue: selectedValue,
-        onChanged: (value) => onChanged(value!),
-        title: Text(label),
-        activeColor: Colors.blue,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        tileColor: Colors.white,
-      ),
-    );
-  }
-
-  Widget _buildDropdown({
-    required String? value,
-    required String hint,
-    required List<String> items,
-    required Function(String?) onChanged,
-  }) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          hint: Text(hint),
-          isExpanded: true,
-          items: items.map((item) {
-            return DropdownMenuItem<String>(
-              value: item,
-              child: Text(item),
-            );
-          }).toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImageUploadSection() {
-    return Column(
-      children: [
-        // Only gallery upload option (camera removed as requested)
-        SizedBox(
-          width: double.infinity,
-          child: _buildImageUploadCard(
-            icon: Icons.photo_library,
-            label: 'Choose from Gallery',
-            onTap: () => _pickImage(ImageSource.gallery),
-          ),
-        ),
-        if (_selectedImages.isNotEmpty) ...[
-          SizedBox(height: 16),
-          _buildSelectedImagesGrid(),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildImageUploadCard({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey[300]!),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Colors.blue, size: 24),
-            SizedBox(width: 12),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.blue,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSelectedImagesGrid() {
-    return Container(
-      height: 120,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _selectedImages.length,
-        itemBuilder: (context, index) {
-          return Container(
-            margin: EdgeInsets.only(right: 12),
-            child: Stack(
-              children: [
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    image: DecorationImage(
-                      image: FileImage(_selectedImages[index]),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: GestureDetector(
-                    onTap: () => _removeImage(index),
-                    child: Container(
-                      padding: EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.close,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildInfoBox() {
-    return Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.blue[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue[100]!),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.info_outline, color: Colors.blue[600], size: 20),
-          SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Service providers will review your request and send quotes.',
-                  style: TextStyle(
-                    color: Colors.blue[700],
-                    fontSize: 12,
-                  ),
-                ),
-                Text(
-                  'You\'ll be notified when quotes are available.',
-                  style: TextStyle(
-                    color: Colors.blue[600],
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomNavigation() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          if (_currentStep > 0)
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _goToPreviousStep,
-                style: OutlinedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text('Back & Edit'),
-              ),
-            ),
-          if (_currentStep > 0) SizedBox(width: 16),
-          Expanded(
-            child: ElevatedButton(
-              onPressed: _canProceed() ? _goToNextStep : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                padding: EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: Text(
-                _currentStep < _totalSteps - 1 ? 'Next' : 'Submit Request',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  bool _canProceed() {
-    switch (_currentStep) {
-      case 0:
-        return _selectedIssueType != null;
-      case 1:
-        return _selectedLocation != null && _problemDescription.isNotEmpty;
-      case 2:
-        return true; // All fields in this step are optional or have defaults
-      case 3:
-        return true; // Review step
-      default:
-        return false;
-    }
-  }
-
-  void _goToPreviousStep() {
-    if (_currentStep > 0) {
-      setState(() {
-        _currentStep--;
-      });
-    }
-  }
-
-  void _goToNextStep() {
-    if (_currentStep < _totalSteps - 1) {
-      setState(() {
-        _currentStep++;
-      });
-    } else {
-      _submitRequest();
-    }
-  }
-
-  Future<void> _pickImage(ImageSource source) async {
-    try {
-      final XFile? image = await _picker.pickImage(source: source);
-      if (image != null) {
-        setState(() {
-          _selectedImages.add(File(image.path));
-        });
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error picking image: $e')),
-      );
-    }
-  }
-
-  void _removeImage(int index) {
-    setState(() {
-      _selectedImages.removeAt(index);
-    });
-  }
-
-  Future<void> _submitRequest() async {
-    if (!_canProceed()) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Get current user
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception('Please login to continue');
-      }
-
-      // Get user's location from database
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      String userLocation = 'colombo'; // Default
-      if (userDoc.exists) {
-        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
-        userLocation =
-            (userData['nearestTown'] ?? 'colombo').toString().toLowerCase();
-      }
-
-      print('\n========== MANUAL BOOKING ML SEARCH ==========');
-      print('📝 Description: $_problemDescription');
-      print('📍 Location: $userLocation');
-      print('🔧 Category: ${widget.serviceType}');
-
-      // Call ML service to get worker recommendations
-      MLRecommendationResponse mlResponse = await MLService.searchWorkers(
-        description: _problemDescription,
-        location: userLocation,
-      );
-
-      print('✅ ML Analysis complete!');
-      print('📊 Found ${mlResponse.workers.length} workers');
-      print('========== MANUAL BOOKING ML SEARCH END ==========\n');
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      // Navigate to worker results screen
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => WorkerResultsScreen(
-            workers: mlResponse.workers,
-            aiAnalysis: mlResponse.aiAnalysis,
-            problemDescription: _problemDescription,
-            problemImageUrls: [], // No images in manual flow yet
-          ),
-        ),
-      );
-    } catch (e) {
-      print('❌ Error in manual booking flow: $e');
-      _showErrorSnackBar('Failed to find workers: ${e.toString()}');
-
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-// Also add this helper method to handle error display:
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
   }
 }
