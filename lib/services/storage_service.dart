@@ -88,6 +88,22 @@ class StorageService {
     }
   }
 
+  Future<void> testStorageEmulator() async {
+    try {
+      final storage = FirebaseStorage.instance;
+      final ref = storage.ref().child('test/test.txt');
+
+      // Try to upload test data
+      await ref.putString('Test data from Flutter');
+      print('✅ Storage emulator test passed!');
+
+      // Clean up
+      await ref.delete();
+    } catch (e) {
+      print('❌ Storage emulator test failed: $e');
+    }
+  }
+
   /// Get content type based on file extension
   static String _getContentType(String extension) {
     switch (extension.toLowerCase()) {

@@ -84,9 +84,10 @@ class _BookingDetailCustomerScreenState
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => IssuePhotoViewerScreen(
+        builder: (context) => IssuePhotoViewerScreenCustomer(
           imageUrls: widget.booking.problemImageUrls,
           problemDescription: widget.booking.problemDescription,
+          workerName: widget.booking.workerName,
         ),
       ),
     );
@@ -457,75 +458,97 @@ class _BookingDetailCustomerScreenState
 }
 
 // Photo viewer screen
-class IssuePhotoViewerScreen extends StatefulWidget {
+class IssuePhotoViewerScreenCustomer extends StatefulWidget {
   final List<String> imageUrls;
   final String problemDescription;
+  final String workerName;
 
-  const IssuePhotoViewerScreen({
+  const IssuePhotoViewerScreenCustomer({
     Key? key,
     required this.imageUrls,
     required this.problemDescription,
+    required this.workerName,
   }) : super(key: key);
 
   @override
-  State<IssuePhotoViewerScreen> createState() => _IssuePhotoViewerScreenState();
+  State<IssuePhotoViewerScreenCustomer> createState() =>
+      _IssuePhotoViewerScreenCustomerState();
 }
 
-class _IssuePhotoViewerScreenState extends State<IssuePhotoViewerScreen> {
-  int _currentIndex = 0;
+class _IssuePhotoViewerScreenCustomerState
+    extends State<IssuePhotoViewerScreenCustomer> {
+  late PageController _pageController;
+  int _currentImageIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
         title: Text('Issue Photos'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.black87,
+        elevation: 0,
       ),
       body: Column(
         children: [
-          // Image viewer
+          // Image viewer with page view
           Expanded(
             child: PageView.builder(
+              controller: _pageController,
               itemCount: widget.imageUrls.length,
               onPageChanged: (index) {
-                setState(() => _currentIndex = index);
+                setState(() {
+                  _currentImageIndex = index;
+                });
               },
               itemBuilder: (context, index) {
-                return Container(
-                  color: Colors.black,
+                return Center(
                   child: InteractiveViewer(
-                    child: Center(
-                      child: Image.network(
-                        widget.imageUrls[index],
-                        fit: BoxFit.contain,
-                        loadingBuilder: (context, child, progress) {
-                          if (progress == null) return child;
-                          return Center(
-                            child: CircularProgressIndicator(
-                              value: progress.expectedTotalBytes != null
-                                  ? progress.cumulativeBytesLoaded /
-                                      progress.expectedTotalBytes!
-                                  : null,
-                            ),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.error, size: 48, color: Colors.red),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Failed to load image',
-                                  style: TextStyle(color: Colors.white),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: Image.network(
+                      widget.imageUrls[index],
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: Colors.orange,
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error_outline,
+                                  color: Colors.white, size: 48),
+                              SizedBox(height: 8),
+                              Text(
+                                'Failed to load image',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ),
                 );
@@ -533,40 +556,71 @@ class _IssuePhotoViewerScreenState extends State<IssuePhotoViewerScreen> {
             ),
           ),
 
-          // Photo counter and description
+          // Problem description at bottom
           Container(
-            color: Colors.white,
+            width: double.infinity,
             padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              border: Border(
+                top: BorderSide(color: Colors.grey[800]!),
+              ),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Photo ${_currentIndex + 1} of ${widget.imageUrls.length}',
+                  'Problem Description:',
                   style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    fontSize: 16,
                   ),
                 ),
-                if (widget.problemDescription.isNotEmpty) ...[
-                  SizedBox(height: 8),
-                  Divider(),
-                  SizedBox(height: 8),
-                  Text(
-                    'Problem Description:',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
+                SizedBox(height: 4),
+                Text(
+                  widget.problemDescription,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    widget.problemDescription,
-                    style: TextStyle(fontSize: 14),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Worker: ${widget.workerName}',
+                  style: TextStyle(
+                    color: Colors.blue[300],
+                    fontSize: 13,
                   ),
-                ],
+                ),
               ],
             ),
           ),
+
+          // Image navigation dots (if multiple images)
+          if (widget.imageUrls.length > 1)
+            Container(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              color: Colors.black87,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  widget.imageUrls.length,
+                  (index) => Container(
+                    margin: EdgeInsets.symmetric(horizontal: 4),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentImageIndex == index
+                          ? Colors.orange
+                          : Colors.grey[600],
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

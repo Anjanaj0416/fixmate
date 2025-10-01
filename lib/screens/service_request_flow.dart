@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'enhanced_worker_selection_screen.dart';
+import '../services/storage_service.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ServiceRequestFlow extends StatefulWidget {
   final String serviceType;
@@ -765,23 +767,169 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
     });
 
     try {
-      // Show confirmation dialog first
+      // ✅ STEP 1: Upload images to Firebase Storage first
+      List<String> uploadedPhotoUrls = [];
+
+      if (_selectedImages.isNotEmpty) {
+        print('📤 Starting upload of ${_selectedImages.length} photo(s)...');
+
+        // Show upload progress
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Text(
+                    'Uploading ${_selectedImages.length} photo(s) to Firebase Storage...'),
+              ],
+            ),
+            duration: Duration(seconds: 30),
+            backgroundColor: Colors.blue,
+          ),
+        );
+
+        // Convert File to XFile and upload each image
+        int successCount = 0;
+        for (int i = 0; i < _selectedImages.length; i++) {
+          File imageFile = _selectedImages[i];
+          try {
+            print('📸 Uploading photo ${i + 1}/${_selectedImages.length}...');
+
+            // Convert File to XFile
+            XFile xFile = XFile(imageFile.path);
+
+            // Upload to Firebase Storage
+            String photoUrl = await StorageService.uploadIssuePhoto(
+              imageFile: xFile,
+            );
+
+            uploadedPhotoUrls.add(photoUrl);
+            successCount++;
+            print('✅ Photo ${i + 1} uploaded successfully: $photoUrl');
+          } catch (e) {
+            print('❌ Failed to upload photo ${i + 1}: ${imageFile.path}');
+            print('   Error: $e');
+            // Continue with other photos even if one fails
+          }
+        }
+
+        // Hide upload progress snackbar
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+        if (uploadedPhotoUrls.isEmpty && _selectedImages.isNotEmpty) {
+          // All uploads failed
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.error, color: Colors.white),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                        'Failed to upload photos. Please check your connection and try again.'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 5),
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+
+        // Show success message for uploads
+        if (successCount > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('${successCount} photo(s) uploaded successfully!'),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+
+        if (successCount < _selectedImages.length) {
+          // Some uploads failed
+          await Future.delayed(Duration(seconds: 2));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Warning: ${_selectedImages.length - successCount} photo(s) failed to upload'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+
+      // ✅ STEP 2: Show confirmation dialog
       bool? confirmed = await showDialog<bool>(
         context: context,
+        barrierDismissible: false,
         builder: (context) => AlertDialog(
           title: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green),
-              SizedBox(width: 8),
-              Text('Request Submitted!'),
+              Icon(Icons.check_circle, color: Colors.green, size: 32),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text('Request Submitted!'),
+              ),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Your service request has been submitted successfully.'),
+              Text(
+                'Your service request has been submitted successfully.',
+                style: TextStyle(fontSize: 16),
+              ),
               SizedBox(height: 16),
+
+              // Show photo upload status
+              if (uploadedPhotoUrls.isNotEmpty) ...[
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.photo_library, color: Colors.blue, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        '${uploadedPhotoUrls.length} photo(s) attached',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.blue[700],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 12),
+              ],
+
               Text(
                 'Now you can browse and select from available service providers in your area.',
                 style: TextStyle(fontSize: 14, color: Colors.grey[600]),
@@ -791,15 +939,24 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
           actions: [
             ElevatedButton(
               onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: Text('OK', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              ),
+              child: Text(
+                'Continue',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
             ),
           ],
         ),
       );
 
+      // ✅ STEP 3: Navigate to worker selection screen
       if (confirmed == true) {
-        // Navigate to enhanced worker selection screen
+        print(
+            '✅ Navigating to worker selection with ${uploadedPhotoUrls.length} photo URLs');
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -809,39 +966,47 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
               issueType: _selectedIssueType ?? 'other',
               problemDescription: _problemDescription,
               problemImageUrls:
-                  _selectedImages.map((file) => file.path).toList(),
+                  uploadedPhotoUrls, // ✅ CRITICAL: Pass Firebase Storage URLs
               location: _selectedLocation ?? 'other',
               address: _currentAddress,
               urgency: _urgency,
               budgetRange: _budgetRange,
-              scheduledDate:
-                  DateTime.now().add(Duration(days: 1)), // Default to tomorrow
+              scheduledDate: DateTime.now().add(Duration(days: 1)),
               scheduledTime: _urgency == 'Same day'
-                  ? 'Same day'
-                  : 'Morning (9 AM - 12 PM)',
+                  ? 'As soon as possible'
+                  : '09:00 AM - 12:00 PM',
             ),
           ),
         );
       }
     } catch (e) {
-      _showErrorSnackBar('Failed to submit request: ${e.toString()}');
+      print('❌ Error in _submitRequest: $e');
+      print('   Stack trace: ${StackTrace.current}');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error, color: Colors.white),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Failed to submit request: ${e.toString()}'),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: () => _submitRequest(),
+          ),
+        ),
+      );
     } finally {
       setState(() {
         _isLoading = false;
       });
     }
-  }
-
-// Also add this helper method to handle error display:
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
   }
 }
