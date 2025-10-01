@@ -1,12 +1,33 @@
 // lib/screens/ai_chat_screen.dart
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
+// FIXED VERSION - Gets location from Firebase user collection (nearestTown)
+// Replace your existing ai_chat_screen.dart with this file
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../services/openai_service.dart';
 import '../services/ml_service.dart';
 import 'worker_results_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class ChatMessage {
+  final String text;
+  final bool isUser;
+  final DateTime timestamp;
+  final XFile? image;
+  final bool showOptions;
+  final bool isError;
+
+  ChatMessage({
+    required this.text,
+    required this.isUser,
+    required this.timestamp,
+    this.image,
+    this.showOptions = false,
+    this.isError = false,
+  });
+}
 
 class AIChatScreen extends StatefulWidget {
   @override
@@ -16,89 +37,159 @@ class AIChatScreen extends StatefulWidget {
 class _AIChatScreenState extends State<AIChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final ImagePicker _imagePicker = ImagePicker();
-
-  List<ChatMessage> _messages = [];
+  final List<ChatMessage> _messages = [];
   bool _isLoading = false;
   XFile? _selectedImage;
-  String? _lastProblemDescription; // Store for ML model
+  String? _lastProblemDescription;
+  String? _userLocation; // Store user's nearest town
 
   @override
   void initState() {
     super.initState();
-    _addWelcomeMessage();
+    _loadUserLocation(); // Load location on init
+    _messages.add(ChatMessage(
+      text: 'Hello! I\'m your AI assistant. You can:\n\n'
+          '📸 Upload a photo of any issue\n'
+          '💬 Describe your problem in text\n\n'
+          'I\'ll analyze it and help you find skilled workers or provide repair tips!',
+      isUser: false,
+      timestamp: DateTime.now(),
+    ));
   }
 
-  void _addWelcomeMessage() {
-    setState(() {
-      _messages.add(ChatMessage(
-        text:
-            'Hello! I\'m your FixMate AI assistant. How can I help you today?\n\n'
-            'You can:\n'
-            '• Send me a photo of your issue\n'
-            '• Ask questions about repairs\n'
-            '• Get advice on maintenance',
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
-    });
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
-  Future<void> _pickImage(ImageSource source) async {
+  // ========== NEW METHOD: Load user location from Firebase ==========
+  Future<void> _loadUserLocation() async {
     try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: source,
-        maxWidth: 1920,
-        maxHeight: 1920,
-        imageQuality: 85,
-      );
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('❌ User not logged in');
+        return;
+      }
 
-      if (image != null) {
+      // Get user document from Firebase
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (userDoc.exists) {
+        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
         setState(() {
-          _selectedImage = image;
+          _userLocation = userData['nearestTown'];
         });
+        print('✅ Loaded user location: $_userLocation');
+      } else {
+        print('❌ User document not found');
       }
     } catch (e) {
-      _showErrorSnackBar('Failed to pick image: $e');
+      print('❌ Error loading user location: $e');
     }
   }
 
-  void _showImageSourceDialog() {
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
     showModalBottomSheet(
       context: context,
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: Icon(Icons.photo_camera, color: Colors.blue),
-                title: Text('Take a photo'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImage(ImageSource.camera);
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.photo_library, color: Colors.blue),
-                title: Text('Choose from gallery'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImage(ImageSource.gallery);
-                },
-              ),
-            ],
-          ),
+      builder: (context) => Container(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.camera_alt, color: Colors.blue),
+              title: Text('Take Photo'),
+              onTap: () async {
+                Navigator.pop(context);
+                final XFile? image =
+                    await picker.pickImage(source: ImageSource.camera);
+                if (image != null) {
+                  setState(() {
+                    _selectedImage = image;
+                  });
+                }
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.photo_library, color: Colors.blue),
+              title: Text('Choose from Gallery'),
+              onTap: () async {
+                Navigator.pop(context);
+                final XFile? image =
+                    await picker.pickImage(source: ImageSource.gallery);
+                if (image != null) {
+                  setState(() {
+                    _selectedImage = image;
+                  });
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  Widget _buildImageWidget(XFile imageFile, double width, double height) {
+    // Use Image.network for web, Image.file for mobile/desktop
+    return FutureBuilder<dynamic>(
+      future: _loadImageBytes(imageFile),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          return Image.memory(
+            snapshot.data!,
+            width: width,
+            height: height,
+            fit: BoxFit.cover,
+          );
+        }
+        return Container(
+          width: width,
+          height: height,
+          color: Colors.grey[300],
+          child: Center(child: CircularProgressIndicator()),
         );
       },
     );
   }
 
-  Future<void> _sendMessage() async {
-    final message = _messageController.text.trim();
+  // Load image as bytes (works on all platforms including web)
+  Future<dynamic> _loadImageBytes(XFile imageFile) async {
+    return await imageFile.readAsBytes();
+  }
 
-    if (message.isEmpty && _selectedImage == null) {
-      return;
-    }
+  void _sendMessage() async {
+    String message = _messageController.text.trim();
+
+    if (message.isEmpty && _selectedImage == null) return;
 
     setState(() {
       if (_selectedImage != null) {
@@ -167,19 +258,20 @@ class _AIChatScreenState extends State<AIChatScreen> {
     }
   }
 
+  // ========== MODIFIED: Show location dialog with pre-filled saved location ==========
   void _handleFindWorkers() async {
     if (_lastProblemDescription == null) {
       _showErrorSnackBar('No problem description available');
       return;
     }
 
-    // Ask for location
+    // Show location dialog with pre-filled location
     final location = await _showLocationDialog();
     if (location == null || location.isEmpty) {
-      return;
+      return; // User cancelled
     }
 
-    // Show loading message
+    // Show loading message with the chosen location
     setState(() {
       _messages.add(ChatMessage(
         text: 'Searching for skilled workers near $location...',
@@ -191,7 +283,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
     _scrollToBottom();
 
     try {
-      // Call ML service
+      // Call ML service with the chosen location (may be different from saved)
       final response = await MLService.searchWorkers(
         description: _lastProblemDescription!,
         location: location,
@@ -237,6 +329,74 @@ class _AIChatScreenState extends State<AIChatScreen> {
       });
       _scrollToBottom();
     }
+  }
+
+  // ========== NEW: Location dialog with pre-filled saved location ==========
+  Future<String?> _showLocationDialog() async {
+    final TextEditingController locationController = TextEditingController();
+
+    // Pre-fill with saved location from Firebase
+    if (_userLocation != null && _userLocation!.isNotEmpty) {
+      locationController.text = _userLocation!;
+    }
+
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Enter Your Location'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Please enter your city or area:',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: locationController,
+                decoration: InputDecoration(
+                  hintText: 'e.g., Colombo, Kandy, Galle',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.location_on),
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Popular locations: Colombo, Kandy, Galle, Negombo, Jaffna, Gampaha',
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                String location = locationController.text.trim();
+                if (location.isNotEmpty) {
+                  Navigator.of(context).pop(location);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Please enter a location'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+              ),
+              child: Text('Search', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _handleGetRepairTips() {
@@ -290,76 +450,8 @@ class _AIChatScreenState extends State<AIChatScreen> {
     }
   }
 
-  Future<String?> _showLocationDialog() async {
-    final TextEditingController locationController = TextEditingController();
-
-    return showDialog<String>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Enter Your Location'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Please enter your city or area:',
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-              ),
-              SizedBox(height: 16),
-              TextField(
-                controller: locationController,
-                decoration: InputDecoration(
-                  hintText: 'e.g., Colombo, Kandy, Galle',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.location_on),
-                ),
-                textCapitalization: TextCapitalization.words,
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Popular locations: Colombo, Kandy, Galle, Negombo, Jaffna, Gampaha',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final location = locationController.text.trim();
-                Navigator.pop(context, location);
-              },
-              child: Text('Search'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _scrollToBottom() {
-    Future.delayed(Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  String _formatTime(DateTime time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -370,14 +462,15 @@ class _AIChatScreenState extends State<AIChatScreen> {
           children: [
             Icon(Icons.smart_toy, color: Colors.white),
             SizedBox(width: 8),
-            Text('AI Assistant', style: TextStyle(color: Colors.white)),
+            Text('AI Assistant'),
           ],
         ),
-        backgroundColor: Colors.blue,
+        backgroundColor: Color(0xFF2196F3),
         elevation: 0,
       ),
       body: Column(
         children: [
+          // Chat messages
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
@@ -388,138 +481,112 @@ class _AIChatScreenState extends State<AIChatScreen> {
               },
             ),
           ),
+
+          // Loading indicator
           if (_isLoading)
             Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
+              padding: EdgeInsets.all(8),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                  CircularProgressIndicator(strokeWidth: 2),
                   SizedBox(width: 12),
-                  Text('Thinking...', style: TextStyle(color: Colors.grey)),
+                  Text(
+                    'AI is thinking...',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
                 ],
               ),
             ),
+
+          // Image preview
           if (_selectedImage != null)
             Container(
-              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              padding: EdgeInsets.all(8),
+              margin: EdgeInsets.all(8),
+              height: 120,
               decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(
+              child: Stack(
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: _buildImageWidget(_selectedImage!, 60, 60),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Image selected',
-                      style: TextStyle(fontWeight: FontWeight.w500),
+                    child: _buildImageWidget(
+                      _selectedImage!,
+                      double.infinity,
+                      120,
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(Icons.close, color: Colors.red),
-                    onPressed: () {
-                      setState(() {
-                        _selectedImage = null;
-                      });
-                    },
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: IconButton(
+                      icon: Icon(Icons.close, color: Colors.white),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black54,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _selectedImage = null;
+                        });
+                      },
+                    ),
                   ),
                 ],
               ),
             ),
+
+          // Input area
           Container(
-            padding: EdgeInsets.all(16),
+            padding: EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
                   offset: Offset(0, -2),
+                  blurRadius: 4,
+                  color: Colors.black12,
                 ),
               ],
             ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.image, color: Colors.blue),
-                    onPressed: _showImageSourceDialog,
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: 'Type a message or add a photo...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey[100],
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 10,
-                        ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.add_photo_alternate, color: Colors.blue),
+                  onPressed: _pickImage,
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: InputDecoration(
+                      hintText: 'Type a message...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
                       ),
-                      maxLines: null,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _sendMessage(),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
+                    maxLines: null,
+                    textCapitalization: TextCapitalization.sentences,
                   ),
-                  SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.blue,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: Icon(Icons.send, color: Colors.white),
-                      onPressed: _isLoading ? null : _sendMessage,
-                    ),
+                ),
+                SizedBox(width: 8),
+                CircleAvatar(
+                  backgroundColor: Colors.blue,
+                  child: IconButton(
+                    icon: Icon(Icons.send, color: Colors.white, size: 20),
+                    onPressed: _sendMessage,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
-  }
-
-  Widget _buildImageWidget(XFile imageFile, double width, double height) {
-    if (kIsWeb) {
-      return Image.network(
-        imageFile.path,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            width: width,
-            height: height,
-            color: Colors.grey[300],
-            child: Icon(Icons.error),
-          );
-        },
-      );
-    } else {
-      return Image.file(
-        File(imageFile.path),
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-      );
-    }
   }
 
   Widget _buildMessageBubble(ChatMessage message) {
@@ -594,9 +661,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
             Text(
               _formatTime(message.timestamp),
               style: TextStyle(
-                color: message.isUser
-                    ? Colors.white.withOpacity(0.7)
-                    : Colors.grey[600],
+                color: message.isUser ? Colors.white70 : Colors.grey[600],
                 fontSize: 11,
               ),
             ),
@@ -605,35 +670,4 @@ class _AIChatScreenState extends State<AIChatScreen> {
       ),
     );
   }
-
-  String _formatTime(DateTime time) {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
-  }
-
-  @override
-  void dispose() {
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-}
-
-class ChatMessage {
-  final String text;
-  final bool isUser;
-  final DateTime timestamp;
-  final XFile? image;
-  final bool isError;
-  final bool showOptions;
-
-  ChatMessage({
-    required this.text,
-    required this.isUser,
-    required this.timestamp,
-    this.image,
-    this.isError = false,
-    this.showOptions = false,
-  });
 }
