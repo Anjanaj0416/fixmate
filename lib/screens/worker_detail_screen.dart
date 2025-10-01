@@ -10,6 +10,7 @@ import '../services/booking_service.dart';
 import '../services/chat_service.dart';
 import 'chat_screen.dart';
 import '../utils/string_utils.dart';
+import '../services/worker_creation_service.dart';
 
 class WorkerDetailScreen extends StatefulWidget {
   final MLWorker worker;
@@ -66,7 +67,7 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
         _showSnackBar('Creating worker profile...', Colors.orange);
 
         // CRITICAL FIX: storeWorkerFromML now returns worker_id (HM_XXXX)
-        workerId = await WorkerStorageService.storeWorkerFromML(
+        String workerId = await WorkerCreationService.createWorkerFromML(
           mlWorker: widget.worker,
         );
         print('✅ New worker created: $workerId');
