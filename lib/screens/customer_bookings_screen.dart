@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/booking_model.dart';
 import '../services/booking_service.dart';
 import 'booking_detail_customer_screen.dart';
+import '../utils/string_utils.dart';
 
 class CustomerBookingsScreen extends StatefulWidget {
   @override
@@ -243,7 +244,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                     ),
                   ),
                   Text(
-                    'ID: ${booking.bookingId.substring(0, 8)}...',
+                    'ID: ${StringUtils.formatBookingId(booking.bookingId)}...',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey[500],
