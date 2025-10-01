@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/booking_model.dart';
 import '../services/chat_service.dart';
 import 'chat_screen.dart';
+import '../utils/string_utils.dart';
 
 class BookingDetailCustomerScreen extends StatelessWidget {
   final BookingModel booking;
@@ -153,7 +154,7 @@ class BookingDetailCustomerScreen extends StatelessWidget {
                     ),
                     Divider(),
                     _detailRow('Booking ID',
-                        booking.bookingId.substring(0, 12) + '...'),
+                        StringUtils.formatBookingId(booking.bookingId)),
                     _detailRow('Location', booking.location),
                     _detailRow('Address', booking.address),
                     _detailRow('Date', _formatDate(booking.scheduledDate)),

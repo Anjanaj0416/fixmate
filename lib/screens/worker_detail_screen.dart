@@ -9,6 +9,7 @@ import '../services/worker_storage_service.dart';
 import '../services/booking_service.dart';
 import '../services/chat_service.dart';
 import 'chat_screen.dart';
+import '../utils/string_utils.dart';
 
 class WorkerDetailScreen extends StatefulWidget {
   final MLWorker worker;
@@ -199,7 +200,7 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Booking ID: ${bookingId.substring(0, 12)}...\n\n'
+              'Booking ID: ${StringUtils.formatBookingId(bookingId)}...\n\n'
               'The worker will be notified about your request.',
               textAlign: TextAlign.center,
             ),

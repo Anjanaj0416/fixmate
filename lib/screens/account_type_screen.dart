@@ -1,3 +1,4 @@
+// lib/screens/account_type_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -55,9 +56,10 @@ class _AccountTypeScreenState extends State<AccountTypeScreen> {
 
       Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
 
-      // Generate customer ID
-      String customerId =
-          'CUST_${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+      // FIXED: Generate customer ID with proper length
+      // Use full timestamp + random suffix for unique, longer ID
+      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      String customerId = 'CUST_${timestamp}_${_generateRandomSuffix()}';
 
       // Create customer model
       CustomerModel customer = CustomerModel(
@@ -92,48 +94,21 @@ class _AccountTypeScreenState extends State<AccountTypeScreen> {
       _showSuccessSnackBar('Account created successfully!');
 
       // Navigate to customer dashboard
-      await Future.delayed(Duration(seconds: 2));
-      Navigator.pushNamedAndRemoveUntil(
-          context, '/customer_dashboard', (route) => false);
+      Navigator.pushReplacementNamed(context, '/customer_dashboard');
     } catch (e) {
-      throw Exception('Failed to create customer profile: ${e.toString()}');
+      throw Exception('Failed to create customer: ${e.toString()}');
     }
+  }
+
+  // Generate random 4-digit suffix for uniqueness
+  String _generateRandomSuffix() {
+    return (1000 + (DateTime.now().microsecondsSinceEpoch % 9000)).toString();
   }
 
   Future<void> _navigateToWorkerRegistration() async {
-    // Update user document to mark as service provider
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
-        'accountType': 'service_provider_pending',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
-
-    setState(() {
-      _isLoading = false;
-      _selectedType = null;
-    });
-
-    // Navigate to worker registration flow
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => WorkerRegistrationFlow()),
-    );
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
     );
   }
 
@@ -142,9 +117,17 @@ class _AccountTypeScreenState extends State<AccountTypeScreen> {
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -152,244 +135,93 @@ class _AccountTypeScreenState extends State<AccountTypeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'How will you use FixMate?',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-            Text(
-              'Choose your primary purpose',
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-            ),
-          ],
-        ),
+        title: Text('Select Account Type'),
+        backgroundColor: Color(0xFF2196F3),
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(24.0),
-        child: Column(
-          children: [
-            SizedBox(height: 20),
-
-            // Looking for Services Card
-            _buildAccountTypeCard(
-              type: 'customer',
-              icon: Icons.search,
-              iconColor: Color(0xFF2196F3),
-              title: 'Looking for Services',
-              description:
-                  'Find skilled professionals for your home repairs, maintenance, and improvement projects',
-              features: ['Find Workers', 'Get Quotes', 'Book Services'],
-              buttonText: 'I Need Services',
-              buttonColor: Color(0xFF2196F3),
-              isSelected: _selectedType == 'customer',
-            ),
-
-            SizedBox(height: 24),
-
-            // Providing Services Card
-            _buildAccountTypeCard(
-              type: 'service_provider',
-              icon: Icons.build,
-              iconColor: Color(0xFFFF9800),
-              title: 'Providing Services',
-              description:
-                  'Offer your skills and grow your business by connecting with clients who need your expertise',
-              features: ['Get Clients', 'Send Quotes', 'Earn More'],
-              buttonText: 'I Provide Services',
-              buttonColor: Color(0xFFFF9800),
-              isSelected: _selectedType == 'service_provider',
-            ),
-
-            SizedBox(height: 40),
-
-            // Note
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.blue[100]!),
-              ),
-              child: Row(
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.info_outline, color: Color(0xFF2196F3), size: 20),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'You can always switch between modes later in your profile',
-                      style: TextStyle(color: Color(0xFF2196F3), fontSize: 14),
+                  Text(
+                    'Choose Your Account Type',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2196F3),
                     ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 40),
+                  _buildAccountTypeCard(
+                    type: 'customer',
+                    title: 'Customer',
+                    icon: Icons.person,
+                    description: 'Find and book service professionals',
+                    color: Colors.blue,
+                  ),
+                  SizedBox(height: 20),
+                  _buildAccountTypeCard(
+                    type: 'service_provider',
+                    title: 'Service Provider',
+                    icon: Icons.handyman,
+                    description: 'Offer your services to customers',
+                    color: Colors.orange,
                   ),
                 ],
               ),
             ),
-
-            SizedBox(height: 20),
-
-            // Skip for now button
-            TextButton(
-              onPressed: _isLoading
-                  ? null
-                  : () {
-                      // TODO: Navigate to main app without setting account type
-                      _showSuccessSnackBar(
-                        'You can set your account type later in settings.',
-                      );
-                    },
-              child: Text(
-                'Skip for now',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
   Widget _buildAccountTypeCard({
     required String type,
-    required IconData icon,
-    required Color iconColor,
     required String title,
+    required IconData icon,
     required String description,
-    required List<String> features,
-    required String buttonText,
-    required Color buttonColor,
-    required bool isSelected,
+    required Color color,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isSelected ? buttonColor : Colors.grey[300]!,
-          width: isSelected ? 2 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 8,
-            offset: Offset(0, 2),
+    bool isSelected = _selectedType == type;
+
+    return InkWell(
+      onTap: () => _selectAccountType(type),
+      child: Card(
+        elevation: isSelected ? 8 : 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+          side: BorderSide(
+            color: isSelected ? color : Colors.transparent,
+            width: 2,
           ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Icon and Title
-            Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: iconColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: iconColor, size: 28),
+        ),
+        child: Container(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Icon(icon, size: 60, color: color),
+              SizedBox(height: 16),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: color,
                 ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        description,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-
-            SizedBox(height: 20),
-
-            // Features
-            ...features.map((feature) => Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle, color: iconColor, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        feature,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
-
-            SizedBox(height: 20),
-
-            // Action Button
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _isLoading && _selectedType == type
-                    ? null
-                    : () => _selectAccountType(type),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: buttonColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  elevation: 0,
-                ),
-                child: _isLoading && _selectedType == type
-                    ? SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : Text(
-                        buttonText,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
               ),
-            ),
-          ],
+              SizedBox(height: 8),
+              Text(
+                description,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -3,6 +3,7 @@
 // This version avoids the complex query that requires an index
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/string_utils.dart';
 
 class ChatMessage {
   final String messageId;
@@ -194,8 +195,7 @@ class ChatService {
           : 'unread_count_customer';
 
       await _firestore.collection('chat_rooms').doc(chatId).update({
-        'last_message':
-            message.length > 50 ? '${message.substring(0, 50)}...' : message,
+        'last_message': StringUtils.truncate(message, 50),
         'last_message_time': FieldValue.serverTimestamp(),
         unreadField: FieldValue.increment(1),
       });
