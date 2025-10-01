@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // ✅ ADD THIS IMPORT
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'screens/welcome_screen.dart';
@@ -15,8 +16,6 @@ import 'services/openai_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
-import 'firebase_options.dart';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -25,9 +24,23 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  // ✅ CONFIGURE EMULATORS IN DEBUG MODE
   if (kDebugMode) {
-    await FirebaseStorage.instance.useStorageEmulator('localhost', 9199);
-    print('🔧 Using Firebase Storage Emulator on localhost:9199');
+    // Auth Emulator
+    await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
+    print('🔧 Using Firebase Auth Emulator on localhost:9099');
+
+    // Firestore Emulator
+    FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
+    print('🔧 Using Firebase Firestore Emulator on localhost:8080');
+
+    // Storage Emulator
+    await FirebaseStorage.instance.useStorageEmulator('localhost', 9299);
+    print('🔧 Using Firebase Storage Emulator on localhost:9299');
+
+    // Functions Emulator
+    FirebaseFunctions.instance.useFunctionsEmulator('localhost', 5001);
+    print('🔧 Using Firebase Functions Emulator on localhost:5001');
   }
 
   // Load .env file
@@ -67,7 +80,6 @@ class FixMateApp extends StatelessWidget {
         '/customer_dashboard': (context) => CustomerDashboard(),
       },
       onGenerateRoute: (settings) {
-        // Handle dynamic routes or routes with parameters
         switch (settings.name) {
           case '/worker_dashboard':
             return MaterialPageRoute(
@@ -78,7 +90,6 @@ class FixMateApp extends StatelessWidget {
               builder: (context) => CustomerDashboard(),
             );
           default:
-            // Return null to let the framework handle the route
             return null;
         }
       },
