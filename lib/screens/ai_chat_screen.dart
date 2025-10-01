@@ -1,17 +1,16 @@
 // lib/screens/ai_chat_screen.dart
-// FIXED VERSION - Gets location from Firebase user collection (nearestTown)
-// Replace your existing ai_chat_screen.dart with this file
+// COMPLETE FIXED VERSION - Replace entire file
+// This version uses ML model to predict service type before showing workers
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../services/openai_service.dart';
-import '../services/ml_service.dart';
-import 'worker_results_screen.dart';
+import '../services/ml_service.dart'; // ✅ Import ML Service
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../services/storage_service.dart'; // NEW - Add this
-import 'enhanced_worker_selection_screen.dart'; // NEW - Add this
+import '../services/storage_service.dart';
+import 'enhanced_worker_selection_screen.dart';
 
 class ChatMessage {
   final String text;
@@ -43,12 +42,12 @@ class _AIChatScreenState extends State<AIChatScreen> {
   bool _isLoading = false;
   XFile? _selectedImage;
   String? _lastProblemDescription;
-  String? _userLocation; // Store user's nearest town
+  String? _userLocation;
 
   @override
   void initState() {
     super.initState();
-    _loadUserLocation(); // Load location on init
+    _loadUserLocation();
     _messages.add(ChatMessage(
       text: 'Hello! I\'m your AI assistant. You can:\n\n'
           '📸 Upload a photo of any issue\n'
@@ -66,7 +65,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
     super.dispose();
   }
 
-  // ========== NEW METHOD: Load user location from Firebase ==========
   Future<void> _loadUserLocation() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
@@ -75,7 +73,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
         return;
       }
 
-      // Get user document from Firebase
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -161,7 +158,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
   }
 
   Widget _buildImageWidget(XFile imageFile, double width, double height) {
-    // Use Image.network for web, Image.file for mobile/desktop
     return FutureBuilder<dynamic>(
       future: _loadImageBytes(imageFile),
       builder: (context, snapshot) {
@@ -183,7 +179,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
     );
   }
 
-  // Load image as bytes (works on all platforms including web)
   Future<dynamic> _loadImageBytes(XFile imageFile) async {
     return await imageFile.readAsBytes();
   }
@@ -225,10 +220,11 @@ class _AIChatScreenState extends State<AIChatScreen> {
       if (imageToAnalyze != null) {
         response = await OpenAIService.analyzeImageFromXFile(
           imageFile: imageToAnalyze,
-          userMessage: message.isEmpty ? null : message,
+          userMessage: message.isEmpty
+              ? 'What issue do you see in this image? Provide a detailed description.'
+              : message,
         );
 
-        // Store the problem description for ML model
         _lastProblemDescription = response;
       } else {
         response = await OpenAIService.sendMessage(message);
@@ -239,8 +235,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
           text: response,
           isUser: false,
           timestamp: DateTime.now(),
-          showOptions:
-              imageToAnalyze != null, // Show options only for image analysis
+          showOptions: imageToAnalyze != null,
         ));
         _isLoading = false;
       });
@@ -260,14 +255,13 @@ class _AIChatScreenState extends State<AIChatScreen> {
     }
   }
 
-  // ========== MODIFIED: Show location dialog with pre-filled saved location ==========
+  // ========== FIXED: Use ML model to predict service type ==========
   Future<void> _findWorkers() async {
     if (_lastProblemDescription == null) {
       _showErrorSnackBar('No problem description available');
       return;
     }
 
-    // Show location dialog
     String? location = await _showLocationDialog();
     if (location == null || location.isEmpty) {
       _showErrorSnackBar('Location is required to find workers');
@@ -277,13 +271,11 @@ class _AIChatScreenState extends State<AIChatScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // NEW: Upload photo to Firebase Storage if there's an image
+      // Step 1: Upload photo to Firebase Storage
       List<String> uploadedPhotoUrls = [];
 
-      // Check if there's an image in the last message
       for (var message in _messages.reversed) {
         if (message.isUser && message.image != null) {
-          // Show upload progress
           setState(() {
             _messages.add(ChatMessage(
               text: '📤 Uploading photo to secure storage...',
@@ -294,14 +286,12 @@ class _AIChatScreenState extends State<AIChatScreen> {
           _scrollToBottom();
 
           try {
-            // Upload the photo
             String photoUrl = await StorageService.uploadIssuePhoto(
               imageFile: message.image!,
             );
             uploadedPhotoUrls.add(photoUrl);
             print('✅ Photo uploaded: $photoUrl');
 
-            // Show success message
             setState(() {
               _messages.add(ChatMessage(
                 text: '✅ Photo uploaded successfully!',
@@ -315,35 +305,89 @@ class _AIChatScreenState extends State<AIChatScreen> {
             _showErrorSnackBar('Failed to upload photo, continuing without it');
           }
 
-          break; // Only upload the most recent image
+          break;
         }
       }
 
+      // Step 2: Use ML model to predict service type
+      setState(() {
+        _messages.add(ChatMessage(
+          text: '🤖 Analyzing your issue to find the best workers...',
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      });
+      _scrollToBottom();
+
+      print('🔍 Predicting service type from description...');
+      print('📝 Description: $_lastProblemDescription');
+      print('📍 Location: $location');
+
+      // Call ML service
+      MLRecommendationResponse mlResponse = await MLService.searchWorkers(
+        description: _lastProblemDescription!,
+        location: location,
+      );
+
+      print('✅ ML Analysis complete!');
+      print(
+          '📊 Predicted service: ${mlResponse.aiAnalysis.servicePredictions.first.serviceType}');
+      print(
+          '📊 Confidence: ${(mlResponse.aiAnalysis.servicePredictions.first.confidence * 100).toStringAsFixed(1)}%');
+
+      // Get the top prediction
+      var topPrediction = mlResponse.aiAnalysis.servicePredictions.first;
+      String predictedServiceType = topPrediction.serviceType;
+
+      // Extract sub-service and issue type from service type
+      List<String> serviceParts = predictedServiceType.split('_');
+      String serviceType =
+          serviceParts.isNotEmpty ? serviceParts[0] : predictedServiceType;
+      String subService =
+          serviceParts.length > 1 ? serviceParts[1] : serviceType;
+      String issueType = serviceParts.length > 2 ? serviceParts[2] : 'general';
+
+      print('🎯 Using service type: $serviceType');
+      print('🎯 Using sub-service: $subService');
+      print('🎯 Using issue type: $issueType');
+
       setState(() => _isLoading = false);
 
-      // Navigate to worker selection with uploaded photo URLs
+      // Step 3: Navigate to enhanced worker selection
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => EnhancedWorkerSelectionScreen(
-            serviceType: 'general_services',
-            subService: 'maintenance',
-            issueType: 'general',
+            serviceType: serviceType,
+            subService: subService,
+            issueType: issueType,
             problemDescription: _lastProblemDescription!,
-            problemImageUrls: uploadedPhotoUrls, // ✅ Now contains actual URLs
+            problemImageUrls: uploadedPhotoUrls,
             location: location,
             address: location,
-            urgency: 'normal',
+            urgency: _determineUrgency(mlResponse.aiAnalysis),
             budgetRange: 'negotiable',
             scheduledDate: DateTime.now().add(Duration(days: 1)),
             scheduledTime: '09:00 AM',
           ),
         ),
       );
-    } catch (e) {
+
       setState(() {
         _messages.add(ChatMessage(
-          text: 'Failed to process request: ${e.toString()}',
+          text: '✅ Found workers matching your needs!\n'
+              '🔧 Service: ${_formatServiceType(serviceType)}\n'
+              '📍 Location: $location',
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      });
+      _scrollToBottom();
+    } catch (e) {
+      print('❌ Error finding workers: $e');
+      setState(() {
+        _messages.add(ChatMessage(
+          text: 'Failed to find workers: ${e.toString()}',
           isUser: false,
           timestamp: DateTime.now(),
           isError: true,
@@ -354,99 +398,118 @@ class _AIChatScreenState extends State<AIChatScreen> {
     }
   }
 
-  // ========== NEW: Location dialog with pre-filled saved location ==========
+  String _determineUrgency(AIAnalysis aiAnalysis) {
+    String description = _lastProblemDescription?.toLowerCase() ?? '';
+
+    List<String> urgentKeywords = [
+      'urgent',
+      'emergency',
+      'immediate',
+      'asap',
+      'broken',
+      'not working',
+      'leaking',
+      'flooding',
+      'no water',
+      'no power'
+    ];
+
+    List<String> sameDayKeywords = ['today', 'now', 'quickly', 'soon'];
+
+    if (urgentKeywords.any((keyword) => description.contains(keyword))) {
+      return 'urgent';
+    }
+
+    if (sameDayKeywords.any((keyword) => description.contains(keyword))) {
+      return 'same_day';
+    }
+
+    return 'normal';
+  }
+
+  String _formatServiceType(String serviceType) {
+    return serviceType
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((word) => word[0].toUpperCase() + word.substring(1))
+        .join(' ');
+  }
+
   Future<String?> _showLocationDialog() async {
     final TextEditingController locationController = TextEditingController();
 
-    // Pre-fill with saved location from Firebase
     if (_userLocation != null && _userLocation!.isNotEmpty) {
       locationController.text = _userLocation!;
     }
 
     return showDialog<String>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Enter Your Location'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Please enter your city or area:',
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-              ),
-              SizedBox(height: 16),
-              TextField(
-                controller: locationController,
-                decoration: InputDecoration(
-                  hintText: 'e.g., Colombo, Kandy, Galle',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.location_on),
-                ),
-                textCapitalization: TextCapitalization.words,
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Popular locations: Colombo, Kandy, Galle, Negombo, Jaffna, Gampaha',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(null),
-              child: Text('Cancel'),
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.location_on, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('Enter Location'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Where do you need the service?',
+              style: TextStyle(color: Colors.grey[600]),
             ),
-            ElevatedButton(
-              onPressed: () {
-                String location = locationController.text.trim();
-                if (location.isNotEmpty) {
-                  Navigator.of(context).pop(location);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Please enter a location'),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
+            SizedBox(height: 16),
+            TextField(
+              controller: locationController,
+              decoration: InputDecoration(
+                hintText: 'e.g., Kandy, Colombo',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
-              child: Text('Search', style: TextStyle(color: Colors.white)),
+              autofocus: true,
             ),
           ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              String location = locationController.text.trim();
+              if (location.isNotEmpty) {
+                Navigator.pop(context, location);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Continue'),
+          ),
+        ],
+      ),
     );
   }
 
-  void _handleGetRepairTips() {
-    setState(() {
-      _messages.add(ChatMessage(
-        text: 'Getting repair tips for your issue...',
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
-    });
-    _scrollToBottom();
+  Future<void> _handleGetRepairTips() async {
+    if (_lastProblemDescription == null) {
+      _showErrorSnackBar('No problem description available');
+      return;
+    }
 
-    // Request repair tips from OpenAI
-    _sendRepairTipsRequest();
-  }
-
-  Future<void> _sendRepairTipsRequest() async {
-    if (_lastProblemDescription == null) return;
-
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      final response = await OpenAIService.sendMessage(
+      String response = await OpenAIService.sendMessage(
         'Based on this problem: "$_lastProblemDescription", '
-        'provide step-by-step repair tips that a homeowner can try. '
+        'provide step-by-step DIY repair tips. '
+        'Be specific and practical. '
         'Include safety warnings if necessary.',
       );
 
@@ -493,7 +556,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
       ),
       body: Column(
         children: [
-          // Chat messages
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
@@ -504,24 +566,27 @@ class _AIChatScreenState extends State<AIChatScreen> {
               },
             ),
           ),
-
-          // Loading indicator
           if (_isLoading)
             Padding(
               padding: EdgeInsets.all(8),
               child: Row(
                 children: [
-                  CircularProgressIndicator(strokeWidth: 2),
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                   SizedBox(width: 12),
-                  Text(
-                    'AI is thinking...',
-                    style: TextStyle(color: Colors.grey[600]),
+                  Flexible(
+                    child: Text(
+                      'AI is thinking...',
+                      style: TextStyle(color: Colors.grey[600]),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
             ),
-
-          // Image preview
           if (_selectedImage != null)
             Container(
               margin: EdgeInsets.all(8),
@@ -558,8 +623,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
                 ],
               ),
             ),
-
-          // Input area
           Container(
             padding: EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -649,8 +712,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
                   fontSize: 15,
                 ),
               ),
-
-            // Show action buttons for AI responses with problem descriptions
             if (message.showOptions && !message.isUser) ...[
               SizedBox(height: 12),
               Column(
@@ -679,7 +740,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
                 ],
               ),
             ],
-
             SizedBox(height: 4),
             Text(
               _formatTime(message.timestamp),

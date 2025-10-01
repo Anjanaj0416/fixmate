@@ -12,6 +12,10 @@ import 'screens/account_type_screen.dart';
 import 'screens/worker_registration_flow.dart';
 import 'screens/customer_dashboard.dart';
 import 'services/openai_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +24,11 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  if (kDebugMode) {
+    await FirebaseStorage.instance.useStorageEmulator('localhost', 9199);
+    print('🔧 Using Firebase Storage Emulator on localhost:9199');
+  }
 
   // Load .env file
   try {
