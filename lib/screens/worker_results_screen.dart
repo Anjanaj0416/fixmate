@@ -499,6 +499,7 @@ class _WorkerResultsScreenState extends State<WorkerResultsScreen> {
         builder: (context) => WorkerDetailScreen(
           worker: worker,
           problemDescription: widget.problemDescription,
+          problemImageUrls: widget.problemImageUrls,
         ),
       ),
     );

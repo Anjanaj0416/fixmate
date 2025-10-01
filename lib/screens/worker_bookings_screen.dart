@@ -960,6 +960,9 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
   }
 }
 
+// COMPLETE CLASS - Add this at the end of worker_bookings_screen.dart
+// Replace the incomplete IssuePhotoViewerScreenWorker class
+
 class IssuePhotoViewerScreenWorker extends StatefulWidget {
   final List<String> imageUrls;
   final String problemDescription;
@@ -1028,7 +1031,7 @@ class _IssuePhotoViewerScreenWorkerState
             ),
           ),
 
-          // Image viewer
+          // Image viewer with zoom
           Expanded(
             child: PageView.builder(
               controller: _pageController,

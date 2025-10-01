@@ -14,11 +14,13 @@ import '../utils/string_utils.dart';
 class WorkerDetailScreen extends StatefulWidget {
   final MLWorker worker;
   final String problemDescription;
+  final List<String> problemImageUrls;
 
   const WorkerDetailScreen({
     Key? key,
     required this.worker,
     required this.problemDescription,
+    this.problemImageUrls = const [],
   }) : super(key: key);
 
   @override
@@ -119,7 +121,7 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
         subService: widget.worker.serviceType,
         issueType: 'general',
         problemDescription: widget.problemDescription,
-        problemImageUrls: [],
+        problemImageUrls: widget.problemImageUrls,
         location: widget.worker.city,
         address: widget.worker.city,
         urgency: 'normal',
