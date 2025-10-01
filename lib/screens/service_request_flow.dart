@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'enhanced_worker_selection_screen.dart';
+import '../services/ml_service.dart';
+import 'worker_results_screen.dart';
 
 class ServiceRequestFlow extends StatefulWidget {
   final String serviceType;
@@ -765,67 +767,60 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
     });
 
     try {
-      // Show confirmation dialog first
-      bool? confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green),
-              SizedBox(width: 8),
-              Text('Request Submitted!'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Your service request has been submitted successfully.'),
-              SizedBox(height: 16),
-              Text(
-                'Now you can browse and select from available service providers in your area.',
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: Text('OK', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
+      // Get current user
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('Please login to continue');
+      }
+
+      // Get user's location from database
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      String userLocation = 'colombo'; // Default
+      if (userDoc.exists) {
+        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+        userLocation =
+            (userData['nearestTown'] ?? 'colombo').toString().toLowerCase();
+      }
+
+      print('\n========== MANUAL BOOKING ML SEARCH ==========');
+      print('📝 Description: $_problemDescription');
+      print('📍 Location: $userLocation');
+      print('🔧 Category: ${widget.serviceType}');
+
+      // Call ML service to get worker recommendations
+      MLRecommendationResponse mlResponse = await MLService.searchWorkers(
+        description: _problemDescription,
+        location: userLocation,
       );
 
-      if (confirmed == true) {
-        // Navigate to enhanced worker selection screen
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => EnhancedWorkerSelectionScreen(
-              serviceType: widget.serviceType,
-              subService: widget.subService,
-              issueType: _selectedIssueType ?? 'other',
-              problemDescription: _problemDescription,
-              problemImageUrls:
-                  _selectedImages.map((file) => file.path).toList(),
-              location: _selectedLocation ?? 'other',
-              address: _currentAddress,
-              urgency: _urgency,
-              budgetRange: _budgetRange,
-              scheduledDate:
-                  DateTime.now().add(Duration(days: 1)), // Default to tomorrow
-              scheduledTime: _urgency == 'Same day'
-                  ? 'Same day'
-                  : 'Morning (9 AM - 12 PM)',
-            ),
+      print('✅ ML Analysis complete!');
+      print('📊 Found ${mlResponse.workers.length} workers');
+      print('========== MANUAL BOOKING ML SEARCH END ==========\n');
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Navigate to worker results screen
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => WorkerResultsScreen(
+            workers: mlResponse.workers,
+            aiAnalysis: mlResponse.aiAnalysis,
+            problemDescription: _problemDescription,
+            problemImageUrls: [], // No images in manual flow yet
           ),
-        );
-      }
+        ),
+      );
     } catch (e) {
-      _showErrorSnackBar('Failed to submit request: ${e.toString()}');
-    } finally {
+      print('❌ Error in manual booking flow: $e');
+      _showErrorSnackBar('Failed to find workers: ${e.toString()}');
+
       setState(() {
         _isLoading = false;
       });
