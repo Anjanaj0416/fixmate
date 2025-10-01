@@ -1,12 +1,13 @@
 // lib/screens/booking_detail_customer_screen.dart
-// Modified version with photo viewing capability
+// FIXED VERSION - Added Rate & Review button for completed bookings
 import 'package:flutter/material.dart';
 import '../models/booking_model.dart';
 import '../services/chat_service.dart';
+import '../widgets/rating_dialog.dart';
 import 'chat_screen.dart';
 import '../utils/string_utils.dart';
 
-class BookingDetailCustomerScreen extends StatelessWidget {
+class BookingDetailCustomerScreen extends StatefulWidget {
   final BookingModel booking;
 
   const BookingDetailCustomerScreen({
@@ -14,6 +15,13 @@ class BookingDetailCustomerScreen extends StatelessWidget {
     required this.booking,
   }) : super(key: key);
 
+  @override
+  State<BookingDetailCustomerScreen> createState() =>
+      _BookingDetailCustomerScreenState();
+}
+
+class _BookingDetailCustomerScreenState
+    extends State<BookingDetailCustomerScreen> {
   Future<void> _openChat(BuildContext context) async {
     try {
       // Show loading
@@ -25,11 +33,11 @@ class BookingDetailCustomerScreen extends StatelessWidget {
 
       // Create or get chat room
       String chatId = await ChatService.createOrGetChatRoom(
-        bookingId: booking.bookingId,
-        customerId: booking.customerId,
-        customerName: booking.customerName,
-        workerId: booking.workerId,
-        workerName: booking.workerName,
+        bookingId: widget.booking.bookingId,
+        customerId: widget.booking.customerId,
+        customerName: widget.booking.customerName,
+        workerId: widget.booking.workerId,
+        workerName: widget.booking.workerName,
       );
 
       // Close loading
@@ -41,8 +49,8 @@ class BookingDetailCustomerScreen extends StatelessWidget {
         MaterialPageRoute(
           builder: (context) => ChatScreen(
             chatId: chatId,
-            bookingId: booking.bookingId,
-            otherUserName: booking.workerName,
+            bookingId: widget.booking.bookingId,
+            otherUserName: widget.booking.workerName,
             currentUserType: 'customer',
           ),
         ),
@@ -63,7 +71,7 @@ class BookingDetailCustomerScreen extends StatelessWidget {
 
   // NEW METHOD: View issue photos
   void _viewIssuePhotos(BuildContext context) {
-    if (booking.problemImageUrls.isEmpty) {
+    if (widget.booking.problemImageUrls.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('No photos available for this booking'),
@@ -77,11 +85,29 @@ class BookingDetailCustomerScreen extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (context) => IssuePhotoViewerScreen(
-          imageUrls: booking.problemImageUrls,
-          problemDescription: booking.problemDescription,
+          imageUrls: widget.booking.problemImageUrls,
+          problemDescription: widget.booking.problemDescription,
         ),
       ),
     );
+  }
+
+  // CRITICAL FIX: Add this method to open rating dialog
+  Future<void> _openRatingDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => RatingDialog(booking: widget.booking),
+    );
+
+    if (result == true) {
+      // Rating submitted successfully, refresh the screen
+      setState(() {
+        // This will rebuild the widget and reflect the updated rating status
+      });
+
+      // Optionally navigate back to refresh the bookings list
+      Navigator.pop(context);
+    }
   }
 
   @override
@@ -99,13 +125,13 @@ class BookingDetailCustomerScreen extends StatelessWidget {
           children: [
             // Status Card
             Card(
-              color: _getStatusColor(booking.status),
+              color: _getStatusColor(widget.booking.status),
               child: Padding(
                 padding: EdgeInsets.all(16),
                 child: Row(
                   children: [
                     Icon(
-                      _getStatusIcon(booking.status),
+                      _getStatusIcon(widget.booking.status),
                       color: Colors.white,
                       size: 32,
                     ),
@@ -122,7 +148,7 @@ class BookingDetailCustomerScreen extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            booking.status.displayName,
+                            widget.booking.status.displayName,
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 20,
@@ -154,10 +180,14 @@ class BookingDetailCustomerScreen extends StatelessWidget {
                       ),
                     ),
                     Divider(),
-                    _detailRow('Name', booking.workerName),
-                    _detailRow('Phone', booking.workerPhone),
-                    _detailRow(
-                        'Service', booking.serviceType.replaceAll('_', ' ')),
+                    _detailRow('Name', widget.booking.workerName),
+                    _detailRow('Phone', widget.booking.workerPhone),
+                    _detailRow('Service',
+                        widget.booking.serviceType.replaceAll('_', ' ')),
+                    if (widget.booking.workerRating != null &&
+                        widget.booking.workerRating! > 0)
+                      _detailRow('Rating',
+                          '${widget.booking.workerRating!.toStringAsFixed(1)} ⭐'),
                   ],
                 ),
               ),
@@ -181,13 +211,14 @@ class BookingDetailCustomerScreen extends StatelessWidget {
                     ),
                     Divider(),
                     _detailRow('Booking ID',
-                        StringUtils.formatBookingId(booking.bookingId)),
-                    _detailRow('Location', booking.location),
-                    _detailRow('Address', booking.address),
-                    _detailRow('Date', _formatDate(booking.scheduledDate)),
-                    _detailRow('Time', booking.scheduledTime),
-                    _detailRow('Budget', booking.budgetRange),
-                    _detailRow('Urgency', booking.urgency.toUpperCase()),
+                        StringUtils.formatBookingId(widget.booking.bookingId)),
+                    _detailRow('Location', widget.booking.location),
+                    _detailRow('Address', widget.booking.address),
+                    _detailRow(
+                        'Date', _formatDate(widget.booking.scheduledDate)),
+                    _detailRow('Time', widget.booking.scheduledTime),
+                    _detailRow('Budget', widget.booking.budgetRange),
+                    _detailRow('Urgency', widget.booking.urgency),
                   ],
                 ),
               ),
@@ -210,28 +241,27 @@ class BookingDetailCustomerScreen extends StatelessWidget {
                       ),
                     ),
                     Divider(),
-                    Text(booking.problemDescription),
-
-                    // NEW: Photo count indicator and view button
-                    if (booking.problemImageUrls.isNotEmpty) ...[
-                      SizedBox(height: 12),
+                    Text(
+                      widget.booking.problemDescription.isEmpty
+                          ? 'No description provided'
+                          : widget.booking.problemDescription,
+                      style: TextStyle(fontSize: 15),
+                    ),
+                    if (widget.booking.problemImageUrls.isNotEmpty) ...[
+                      SizedBox(height: 16),
                       Container(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.1),
+                          color: Colors.blue[50],
                           borderRadius: BorderRadius.circular(8),
-                          border:
-                              Border.all(color: Colors.blue.withOpacity(0.3)),
+                          border: Border.all(color: Colors.blue[200]!),
                         ),
                         child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Icon(Icons.photo_library,
-                                color: Colors.blue, size: 20),
-                            SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                '${booking.problemImageUrls.length} photo${booking.problemImageUrls.length > 1 ? 's' : ''} attached',
+                                '${widget.booking.problemImageUrls.length} photo${widget.booking.problemImageUrls.length > 1 ? 's' : ''} attached',
                                 style: TextStyle(
                                   color: Colors.blue[700],
                                   fontWeight: FontWeight.w500,
@@ -259,6 +289,80 @@ class BookingDetailCustomerScreen extends StatelessWidget {
 
             SizedBox(height: 24),
 
+            // CRITICAL FIX: Add Rate & Review button for completed bookings
+            if (widget.booking.status == BookingStatus.completed &&
+                widget.booking.customerRating == null)
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _openRatingDialog,
+                  icon: Icon(Icons.star, color: Colors.white),
+                  label: Text(
+                    'Rate & Review',
+                    style: TextStyle(fontSize: 16, color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFFFF9800),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+
+            // Show rating if already submitted
+            if (widget.booking.status == BookingStatus.completed &&
+                widget.booking.customerRating != null)
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.green),
+                        SizedBox(width: 8),
+                        Text(
+                          'Your Rating: ${widget.booking.customerRating!.toStringAsFixed(1)} ⭐',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (widget.booking.customerReview != null &&
+                        widget.booking.customerReview!.isNotEmpty) ...[
+                      SizedBox(height: 8),
+                      Text(
+                        'Your Review:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        widget.booking.customerReview!,
+                        style: TextStyle(color: Colors.grey[800]),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+            // Add some spacing if rate button exists
+            if (widget.booking.status == BookingStatus.completed)
+              SizedBox(height: 16),
+
             // Chat Button
             SizedBox(
               width: double.infinity,
@@ -267,7 +371,7 @@ class BookingDetailCustomerScreen extends StatelessWidget {
                 onPressed: () => _openChat(context),
                 icon: Icon(Icons.chat_bubble_outline, color: Colors.white),
                 label: Text(
-                  'Chat with ${booking.workerName}',
+                  'Chat with ${widget.booking.workerName}',
                   style: TextStyle(fontSize: 16, color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(
@@ -352,7 +456,7 @@ class BookingDetailCustomerScreen extends StatelessWidget {
   }
 }
 
-// NEW CLASS: Photo viewer screen
+// Photo viewer screen
 class IssuePhotoViewerScreen extends StatefulWidget {
   final List<String> imageUrls;
   final String problemDescription;
@@ -368,76 +472,60 @@ class IssuePhotoViewerScreen extends StatefulWidget {
 }
 
 class _IssuePhotoViewerScreenState extends State<IssuePhotoViewerScreen> {
-  int _currentImageIndex = 0;
-  final PageController _pageController = PageController();
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
+  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(
-          'Issue Photos (${_currentImageIndex + 1}/${widget.imageUrls.length})',
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Colors.black87,
-        iconTheme: IconThemeData(color: Colors.white),
-        elevation: 0,
+        title: Text('Issue Photos'),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
           // Image viewer
           Expanded(
             child: PageView.builder(
-              controller: _pageController,
               itemCount: widget.imageUrls.length,
               onPageChanged: (index) {
-                setState(() {
-                  _currentImageIndex = index;
-                });
+                setState(() => _currentIndex = index);
               },
               itemBuilder: (context, index) {
-                return InteractiveViewer(
-                  minScale: 0.5,
-                  maxScale: 4.0,
-                  child: Center(
-                    child: Image.network(
-                      widget.imageUrls[index],
-                      fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                            color: Colors.white,
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.error_outline,
-                                  color: Colors.white, size: 48),
-                              SizedBox(height: 8),
-                              Text(
-                                'Failed to load image',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                return Container(
+                  color: Colors.black,
+                  child: InteractiveViewer(
+                    child: Center(
+                      child: Image.network(
+                        widget.imageUrls[index],
+                        fit: BoxFit.contain,
+                        loadingBuilder: (context, child, progress) {
+                          if (progress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: progress.expectedTotalBytes != null
+                                  ? progress.cumulativeBytesLoaded /
+                                      progress.expectedTotalBytes!
+                                  : null,
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.error, size: 48, color: Colors.red),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Failed to load image',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 );
@@ -445,63 +533,40 @@ class _IssuePhotoViewerScreenState extends State<IssuePhotoViewerScreen> {
             ),
           ),
 
-          // Problem description at bottom
+          // Photo counter and description
           Container(
-            width: double.infinity,
+            color: Colors.white,
             padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.black87,
-              border: Border(
-                top: BorderSide(color: Colors.grey[800]!),
-              ),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Problem Description:',
+                  'Photo ${_currentIndex + 1} of ${widget.imageUrls.length}',
                   style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
                     fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
                 ),
-                SizedBox(height: 4),
-                Text(
-                  widget.problemDescription,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
+                if (widget.problemDescription.isNotEmpty) ...[
+                  SizedBox(height: 8),
+                  Divider(),
+                  SizedBox(height: 8),
+                  Text(
+                    'Problem Description:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
                   ),
-                ),
+                  SizedBox(height: 4),
+                  Text(
+                    widget.problemDescription,
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ],
               ],
             ),
           ),
-
-          // Image navigation dots (if multiple images)
-          if (widget.imageUrls.length > 1)
-            Container(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              color: Colors.black87,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  widget.imageUrls.length,
-                  (index) => Container(
-                    margin: EdgeInsets.symmetric(horizontal: 4),
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _currentImageIndex == index
-                          ? Colors.blue
-                          : Colors.grey[600],
-                    ),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
