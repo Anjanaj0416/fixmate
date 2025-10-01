@@ -1,5 +1,5 @@
 // lib/screens/booking_detail_customer_screen.dart
-// New file - Customer view of booking with chat option
+// Modified version with photo viewing capability
 import 'package:flutter/material.dart';
 import '../models/booking_model.dart';
 import '../services/chat_service.dart';
@@ -61,6 +61,29 @@ class BookingDetailCustomerScreen extends StatelessWidget {
     }
   }
 
+  // NEW METHOD: View issue photos
+  void _viewIssuePhotos(BuildContext context) {
+    if (booking.problemImageUrls.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No photos available for this booking'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => IssuePhotoViewerScreen(
+          imageUrls: booking.problemImageUrls,
+          problemDescription: booking.problemDescription,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -81,7 +104,11 @@ class BookingDetailCustomerScreen extends StatelessWidget {
                 padding: EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    Icon(_getStatusIcon(booking.status), color: Colors.white),
+                    Icon(
+                      _getStatusIcon(booking.status),
+                      color: Colors.white,
+                      size: 32,
+                    ),
                     SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -91,14 +118,14 @@ class BookingDetailCustomerScreen extends StatelessWidget {
                             'Status',
                             style: TextStyle(
                               color: Colors.white70,
-                              fontSize: 12,
+                              fontSize: 14,
                             ),
                           ),
                           Text(
                             booking.status.displayName,
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 18,
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -112,7 +139,7 @@ class BookingDetailCustomerScreen extends StatelessWidget {
 
             SizedBox(height: 16),
 
-            // Worker Details Card
+            // Worker Information Card
             Card(
               child: Padding(
                 padding: EdgeInsets.all(16),
@@ -120,7 +147,7 @@ class BookingDetailCustomerScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Worker Details',
+                      'Worker Information',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -184,6 +211,47 @@ class BookingDetailCustomerScreen extends StatelessWidget {
                     ),
                     Divider(),
                     Text(booking.problemDescription),
+
+                    // NEW: Photo count indicator and view button
+                    if (booking.problemImageUrls.isNotEmpty) ...[
+                      SizedBox(height: 12),
+                      Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border:
+                              Border.all(color: Colors.blue.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.photo_library,
+                                color: Colors.blue, size: 20),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${booking.problemImageUrls.length} photo${booking.problemImageUrls.length > 1 ? 's' : ''} attached',
+                                style: TextStyle(
+                                  color: Colors.blue[700],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _viewIssuePhotos(context),
+                              icon: Icon(Icons.remove_red_eye, size: 18),
+                              label: Text('View'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.blue,
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -281,5 +349,161 @@ class BookingDetailCustomerScreen extends StatelessWidget {
       default:
         return Icons.info;
     }
+  }
+}
+
+// NEW CLASS: Photo viewer screen
+class IssuePhotoViewerScreen extends StatefulWidget {
+  final List<String> imageUrls;
+  final String problemDescription;
+
+  const IssuePhotoViewerScreen({
+    Key? key,
+    required this.imageUrls,
+    required this.problemDescription,
+  }) : super(key: key);
+
+  @override
+  State<IssuePhotoViewerScreen> createState() => _IssuePhotoViewerScreenState();
+}
+
+class _IssuePhotoViewerScreenState extends State<IssuePhotoViewerScreen> {
+  int _currentImageIndex = 0;
+  final PageController _pageController = PageController();
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: Text(
+          'Issue Photos (${_currentImageIndex + 1}/${widget.imageUrls.length})',
+          style: TextStyle(color: Colors.white),
+        ),
+        backgroundColor: Colors.black87,
+        iconTheme: IconThemeData(color: Colors.white),
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          // Image viewer
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: widget.imageUrls.length,
+              onPageChanged: (index) {
+                setState(() {
+                  _currentImageIndex = index;
+                });
+              },
+              itemBuilder: (context, index) {
+                return InteractiveViewer(
+                  minScale: 0.5,
+                  maxScale: 4.0,
+                  child: Center(
+                    child: Image.network(
+                      widget.imageUrls[index],
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: Colors.white,
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error_outline,
+                                  color: Colors.white, size: 48),
+                              SizedBox(height: 8),
+                              Text(
+                                'Failed to load image',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // Problem description at bottom
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              border: Border(
+                top: BorderSide(color: Colors.grey[800]!),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Problem Description:',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  widget.problemDescription,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Image navigation dots (if multiple images)
+          if (widget.imageUrls.length > 1)
+            Container(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              color: Colors.black87,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  widget.imageUrls.length,
+                  (index) => Container(
+                    margin: EdgeInsets.symmetric(horizontal: 4),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentImageIndex == index
+                          ? Colors.blue
+                          : Colors.grey[600],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

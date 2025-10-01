@@ -498,6 +498,47 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
               SizedBox(height: 4),
               Text(booking.problemDescription),
 
+              // NEW: Photo viewing section
+              if (booking.problemImageUrls.isNotEmpty) ...[
+                SizedBox(height: 12),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.photo_library, color: Colors.orange, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${booking.problemImageUrls.length} issue photo${booking.problemImageUrls.length > 1 ? 's' : ''} available',
+                          style: TextStyle(
+                            color: Colors.orange[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context); // Close dialog
+                          _viewIssuePhotos(booking); // Open photo viewer
+                        },
+                        icon: Icon(Icons.remove_red_eye, size: 18),
+                        label: Text('View'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.orange,
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
               SizedBox(height: 16),
 
               // Chat Button
@@ -526,7 +567,51 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
             onPressed: () => Navigator.pop(context),
             child: Text('Close'),
           ),
+
+          // Accept/Decline buttons based on status
+          if (booking.status == BookingStatus.requested) ...[
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _acceptBooking(booking);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              child: Text('Accept'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _declineBooking(booking);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: Text('Decline'),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+// NEW METHOD: Add this method to your WorkerBookingsScreen class
+  void _viewIssuePhotos(BookingModel booking) {
+    if (booking.problemImageUrls.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No photos available for this booking'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => IssuePhotoViewerScreenWorker(
+          imageUrls: booking.problemImageUrls,
+          problemDescription: booking.problemDescription,
+          customerName: booking.customerName,
+        ),
       ),
     );
   }
@@ -870,6 +955,190 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 3),
+      ),
+    );
+  }
+}
+
+class IssuePhotoViewerScreenWorker extends StatefulWidget {
+  final List<String> imageUrls;
+  final String problemDescription;
+  final String customerName;
+
+  const IssuePhotoViewerScreenWorker({
+    Key? key,
+    required this.imageUrls,
+    required this.problemDescription,
+    required this.customerName,
+  }) : super(key: key);
+
+  @override
+  State<IssuePhotoViewerScreenWorker> createState() =>
+      _IssuePhotoViewerScreenWorkerState();
+}
+
+class _IssuePhotoViewerScreenWorkerState
+    extends State<IssuePhotoViewerScreenWorker> {
+  int _currentImageIndex = 0;
+  final PageController _pageController = PageController();
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: Text(
+          'Issue Photos (${_currentImageIndex + 1}/${widget.imageUrls.length})',
+          style: TextStyle(color: Colors.white),
+        ),
+        backgroundColor: Colors.black87,
+        iconTheme: IconThemeData(color: Colors.white),
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          // Customer info banner
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.2),
+              border: Border(
+                bottom: BorderSide(color: Colors.orange.withOpacity(0.5)),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.person, color: Colors.orange, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Customer: ${widget.customerName}',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Image viewer
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: widget.imageUrls.length,
+              onPageChanged: (index) {
+                setState(() {
+                  _currentImageIndex = index;
+                });
+              },
+              itemBuilder: (context, index) {
+                return InteractiveViewer(
+                  minScale: 0.5,
+                  maxScale: 4.0,
+                  child: Center(
+                    child: Image.network(
+                      widget.imageUrls[index],
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: Colors.orange,
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error_outline,
+                                  color: Colors.white, size: 48),
+                              SizedBox(height: 8),
+                              Text(
+                                'Failed to load image',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // Problem description at bottom
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              border: Border(
+                top: BorderSide(color: Colors.grey[800]!),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Problem Description:',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  widget.problemDescription,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Image navigation dots (if multiple images)
+          if (widget.imageUrls.length > 1)
+            Container(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              color: Colors.black87,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  widget.imageUrls.length,
+                  (index) => Container(
+                    margin: EdgeInsets.symmetric(horizontal: 4),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentImageIndex == index
+                          ? Colors.orange
+                          : Colors.grey[600],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -10,6 +10,8 @@ import '../services/ml_service.dart';
 import 'worker_results_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/storage_service.dart'; // NEW - Add this
+import 'enhanced_worker_selection_screen.dart'; // NEW - Add this
 
 class ChatMessage {
   final String text;
@@ -259,68 +261,89 @@ class _AIChatScreenState extends State<AIChatScreen> {
   }
 
   // ========== MODIFIED: Show location dialog with pre-filled saved location ==========
-  void _handleFindWorkers() async {
+  Future<void> _findWorkers() async {
     if (_lastProblemDescription == null) {
       _showErrorSnackBar('No problem description available');
       return;
     }
 
-    // Show location dialog with pre-filled location
-    final location = await _showLocationDialog();
+    // Show location dialog
+    String? location = await _showLocationDialog();
     if (location == null || location.isEmpty) {
-      return; // User cancelled
+      _showErrorSnackBar('Location is required to find workers');
+      return;
     }
 
-    // Show loading message with the chosen location
-    setState(() {
-      _messages.add(ChatMessage(
-        text: 'Searching for skilled workers near $location...',
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
-      _isLoading = true;
-    });
-    _scrollToBottom();
+    setState(() => _isLoading = true);
 
     try {
-      // Call ML service with the chosen location (may be different from saved)
-      final response = await MLService.searchWorkers(
-        description: _lastProblemDescription!,
-        location: location,
-      );
+      // NEW: Upload photo to Firebase Storage if there's an image
+      List<String> uploadedPhotoUrls = [];
 
-      setState(() {
-        _isLoading = false;
-      });
+      // Check if there's an image in the last message
+      for (var message in _messages.reversed) {
+        if (message.isUser && message.image != null) {
+          // Show upload progress
+          setState(() {
+            _messages.add(ChatMessage(
+              text: '📤 Uploading photo to secure storage...',
+              isUser: false,
+              timestamp: DateTime.now(),
+            ));
+          });
+          _scrollToBottom();
 
-      if (response.workers.isEmpty) {
-        setState(() {
-          _messages.add(ChatMessage(
-            text:
-                'No workers found for your location. Please try a different area.',
-            isUser: false,
-            timestamp: DateTime.now(),
-          ));
-        });
-        _scrollToBottom();
-      } else {
-        // Navigate to worker results screen
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => WorkerResultsScreen(
-              workers: response.workers,
-              aiAnalysis: response.aiAnalysis,
-              problemDescription: _lastProblemDescription!,
-            ),
-          ),
-        );
+          try {
+            // Upload the photo
+            String photoUrl = await StorageService.uploadIssuePhoto(
+              imageFile: message.image!,
+            );
+            uploadedPhotoUrls.add(photoUrl);
+            print('✅ Photo uploaded: $photoUrl');
+
+            // Show success message
+            setState(() {
+              _messages.add(ChatMessage(
+                text: '✅ Photo uploaded successfully!',
+                isUser: false,
+                timestamp: DateTime.now(),
+              ));
+            });
+            _scrollToBottom();
+          } catch (e) {
+            print('❌ Photo upload failed: $e');
+            _showErrorSnackBar('Failed to upload photo, continuing without it');
+          }
+
+          break; // Only upload the most recent image
+        }
       }
+
+      setState(() => _isLoading = false);
+
+      // Navigate to worker selection with uploaded photo URLs
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => EnhancedWorkerSelectionScreen(
+            serviceType: 'general_services',
+            subService: 'maintenance',
+            issueType: 'general',
+            problemDescription: _lastProblemDescription!,
+            problemImageUrls: uploadedPhotoUrls, // ✅ Now contains actual URLs
+            location: location,
+            address: location,
+            urgency: 'normal',
+            budgetRange: 'negotiable',
+            scheduledDate: DateTime.now().add(Duration(days: 1)),
+            scheduledTime: '09:00 AM',
+          ),
+        ),
+      );
     } catch (e) {
       setState(() {
         _messages.add(ChatMessage(
-          text:
-              'Failed to find workers: ${e.toString()}\n\nMake sure the ML service is running.',
+          text: 'Failed to process request: ${e.toString()}',
           isUser: false,
           timestamp: DateTime.now(),
           isError: true,
@@ -634,7 +657,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ElevatedButton.icon(
-                    onPressed: _handleFindWorkers,
+                    onPressed: _findWorkers,
                     icon: Icon(Icons.person_search, size: 18),
                     label: Text('Find Skilled Workers'),
                     style: ElevatedButton.styleFrom(
