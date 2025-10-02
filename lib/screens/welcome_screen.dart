@@ -15,112 +15,126 @@ class WelcomeScreen extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Logo
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Icon(Icons.build, size: 50, color: Color(0xFF2196F3)),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.all(24.0),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: MediaQuery.of(context).size.height -
+                      MediaQuery.of(context).padding.top -
+                      MediaQuery.of(context).padding.bottom -
+                      48,
                 ),
-                SizedBox(height: 32),
-
-                // App Name
-                Text(
-                  'FixMate',
-                  style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Find. Fix. Done.',
-                  style: TextStyle(fontSize: 18, color: Colors.white70),
-                ),
-                SizedBox(height: 48),
-
-                // Features
-                _buildFeatureItem(
-                  icon: Icons.search,
-                  title: 'Find Skilled Workers',
-                  subtitle: 'Connect with verified professionals',
-                ),
-                SizedBox(height: 16),
-                _buildFeatureItem(
-                  icon: Icons.build,
-                  title: 'Offer Your Services',
-                  subtitle: 'Grow your business with new clients',
-                ),
-                SizedBox(height: 16),
-                _buildFeatureItem(
-                  icon: Icons.star,
-                  title: 'Smart Matching',
-                  subtitle: 'AI-powered worker recommendations',
-                ),
-                SizedBox(height: 48),
-
-                // Get Started Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => CreateAccountScreen(),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFF9800),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(height: 20),
+                    // Logo
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
                       ),
+                      child:
+                          Icon(Icons.build, size: 50, color: Color(0xFF2196F3)),
                     ),
-                    child: Text(
-                      'Get Started',
+                    SizedBox(height: 32),
+
+                    // App Name
+                    Text(
+                      'FixMate',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 36,
                         fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
-                  ),
-                ),
-                SizedBox(height: 16),
+                    SizedBox(height: 8),
+                    Text(
+                      'Find. Fix. Done.',
+                      style: TextStyle(fontSize: 18, color: Colors.white70),
+                    ),
+                    SizedBox(height: 48),
 
-                // Sign In Link
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => SignInScreen()),
-                    );
-                  },
-                  child: Text(
-                    'Already have an account? Sign In',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                ),
-                SizedBox(height: 24),
+                    // Features
+                    _buildFeatureItem(
+                      icon: Icons.search,
+                      title: 'Find Skilled Workers',
+                      subtitle: 'Connect with verified professionals',
+                    ),
+                    SizedBox(height: 20),
+                    _buildFeatureItem(
+                      icon: Icons.handyman,
+                      title: 'Offer Your Services',
+                      subtitle: 'Grow your business with new clients',
+                    ),
+                    SizedBox(height: 20),
+                    _buildFeatureItem(
+                      icon: Icons.star,
+                      title: 'Smart Matching',
+                      subtitle: 'AI-powered worker recommendations',
+                    ),
+                    SizedBox(height: 48),
 
-                // Terms and Privacy
-                Text(
-                  'By continuing, you agree to our Terms of Service and Privacy Policy',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: Colors.white60),
+                    // Get Started Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => CreateAccountScreen()),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Get Started',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+
+                    // Sign In Button
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => SignInScreen()),
+                        );
+                      },
+                      child: Text(
+                        'Already have an account? Sign In',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                    SizedBox(height: 24),
+
+                    // Terms and Privacy
+                    Text(
+                      'By continuing, you agree to our Terms of Service and Privacy Policy',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: Colors.white60),
+                    ),
+                    SizedBox(height: 20),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
