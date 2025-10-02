@@ -6,6 +6,7 @@ import 'service_request_flow.dart';
 import 'customer_profile_screen.dart';
 import 'customer_bookings_screen.dart';
 import 'ai_chat_screen.dart'; // ADD THIS IMPORT
+import 'customer_chats_screen.dart';
 
 class CustomerDashboard extends StatefulWidget {
   @override
@@ -571,31 +572,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   Widget _buildInboxScreen() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.message, size: 64, color: Colors.grey[400]),
-          SizedBox(height: 16),
-          Text(
-            'Messages',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[600],
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'No messages yet',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[500],
-            ),
-          ),
-        ],
-      ),
-    );
+    // NEW: Show actual chat list instead of placeholder
+    return CustomerChatsScreen();
   }
 
   Widget _buildProfileScreen() {

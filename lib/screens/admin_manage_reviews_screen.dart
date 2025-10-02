@@ -1,4 +1,5 @@
 // lib/screens/admin_manage_reviews_screen.dart
+// ENHANCED VERSION - Added delete inappropriate reviews functionality
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -9,6 +10,107 @@ class AdminManageReviewsScreen extends StatefulWidget {
 }
 
 class _AdminManageReviewsScreenState extends State<AdminManageReviewsScreen> {
+  // Delete a review
+  Future<void> _deleteReview(String reviewId, String reviewText) async {
+    // Show confirmation dialog
+    bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Delete Review?'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete this review?'),
+            SizedBox(height: 12),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '"${reviewText.length > 100 ? reviewText.substring(0, 100) + '...' : reviewText}"',
+                style: TextStyle(
+                  fontStyle: FontStyle.italic,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'This action cannot be undone.',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()),
+      );
+
+      // Delete the review
+      await FirebaseFirestore.instance
+          .collection('reviews')
+          .doc(reviewId)
+          .delete();
+
+      // Close loading
+      Navigator.pop(context);
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Review deleted successfully'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      // Close loading
+      Navigator.pop(context);
+
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting review: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -22,7 +124,16 @@ class _AdminManageReviewsScreenState extends State<AdminManageReviewsScreen> {
         }
 
         if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 64, color: Colors.red),
+                SizedBox(height: 16),
+                Text('Error: ${snapshot.error}'),
+              ],
+            ),
+          );
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -56,58 +167,81 @@ class _AdminManageReviewsScreenState extends State<AdminManageReviewsScreen> {
             Timestamp? createdAt = data['created_at'] as Timestamp?;
             String bookingId = data['booking_id'] ?? 'N/A';
 
+            DateTime? reviewDate = createdAt?.toDate();
+            String formattedDate = reviewDate != null
+                ? '${reviewDate.day}/${reviewDate.month}/${reviewDate.year}'
+                : 'Unknown date';
+
             return Card(
               margin: EdgeInsets.only(bottom: 16),
               elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Padding(
                 padding: EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header
+                    // Header row with customer, worker, and delete button
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                customerName,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
+                              Row(
+                                children: [
+                                  Icon(Icons.person,
+                                      size: 16, color: Colors.blue),
+                                  SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      customerName,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                               SizedBox(height: 4),
-                              Text(
-                                'reviewed $workerName',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 14,
-                                ),
+                              Row(
+                                children: [
+                                  Icon(Icons.engineering,
+                                      size: 16, color: Colors.orange),
+                                  SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      'Worker: $workerName',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
                         ),
+                        // Delete button
                         IconButton(
                           icon: Icon(Icons.delete, color: Colors.red),
-                          onPressed: () =>
-                              _confirmDeleteReview(doc.id, customerName),
+                          tooltip: 'Delete inappropriate review',
+                          onPressed: () => _deleteReview(doc.id, review),
                         ),
                       ],
                     ),
+                    Divider(height: 16),
 
-                    SizedBox(height: 12),
-
-                    // Rating
+                    // Rating stars
                     Row(
                       children: [
                         ...List.generate(5, (starIndex) {
                           return Icon(
-                            starIndex < rating.round()
-                                ? Icons.star
-                                : Icons.star_border,
+                            starIndex < rating ? Icons.star : Icons.star_border,
                             color: Colors.amber,
                             size: 20,
                           );
@@ -122,20 +256,28 @@ class _AdminManageReviewsScreenState extends State<AdminManageReviewsScreen> {
                         ),
                       ],
                     ),
-
                     SizedBox(height: 12),
 
-                    // Review Text
-                    Text(
-                      review,
-                      style: TextStyle(fontSize: 14),
+                    // Review text
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[200]!),
+                      ),
+                      child: Text(
+                        review,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[800],
+                          height: 1.4,
+                        ),
+                      ),
                     ),
-
                     SizedBox(height: 12),
 
-                    // Footer Info
-                    Divider(),
-                    SizedBox(height: 8),
+                    // Footer with service type, booking ID, and date
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -145,27 +287,27 @@ class _AdminManageReviewsScreenState extends State<AdminManageReviewsScreen> {
                             Text(
                               'Service: ${serviceType.replaceAll('_', ' ')}',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 11,
                                 color: Colors.grey[600],
                               ),
                             ),
                             Text(
-                              'Booking ID: $bookingId',
+                              'Booking: $bookingId',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 11,
                                 color: Colors.grey[600],
                               ),
                             ),
                           ],
                         ),
-                        if (createdAt != null)
-                          Text(
-                            _formatDate(createdAt.toDate()),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
+                        Text(
+                          formattedDate,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[500],
+                            fontStyle: FontStyle.italic,
                           ),
+                        ),
                       ],
                     ),
                   ],
@@ -176,60 +318,5 @@ class _AdminManageReviewsScreenState extends State<AdminManageReviewsScreen> {
         );
       },
     );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
-  }
-
-  Future<void> _confirmDeleteReview(
-      String reviewId, String customerName) async {
-    bool? confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Delete Review'),
-        content: Text(
-          'Are you sure you want to delete the review by $customerName? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await _deleteReview(reviewId);
-    }
-  }
-
-  Future<void> _deleteReview(String reviewId) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('reviews')
-          .doc(reviewId)
-          .delete();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Review deleted successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error deleting review: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 }

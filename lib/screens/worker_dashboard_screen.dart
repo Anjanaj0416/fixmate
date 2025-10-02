@@ -1,6 +1,5 @@
 // lib/screens/worker_dashboard_screen.dart
-// UPDATED VERSION - Added ratings and reviews section
-
+// ENHANCED VERSION - Added Chat/Messages navigation
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,6 +7,7 @@ import '../models/worker_model.dart';
 import '../screens/worker_profile_screen.dart';
 import '../screens/worker_bookings_screen.dart';
 import '../screens/worker_reviews_screen.dart';
+import '../screens/worker_chats_screen.dart'; // NEW IMPORT
 import '../services/rating_service.dart';
 
 class WorkerDashboardScreen extends StatefulWidget {
@@ -38,7 +38,6 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
 
       print('📊 Loading worker data for user: ${user.uid}');
 
-      // METHOD 1: Try loading by user UID (most reliable)
       DocumentSnapshot workerDoc = await FirebaseFirestore.instance
           .collection('workers')
           .doc(user.uid)
@@ -49,7 +48,6 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         _worker = WorkerModel.fromFirestore(workerDoc);
         _isAvailable = _worker!.availability.availableToday;
 
-        // Load rating stats
         _ratingStats = await RatingService.getWorkerRatingStats(
           _worker!.workerId!,
         );
@@ -60,7 +58,6 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
 
       print('⚠️ Worker not found by UID, trying email query...');
 
-      // METHOD 2: Fallback - try querying by email
       QuerySnapshot workerQuery = await FirebaseFirestore.instance
           .collection('workers')
           .where('contact.email', isEqualTo: user.email)
@@ -72,7 +69,6 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         _worker = WorkerModel.fromFirestore(workerQuery.docs.first);
         _isAvailable = _worker!.availability.availableToday;
 
-        // Load rating stats
         _ratingStats = await RatingService.getWorkerRatingStats(
           _worker!.workerId!,
         );
@@ -92,53 +88,80 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
   Future<void> _toggleAvailability() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
-      if (user != null && _worker != null) {
-        QuerySnapshot workerQuery = await FirebaseFirestore.instance
-            .collection('workers')
-            .where('worker_id', isEqualTo: _worker!.workerId)
-            .limit(1)
-            .get();
+      if (user == null) return;
 
-        if (workerQuery.docs.isNotEmpty) {
-          await FirebaseFirestore.instance
-              .collection('workers')
-              .doc(workerQuery.docs.first.id)
-              .update({
-            'availability.available_today': !_isAvailable,
-            'last_active': FieldValue.serverTimestamp(),
-          });
+      setState(() => _isAvailable = !_isAvailable);
 
-          setState(() {
-            _isAvailable = !_isAvailable;
-          });
+      await FirebaseFirestore.instance
+          .collection('workers')
+          .doc(user.uid)
+          .update({
+        'availability.available_today': _isAvailable,
+        'availability.updated_at': FieldValue.serverTimestamp(),
+      });
 
-          _showSuccessSnackBar(_isAvailable
-              ? 'You are now available for work'
-              : 'You are now offline');
-        }
-      }
+      _showSuccessSnackBar(
+        _isAvailable ? 'You are now available' : 'You are now unavailable',
+      );
     } catch (e) {
-      _showErrorSnackBar('Failed to update availability: ${e.toString()}');
+      setState(() => _isAvailable = !_isAvailable);
+      _showErrorSnackBar('Failed to update availability');
     }
   }
 
-  Future<void> _logout() async {
-    try {
-      await FirebaseAuth.instance.signOut();
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        '/welcome',
-        (route) => false,
-      );
-    } catch (e) {
-      _showErrorSnackBar('Logout failed: ${e.toString()}');
-    }
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading || _worker == null) {
+    if (_isLoading) {
       return Scaffold(
+        appBar: AppBar(
+          title: Text('Worker Dashboard'),
+          backgroundColor: Color(0xFFFF9800),
+        ),
         body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_worker == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('Worker Dashboard'),
+          backgroundColor: Color(0xFFFF9800),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: Colors.red),
+              SizedBox(height: 16),
+              Text('Failed to load worker profile'),
+              SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadWorkerData,
+                child: Text('Retry'),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -147,24 +170,9 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         title: Text('Worker Dashboard'),
         backgroundColor: Color(0xFFFF9800),
         actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'logout') {
-                _logout();
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Logout', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
-              ),
-            ],
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _loadWorkerData,
           ),
         ],
       ),
@@ -257,11 +265,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                   MaterialPageRoute(
                     builder: (context) => WorkerProfileScreen(worker: _worker!),
                   ),
-                ).then((updated) {
-                  if (updated == true) {
-                    _loadWorkerData();
-                  }
-                });
+                );
               },
             ),
           ],
@@ -277,36 +281,37 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Icon(
-              _isAvailable ? Icons.check_circle : Icons.cancel,
-              color: _isAvailable ? Colors.green : Colors.red,
-              size: 32,
-            ),
-            SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _isAvailable ? 'Available for Work' : 'Currently Offline',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+            Row(
+              children: [
+                Icon(
+                  _isAvailable ? Icons.check_circle : Icons.cancel,
+                  color: _isAvailable ? Colors.green : Colors.red,
+                  size: 28,
+                ),
+                SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Availability Status',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    _isAvailable
-                        ? 'You will receive booking requests'
-                        : 'You won\'t receive booking requests',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                    Text(
+                      _isAvailable ? 'Available' : 'Unavailable',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: _isAvailable ? Colors.green : Colors.red,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ),
             Switch(
               value: _isAvailable,
@@ -320,228 +325,123 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
   }
 
   Widget _buildRatingsCard() {
-    double averageRating = _ratingStats['average_rating'] ?? _worker!.rating;
+    if (_ratingStats.isEmpty) {
+      return SizedBox.shrink();
+    }
+
+    double avgRating = _ratingStats['average_rating'] ?? 0.0;
     int totalReviews = _ratingStats['total_reviews'] ?? 0;
-    Map<int, int> ratingBreakdown = _ratingStats['rating_breakdown'] ?? {};
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => WorkerReviewsScreen(
-                workerId: _worker!.workerId!,
-                workerName: _worker!.workerName,
-              ),
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Ratings & Reviews',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                ],
-              ),
-              SizedBox(height: 16),
-              Row(
-                children: [
-                  // Average rating display
-                  Column(
-                    children: [
-                      Text(
-                        averageRating.toStringAsFixed(1),
-                        style: TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFFFF9800),
-                        ),
-                      ),
-                      Row(
-                        children: List.generate(5, (index) {
-                          return Icon(
-                            index < averageRating.floor()
-                                ? Icons.star
-                                : (index < averageRating.ceil() &&
-                                        averageRating % 1 != 0)
-                                    ? Icons.star_half
-                                    : Icons.star_border,
-                            color: Color(0xFFFF9800),
-                            size: 20,
-                          );
-                        }),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        '$totalReviews ${totalReviews == 1 ? 'review' : 'reviews'}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(width: 24),
-
-                  // Rating breakdown
-                  Expanded(
-                    child: Column(
-                      children: List.generate(5, (index) {
-                        int stars = 5 - index;
-                        int count = ratingBreakdown[stars] ?? 0;
-                        double percentage =
-                            totalReviews > 0 ? count / totalReviews : 0;
-
-                        return Padding(
-                          padding: EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            children: [
-                              Text(
-                                '$stars',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              SizedBox(width: 2),
-                              Icon(Icons.star,
-                                  size: 12, color: Color(0xFFFF9800)),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(2),
-                                  child: LinearProgressIndicator(
-                                    value: percentage,
-                                    backgroundColor: Colors.grey[200],
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Color(0xFFFF9800),
-                                    ),
-                                    minHeight: 6,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                              SizedBox(
-                                width: 20,
-                                child: Text(
-                                  '$count',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
-                                  textAlign: TextAlign.right,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-                ],
-              ),
-              if (totalReviews > 0) ...[
-                SizedBox(height: 12),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, size: 18, color: Colors.blue),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Tap to view all customer reviews',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue[900],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickStats() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildStatCard(
-            'Jobs Completed',
-            _worker!.jobsCompleted.toString(),
-            Icons.work,
-            Colors.green,
-          ),
-        ),
-        SizedBox(width: 12),
-        Expanded(
-          child: _buildStatCard(
-            'Experience',
-            '${_worker!.experienceYears} years',
-            Icons.emoji_events,
-            Colors.orange,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(
-      String title, String value, IconData icon, Color color) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 32, color: color),
-            SizedBox(height: 8),
             Text(
-              value,
+              'Your Ratings',
               style: TextStyle(
-                fontSize: 24,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: color,
               ),
             ),
-            SizedBox(height: 4),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-              textAlign: TextAlign.center,
+            SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.star, color: Colors.amber, size: 32),
+                SizedBox(width: 8),
+                Text(
+                  avgRating.toStringAsFixed(1),
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  '($totalReviews reviews)',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildQuickStats() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Quick Stats',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatItem(
+                  'Completed',
+                  _worker!.jobsCompleted.toString(),
+                  Icons.check_circle,
+                  Colors.green,
+                ),
+                _buildStatItem(
+                  'Rating',
+                  _worker!.rating.toStringAsFixed(1),
+                  Icons.star,
+                  Colors.amber,
+                ),
+                _buildStatItem(
+                  'Reviews',
+                  (_ratingStats['total_reviews'] ?? 0).toString(),
+                  Icons.rate_review,
+                  Colors.blue,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(
+      String label, String value, IconData icon, Color color) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 28),
+        SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
     );
   }
 
@@ -595,29 +495,28 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
               },
             ),
             _buildActionCard(
+              'Chats',
+              Icons.chat_bubble,
+              Colors.green,
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WorkerChatsScreen(),
+                  ),
+                );
+              },
+            ),
+            _buildActionCard(
               'Profile',
               Icons.person,
-              Colors.green,
+              Colors.purple,
               () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => WorkerProfileScreen(worker: _worker!),
                   ),
-                ).then((updated) {
-                  if (updated == true) {
-                    _loadWorkerData();
-                  }
-                });
-              },
-            ),
-            _buildActionCard(
-              'Settings',
-              Icons.settings,
-              Colors.grey,
-              () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Settings coming soon')),
                 );
               },
             ),
@@ -629,48 +528,36 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
 
   Widget _buildActionCard(
       String title, IconData icon, Color color, VoidCallback onTap) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: EdgeInsets.all(16),
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 32, color: color),
+              Icon(icon, color: color, size: 32),
               SizedBox(height: 8),
               Text(
                 title,
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
                 ),
-                textAlign: TextAlign.center,
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
       ),
     );
   }
