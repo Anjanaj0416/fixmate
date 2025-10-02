@@ -1,4 +1,5 @@
 // lib/screens/admin_manage_users_screen.dart
+// FIXED VERSION - Added red unsuspend button with proper display
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -8,8 +9,7 @@ class AdminManageUsersScreen extends StatefulWidget {
 }
 
 class _AdminManageUsersScreenState extends State<AdminManageUsersScreen> {
-  String _selectedTab = 'customers'; // 'customers' or 'workers'
-  bool _isLoading = false;
+  String _selectedTab = 'customers';
 
   @override
   Widget build(BuildContext context) {
@@ -18,13 +18,13 @@ class _AdminManageUsersScreenState extends State<AdminManageUsersScreen> {
         // Tab Selector
         Container(
           padding: EdgeInsets.all(16),
-          color: Colors.grey[100],
           child: Row(
             children: [
               Expanded(
                 child: ElevatedButton(
                   onPressed: () => setState(() => _selectedTab = 'customers'),
                   style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: 12),
                     backgroundColor: _selectedTab == 'customers'
                         ? Color(0xFF2196F3)
                         : Colors.grey[300],
@@ -35,11 +35,12 @@ class _AdminManageUsersScreenState extends State<AdminManageUsersScreen> {
                   child: Text('Customers'),
                 ),
               ),
-              SizedBox(width: 16),
+              SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
                   onPressed: () => setState(() => _selectedTab = 'workers'),
                   style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: 12),
                     backgroundColor: _selectedTab == 'workers'
                         ? Color(0xFF2196F3)
                         : Colors.grey[300],
@@ -96,6 +97,7 @@ class _AdminManageUsersScreenState extends State<AdminManageUsersScreen> {
             Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
             String name = data['name'] ?? 'Unknown';
+            String customerId = data['customer_id'] ?? 'N/A';
             String email = data['email'] ?? 'No email';
             String phone = data['phone'] ?? 'No phone';
             bool isActive = data['status'] != 'suspended';
@@ -117,8 +119,10 @@ class _AdminManageUsersScreenState extends State<AdminManageUsersScreen> {
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text('ID: $customerId'),
                     Text('Email: $email'),
                     Text('Phone: $phone'),
+                    SizedBox(height: 4),
                     Text(
                       'Status: ${isActive ? "Active" : "Suspended"}',
                       style: TextStyle(
@@ -128,12 +132,16 @@ class _AdminManageUsersScreenState extends State<AdminManageUsersScreen> {
                     ),
                   ],
                 ),
-                trailing: Switch(
-                  value: isActive,
-                  onChanged: (value) {
-                    _toggleUserStatus(doc.id, value, 'customers');
+                trailing: ElevatedButton(
+                  onPressed: () {
+                    _toggleUserStatus(doc.id, !isActive, 'customers');
                   },
-                  activeColor: Colors.green,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isActive ? Colors.orange : Colors.red,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  child: Text(isActive ? 'Suspend' : 'Unsuspend'),
                 ),
                 isThreeLine: true,
               ),
@@ -203,6 +211,7 @@ class _AdminManageUsersScreenState extends State<AdminManageUsersScreen> {
                     Text('ID: $workerId'),
                     Text('Email: $email'),
                     Text('Service: ${serviceType.replaceAll('_', ' ')}'),
+                    SizedBox(height: 4),
                     Row(
                       children: [
                         Icon(Icons.star, size: 16, color: Colors.amber),
@@ -220,12 +229,16 @@ class _AdminManageUsersScreenState extends State<AdminManageUsersScreen> {
                     ),
                   ],
                 ),
-                trailing: Switch(
-                  value: isActive,
-                  onChanged: (value) {
-                    _toggleUserStatus(doc.id, value, 'workers');
+                trailing: ElevatedButton(
+                  onPressed: () {
+                    _toggleUserStatus(doc.id, !isActive, 'workers');
                   },
-                  activeColor: Colors.green,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isActive ? Colors.orange : Colors.red,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  child: Text(isActive ? 'Suspend' : 'Unsuspend'),
                 ),
                 isThreeLine: true,
               ),

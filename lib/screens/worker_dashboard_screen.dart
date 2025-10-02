@@ -9,6 +9,7 @@ import '../screens/worker_bookings_screen.dart';
 import '../screens/worker_reviews_screen.dart';
 import '../screens/worker_chats_screen.dart'; // NEW IMPORT
 import '../services/rating_service.dart';
+import 'worker_chats_screen.dart';
 
 class WorkerDashboardScreen extends StatefulWidget {
   @override
@@ -272,6 +273,11 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildInboxScreen() {
+    // NEW: Show actual worker chat list instead of placeholder
+    return WorkerChatsScreen();
   }
 
   Widget _buildAvailabilityCard() {

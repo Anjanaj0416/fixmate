@@ -1,9 +1,11 @@
 // lib/screens/admin_dashboard_screen.dart
+// UPDATED VERSION - Added Inbox tab for support chats
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'admin_manage_users_screen.dart';
 import 'admin_manage_reviews_screen.dart';
+import 'admin_inbox_screen.dart';
 import 'admin_settings_screen.dart';
 import 'welcome_screen.dart';
 
@@ -63,12 +65,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           await FirebaseFirestore.instance.collection('reviews').get();
 
       setState(() {
-        _stats['totalUsers'] = customersSnapshot.docs.length;
-        _stats['totalWorkers'] = workersSnapshot.docs.length;
-        _stats['totalBookings'] = bookingsSnapshot.docs.length;
-        _stats['pendingBookings'] = pendingSnapshot.docs.length;
-        _stats['completedBookings'] = completedSnapshot.docs.length;
-        _stats['totalReviews'] = reviewsSnapshot.docs.length;
+        _stats = {
+          'totalUsers': customersSnapshot.size,
+          'totalWorkers': workersSnapshot.size,
+          'totalBookings': bookingsSnapshot.size,
+          'pendingBookings': pendingSnapshot.size,
+          'completedBookings': completedSnapshot.size,
+          'totalReviews': reviewsSnapshot.size,
+        };
         _isLoading = false;
       });
     } catch (e) {
@@ -77,52 +81,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  Future<void> _signOut() async {
-    try {
-      await FirebaseAuth.instance.signOut();
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => WelcomeScreen()),
-        (route) => false,
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error signing out: $e')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Admin Panel'),
-        backgroundColor: Color(0xFF2196F3),
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: _loadStats,
+            tooltip: 'Refresh Stats',
           ),
           IconButton(
             icon: Icon(Icons.logout),
-            onPressed: _signOut,
+            onPressed: _logout,
+            tooltip: 'Logout',
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          _buildDashboardHome(),
-          AdminManageUsersScreen(),
-          AdminManageReviewsScreen(),
-          AdminSettingsScreen(),
-        ],
-      ),
+      body: _getBody(),
       bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
-        selectedItemColor: Color(0xFF2196F3),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Colors.deepPurple,
         unselectedItemColor: Colors.grey,
         items: [
           BottomNavigationBarItem(
@@ -138,6 +122,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             label: 'Reviews',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.inbox),
+            label: 'Inbox',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.settings),
             label: 'Settings',
           ),
@@ -146,112 +134,120 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildDashboardHome() {
+  Widget _getBody() {
+    switch (_currentIndex) {
+      case 0:
+        return _buildDashboard();
+      case 1:
+        return AdminManageUsersScreen();
+      case 2:
+        return AdminManageReviewsScreen();
+      case 3:
+        return AdminInboxScreen();
+      case 4:
+        return AdminSettingsScreen();
+      default:
+        return _buildDashboard();
+    }
+  }
+
+  Widget _buildDashboard() {
     if (_isLoading) {
       return Center(child: CircularProgressIndicator());
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadStats,
-      child: SingleChildScrollView(
-        physics: AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Overview',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Dashboard Overview',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 20),
+
+          // Stats Grid
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: 1.5,
+            children: [
+              _buildStatCard(
+                'Total Customers',
+                _stats['totalUsers'].toString(),
+                Icons.people,
+                Colors.blue,
               ),
-            ),
-            SizedBox(height: 20),
-
-            // Stats Grid
-            GridView.count(
-              shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 1.5,
-              children: [
-                _buildStatCard(
-                  'Total Users',
-                  _stats['totalUsers'].toString(),
-                  Icons.person,
-                  Colors.blue,
-                ),
-                _buildStatCard(
-                  'Total Workers',
-                  _stats['totalWorkers'].toString(),
-                  Icons.engineering,
-                  Colors.green,
-                ),
-                _buildStatCard(
-                  'Total Bookings',
-                  _stats['totalBookings'].toString(),
-                  Icons.book,
-                  Colors.orange,
-                ),
-                _buildStatCard(
-                  'Pending',
-                  _stats['pendingBookings'].toString(),
-                  Icons.pending,
-                  Colors.amber,
-                ),
-                _buildStatCard(
-                  'Completed',
-                  _stats['completedBookings'].toString(),
-                  Icons.check_circle,
-                  Colors.teal,
-                ),
-                _buildStatCard(
-                  'Total Reviews',
-                  _stats['totalReviews'].toString(),
-                  Icons.star,
-                  Colors.purple,
-                ),
-              ],
-            ),
-
-            SizedBox(height: 30),
-
-            // Quick Actions
-            Text(
-              'Quick Actions',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+              _buildStatCard(
+                'Total Workers',
+                _stats['totalWorkers'].toString(),
+                Icons.engineering,
+                Colors.green,
               ),
-            ),
-            SizedBox(height: 16),
+              _buildStatCard(
+                'Total Bookings',
+                _stats['totalBookings'].toString(),
+                Icons.book,
+                Colors.orange,
+              ),
+              _buildStatCard(
+                'Pending',
+                _stats['pendingBookings'].toString(),
+                Icons.pending,
+                Colors.amber,
+              ),
+              _buildStatCard(
+                'Completed',
+                _stats['completedBookings'].toString(),
+                Icons.check_circle,
+                Colors.teal,
+              ),
+              _buildStatCard(
+                'Total Reviews',
+                _stats['totalReviews'].toString(),
+                Icons.star,
+                Colors.purple,
+              ),
+            ],
+          ),
 
-            _buildQuickActionButton(
-              'Manage Users',
-              Icons.people,
-              () => setState(() => _currentIndex = 1),
+          SizedBox(height: 30),
+
+          // Quick Actions
+          Text(
+            'Quick Actions',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
-            SizedBox(height: 12),
-            _buildQuickActionButton(
-              'Manage Reviews',
-              Icons.star,
-              () => setState(() => _currentIndex = 2),
-            ),
-            SizedBox(height: 12),
-            _buildQuickActionButton(
-              'View All Bookings',
-              Icons.book,
-              () {
-                // Navigate to bookings view (to be implemented)
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Bookings view coming soon')),
-                );
-              },
-            ),
-          ],
-        ),
+          ),
+          SizedBox(height: 16),
+
+          _buildQuickActionButton(
+            'Manage Users',
+            Icons.people,
+            () => setState(() => _currentIndex = 1),
+          ),
+          SizedBox(height: 12),
+          _buildQuickActionButton(
+            'Manage Reviews',
+            Icons.star,
+            () => setState(() => _currentIndex = 2),
+          ),
+          SizedBox(height: 12),
+          _buildQuickActionButton(
+            'Support Inbox',
+            Icons.inbox,
+            () => setState(() => _currentIndex = 3),
+          ),
+        ],
       ),
     );
   }
@@ -261,28 +257,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Container(
+      child: Padding(
         padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              color.withOpacity(0.1),
-              color.withOpacity(0.05),
-            ],
-          ),
-        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 36, color: color),
+            Icon(icon, size: 40, color: color),
             SizedBox(height: 12),
             Text(
               value,
               style: TextStyle(
-                fontSize: 28,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: color,
               ),
@@ -290,11 +275,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             SizedBox(height: 4),
             Text(
               title,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.grey[700],
+                color: Colors.grey[600],
               ),
-              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -315,14 +300,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         child: Row(
           children: [
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Color(0xFF2196F3).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: Color(0xFF2196F3)),
-            ),
+            Icon(icon, color: Colors.deepPurple),
             SizedBox(width: 16),
             Text(
               title,
@@ -332,10 +310,40 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ),
             Spacer(),
-            Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            Icon(Icons.chevron_right, color: Colors.grey),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _logout() async {
+    bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Logout'),
+        content: Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Logout', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await FirebaseAuth.instance.signOut();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => WelcomeScreen()),
+        (route) => false,
+      );
+    }
   }
 }
