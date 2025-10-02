@@ -1,5 +1,5 @@
 // lib/screens/customer_chats_screen.dart
-// NEW FILE - Customer chat list with support option
+// FIXED VERSION - Properly loads customer ID and displays chats
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,6 +15,7 @@ class CustomerChatsScreen extends StatefulWidget {
 class _CustomerChatsScreenState extends State<CustomerChatsScreen> {
   User? _currentUser;
   String? _customerId;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -23,18 +24,50 @@ class _CustomerChatsScreenState extends State<CustomerChatsScreen> {
   }
 
   Future<void> _loadCustomerData() async {
+    setState(() => _isLoading = true);
+
     _currentUser = FirebaseAuth.instance.currentUser;
     if (_currentUser != null) {
-      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
-          .collection('customers')
-          .doc(_currentUser!.uid)
-          .get();
+      try {
+        // Try to get customer by UID first
+        DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+            .collection('customers')
+            .doc(_currentUser!.uid)
+            .get();
 
-      if (customerDoc.exists) {
-        setState(() {
-          _customerId =
-              (customerDoc.data() as Map<String, dynamic>)['customer_id'];
-        });
+        if (customerDoc.exists) {
+          setState(() {
+            _customerId =
+                (customerDoc.data() as Map<String, dynamic>)['customer_id'] ??
+                    _currentUser!.uid;
+            _isLoading = false;
+          });
+          print('✅ Customer loaded: $_customerId');
+          return;
+        }
+
+        // If not found by UID, try by email
+        QuerySnapshot customerQuery = await FirebaseFirestore.instance
+            .collection('customers')
+            .where('email', isEqualTo: _currentUser!.email)
+            .limit(1)
+            .get();
+
+        if (customerQuery.docs.isNotEmpty) {
+          setState(() {
+            _customerId = (customerQuery.docs.first.data()
+                    as Map<String, dynamic>)['customer_id'] ??
+                customerQuery.docs.first.id;
+            _isLoading = false;
+          });
+          print('✅ Customer loaded by email: $_customerId');
+        } else {
+          print('❌ Customer not found');
+          setState(() => _isLoading = false);
+        }
+      } catch (e) {
+        print('❌ Error loading customer: $e');
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -64,8 +97,40 @@ class _CustomerChatsScreenState extends State<CustomerChatsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_currentUser == null) {
-      return Center(child: CircularProgressIndicator());
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('My Chats'),
+          backgroundColor: Colors.blue,
+          foregroundColor: Colors.white,
+          automaticallyImplyLeading: false,
+        ),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_currentUser == null || _customerId == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('My Chats'),
+          backgroundColor: Colors.blue,
+          foregroundColor: Colors.white,
+          automaticallyImplyLeading: false,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                'Could not load customer profile',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return Scaffold(
@@ -97,62 +162,73 @@ class _CustomerChatsScreenState extends State<CustomerChatsScreen> {
                   child: Text(
                     'Need help? Contact Admin Support',
                     style: TextStyle(
-                      color: Colors.orange[900],
+                      color: Colors.orange[700],
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
-                ElevatedButton(
+                TextButton(
                   onPressed: _openAdminSupport,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  ),
                   child: Text('Support'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.orange[700],
+                  ),
                 ),
               ],
             ),
           ),
-
           // Chat List
           Expanded(
             child: StreamBuilder<List<ChatRoom>>(
-              stream: ChatService.getCustomerChatsStream(_currentUser!.uid),
+              stream: ChatService.getCustomerChatsStream(_customerId!),
               builder: (context, snapshot) {
+                print('🔄 Stream state: ${snapshot.connectionState}');
+
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(child: CircularProgressIndicator());
                 }
 
                 if (snapshot.hasError) {
+                  print('❌ Stream error: ${snapshot.error}');
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.error_outline, size: 64, color: Colors.red),
                         SizedBox(height: 16),
-                        Text('Error loading chats: ${snapshot.error}'),
+                        Text(
+                          'Error loading chats',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          '${snapshot.error}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                          textAlign: TextAlign.center,
+                        ),
                       ],
                     ),
                   );
                 }
 
-                List<ChatRoom> chatRooms = snapshot.data ?? [];
-
-                if (chatRooms.isEmpty) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  print('📭 No chats found for customer: $_customerId');
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.chat_bubble_outline,
-                            size: 64, color: Colors.grey[400]),
+                        Icon(
+                          Icons.chat_bubble_outline,
+                          size: 80,
+                          color: Colors.grey[400],
+                        ),
                         SizedBox(height: 16),
                         Text(
                           'No chats yet',
                           style: TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[700],
                           ),
                         ),
                         SizedBox(height: 8),
@@ -161,7 +237,7 @@ class _CustomerChatsScreenState extends State<CustomerChatsScreen> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.grey[500],
+                            color: Colors.grey[600],
                           ),
                         ),
                       ],
@@ -169,15 +245,17 @@ class _CustomerChatsScreenState extends State<CustomerChatsScreen> {
                   );
                 }
 
+                List<ChatRoom> chats = snapshot.data!;
+                print('✅ Loaded ${chats.length} chats for customer');
+
                 return ListView.builder(
-                  padding: EdgeInsets.all(8),
-                  itemCount: chatRooms.length,
+                  itemCount: chats.length,
                   itemBuilder: (context, index) {
-                    ChatRoom chatRoom = chatRooms[index];
+                    ChatRoom chatRoom = chats[index];
                     bool hasUnread = chatRoom.unreadCountCustomer > 0;
 
                     return Card(
-                      margin: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       elevation: hasUnread ? 3 : 1,
                       child: ListTile(
                         leading: Stack(
@@ -272,17 +350,17 @@ class _CustomerChatsScreenState extends State<CustomerChatsScreen> {
   }
 
   String _formatTime(DateTime time) {
-    DateTime now = DateTime.now();
-    Duration diff = now.difference(time);
+    final now = DateTime.now();
+    final difference = now.difference(time);
 
-    if (diff.inDays > 0) {
-      return '${diff.inDays}d ago';
-    } else if (diff.inHours > 0) {
-      return '${diff.inHours}h ago';
-    } else if (diff.inMinutes > 0) {
-      return '${diff.inMinutes}m ago';
+    if (difference.inDays == 0) {
+      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    } else if (difference.inDays == 1) {
+      return 'Yesterday';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
     } else {
-      return 'Just now';
+      return '${time.day}/${time.month}/${time.year}';
     }
   }
 }

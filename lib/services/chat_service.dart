@@ -1,5 +1,5 @@
 // lib/services/chat_service.dart
-// FIXED VERSION - Removed complex queries that require indexes
+// ENHANCED VERSION - Added extensive debugging and proper error handling
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../utils/string_utils.dart';
 
@@ -104,13 +104,41 @@ class ChatRoom {
 class ChatService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // FIXED: Get customer chats without complex query
+  // Get customer chats with extensive logging
   static Stream<List<ChatRoom>> getCustomerChatsStream(String customerId) {
+    print('🔍 Getting customer chats for ID: $customerId');
+
     return _firestore
         .collection('chat_rooms')
         .where('customer_id', isEqualTo: customerId)
         .snapshots()
         .map((snapshot) {
+      print(
+          '📊 Customer chats snapshot received: ${snapshot.docs.length} documents');
+
+      if (snapshot.docs.isEmpty) {
+        print('⚠️ No chat rooms found for customer: $customerId');
+        // Let's check if there are any chats at all
+        _firestore.collection('chat_rooms').get().then((allChats) {
+          print('📝 Total chat rooms in database: ${allChats.docs.length}');
+          if (allChats.docs.isNotEmpty) {
+            print('📝 Sample chat room customer_ids:');
+            for (var doc in allChats.docs.take(5)) {
+              var data = doc.data() as Map<String, dynamic>;
+              print(
+                  '   - Chat ${doc.id}: customer_id = ${data['customer_id']}');
+            }
+          }
+        });
+      } else {
+        print('✅ Found ${snapshot.docs.length} chats for customer');
+        for (var doc in snapshot.docs) {
+          var data = doc.data() as Map<String, dynamic>;
+          print(
+              '   📨 Chat: ${doc.id}, Worker: ${data['worker_name']}, Last: ${data['last_message']}');
+        }
+      }
+
       // Get all chats
       List<ChatRoom> chats =
           snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList();
@@ -122,13 +150,40 @@ class ChatService {
     });
   }
 
-  // FIXED: Get worker chats without complex query
+  // Get worker chats with extensive logging
   static Stream<List<ChatRoom>> getWorkerChatsStream(String workerId) {
+    print('🔍 Getting worker chats for ID: $workerId');
+
     return _firestore
         .collection('chat_rooms')
         .where('worker_id', isEqualTo: workerId)
         .snapshots()
         .map((snapshot) {
+      print(
+          '📊 Worker chats snapshot received: ${snapshot.docs.length} documents');
+
+      if (snapshot.docs.isEmpty) {
+        print('⚠️ No chat rooms found for worker: $workerId');
+        // Let's check if there are any chats at all
+        _firestore.collection('chat_rooms').get().then((allChats) {
+          print('📝 Total chat rooms in database: ${allChats.docs.length}');
+          if (allChats.docs.isNotEmpty) {
+            print('📝 Sample chat room worker_ids:');
+            for (var doc in allChats.docs.take(5)) {
+              var data = doc.data() as Map<String, dynamic>;
+              print('   - Chat ${doc.id}: worker_id = ${data['worker_id']}');
+            }
+          }
+        });
+      } else {
+        print('✅ Found ${snapshot.docs.length} chats for worker');
+        for (var doc in snapshot.docs) {
+          var data = doc.data() as Map<String, dynamic>;
+          print(
+              '   📨 Chat: ${doc.id}, Customer: ${data['customer_name']}, Last: ${data['last_message']}');
+        }
+      }
+
       // Get all chats
       List<ChatRoom> chats =
           snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList();
@@ -149,6 +204,10 @@ class ChatService {
     required String workerName,
   }) async {
     try {
+      print('🔍 Creating/getting chat room for booking: $bookingId');
+      print('   Customer: $customerId ($customerName)');
+      print('   Worker: $workerId ($workerName)');
+
       QuerySnapshot existing = await _firestore
           .collection('chat_rooms')
           .where('booking_id', isEqualTo: bookingId)
@@ -156,9 +215,11 @@ class ChatService {
           .get();
 
       if (existing.docs.isNotEmpty) {
+        print('✅ Found existing chat room: ${existing.docs.first.id}');
         return existing.docs.first.id;
       }
 
+      print('📝 Creating new chat room...');
       DocumentReference chatRef =
           await _firestore.collection('chat_rooms').add({
         'booking_id': bookingId,
@@ -173,8 +234,10 @@ class ChatService {
         'created_at': FieldValue.serverTimestamp(),
       });
 
+      print('✅ Created new chat room: ${chatRef.id}');
       return chatRef.id;
     } catch (e) {
+      print('❌ Error creating chat room: $e');
       throw Exception('Failed to create chat room: $e');
     }
   }
@@ -189,6 +252,11 @@ class ChatService {
     String? imageUrl,
   }) async {
     try {
+      print('📤 Sending message to chat: $chatId');
+      print('   From: $senderName ($senderType)');
+      print(
+          '   Message: ${message.substring(0, message.length > 50 ? 50 : message.length)}...');
+
       await _firestore
           .collection('chat_rooms')
           .doc(chatId)
@@ -214,37 +282,46 @@ class ChatService {
         unreadField: FieldValue.increment(1),
       });
 
-      print('✅ Message sent to chat: $chatId');
+      print('✅ Message sent successfully');
     } catch (e) {
+      print('❌ Error sending message: $e');
       throw Exception('Failed to send message: $e');
     }
   }
 
   // Get messages stream for a chat
   static Stream<List<ChatMessage>> getMessagesStream(String chatId) {
+    print('🔍 Getting messages stream for chat: $chatId');
+
     return _firestore
         .collection('chat_rooms')
         .doc(chatId)
         .collection('messages')
         .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => ChatMessage.fromFirestore(doc))
-            .toList());
+        .map((snapshot) {
+      print('📊 Messages snapshot: ${snapshot.docs.length} messages');
+      return snapshot.docs
+          .map((doc) => ChatMessage.fromFirestore(doc))
+          .toList();
+    });
   }
 
   // Get chat room details
   static Future<ChatRoom?> getChatRoom(String chatId) async {
     try {
+      print('🔍 Getting chat room: $chatId');
       DocumentSnapshot doc =
           await _firestore.collection('chat_rooms').doc(chatId).get();
 
       if (doc.exists) {
+        print('✅ Found chat room');
         return ChatRoom.fromFirestore(doc);
       }
+      print('⚠️ Chat room not found');
       return null;
     } catch (e) {
-      print('Error getting chat room: $e');
+      print('❌ Error getting chat room: $e');
       return null;
     }
   }
@@ -252,6 +329,7 @@ class ChatService {
   // Get chat room by booking ID
   static Future<String?> getChatRoomByBookingId(String bookingId) async {
     try {
+      print('🔍 Getting chat room by booking ID: $bookingId');
       QuerySnapshot snapshot = await _firestore
           .collection('chat_rooms')
           .where('booking_id', isEqualTo: bookingId)
@@ -259,21 +337,25 @@ class ChatService {
           .get();
 
       if (snapshot.docs.isNotEmpty) {
+        print('✅ Found chat room: ${snapshot.docs.first.id}');
         return snapshot.docs.first.id;
       }
+      print('⚠️ No chat room found for booking');
       return null;
     } catch (e) {
-      print('Error getting chat room by booking: $e');
+      print('❌ Error getting chat room by booking: $e');
       return null;
     }
   }
 
-  // FIXED: Mark messages as read - NO COMPLEX QUERY NEEDED
+  // Mark messages as read
   static Future<void> markMessagesAsRead({
     required String chatId,
     required String userType,
   }) async {
     try {
+      print('📖 Marking messages as read for chat: $chatId (user: $userType)');
+
       // Get all unread messages without filtering by sender
       QuerySnapshot unreadMessages = await _firestore
           .collection('chat_rooms')
@@ -281,6 +363,8 @@ class ChatService {
           .collection('messages')
           .where('is_read', isEqualTo: false)
           .get();
+
+      print('   Found ${unreadMessages.docs.length} unread messages');
 
       // Filter in memory to avoid complex Firestore query
       List<DocumentSnapshot> messagesToMark = unreadMessages.docs.where((doc) {
@@ -292,6 +376,8 @@ class ChatService {
         print('✅ No unread messages to mark');
         return;
       }
+
+      print('   Marking ${messagesToMark.length} messages as read');
 
       // Mark each message as read using batch
       WriteBatch batch = _firestore.batch();
