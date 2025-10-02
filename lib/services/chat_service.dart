@@ -1,7 +1,5 @@
 // lib/services/chat_service.dart
-// REPLACE YOUR EXISTING chat_service.dart WITH THIS VERSION
-// This version avoids the complex query that requires an index
-
+// FIXED VERSION - Removed complex queries that require indexes
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../utils/string_utils.dart';
 
@@ -101,27 +99,48 @@ class ChatRoom {
       createdAt: (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'booking_id': bookingId,
-      'customer_id': customerId,
-      'customer_name': customerName,
-      'worker_id': workerId,
-      'worker_name': workerName,
-      'last_message': lastMessage,
-      'last_message_time': FieldValue.serverTimestamp(),
-      'unread_count_customer': unreadCountCustomer,
-      'unread_count_worker': unreadCountWorker,
-      'created_at': FieldValue.serverTimestamp(),
-    };
-  }
 }
 
 class ChatService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// Create or get existing chat room for a booking
+  // FIXED: Get customer chats without complex query
+  static Stream<List<ChatRoom>> getCustomerChatsStream(String customerId) {
+    return _firestore
+        .collection('chat_rooms')
+        .where('customer_id', isEqualTo: customerId)
+        .snapshots()
+        .map((snapshot) {
+      // Get all chats
+      List<ChatRoom> chats =
+          snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList();
+
+      // Sort in memory by last_message_time (descending)
+      chats.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+
+      return chats;
+    });
+  }
+
+  // FIXED: Get worker chats without complex query
+  static Stream<List<ChatRoom>> getWorkerChatsStream(String workerId) {
+    return _firestore
+        .collection('chat_rooms')
+        .where('worker_id', isEqualTo: workerId)
+        .snapshots()
+        .map((snapshot) {
+      // Get all chats
+      List<ChatRoom> chats =
+          snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList();
+
+      // Sort in memory by last_message_time (descending)
+      chats.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+
+      return chats;
+    });
+  }
+
+  // Create or get existing chat room
   static Future<String> createOrGetChatRoom({
     required String bookingId,
     required String customerId,
@@ -130,18 +149,16 @@ class ChatService {
     required String workerName,
   }) async {
     try {
-      // Check if chat room already exists for this booking
-      QuerySnapshot existingChat = await _firestore
+      QuerySnapshot existing = await _firestore
           .collection('chat_rooms')
           .where('booking_id', isEqualTo: bookingId)
           .limit(1)
           .get();
 
-      if (existingChat.docs.isNotEmpty) {
-        return existingChat.docs.first.id;
+      if (existing.docs.isNotEmpty) {
+        return existing.docs.first.id;
       }
 
-      // Create new chat room
       DocumentReference chatRef =
           await _firestore.collection('chat_rooms').add({
         'booking_id': bookingId,
@@ -156,14 +173,13 @@ class ChatService {
         'created_at': FieldValue.serverTimestamp(),
       });
 
-      print('✅ Chat room created: ${chatRef.id}');
       return chatRef.id;
     } catch (e) {
       throw Exception('Failed to create chat room: $e');
     }
   }
 
-  /// Send a message
+  // Send a message
   static Future<void> sendMessage({
     required String chatId,
     required String senderId,
@@ -173,7 +189,6 @@ class ChatService {
     String? imageUrl,
   }) async {
     try {
-      // Add message to messages subcollection
       await _firestore
           .collection('chat_rooms')
           .doc(chatId)
@@ -189,10 +204,9 @@ class ChatService {
         if (imageUrl != null) 'image_url': imageUrl,
       });
 
-      // Update chat room last message and unread count
-      String unreadField = senderType == 'customer'
-          ? 'unread_count_worker'
-          : 'unread_count_customer';
+      String unreadField = senderType == 'worker'
+          ? 'unread_count_customer'
+          : 'unread_count_worker';
 
       await _firestore.collection('chat_rooms').doc(chatId).update({
         'last_message': StringUtils.truncate(message, 50),
@@ -206,7 +220,7 @@ class ChatService {
     }
   }
 
-  /// Get messages stream for a chat
+  // Get messages stream for a chat
   static Stream<List<ChatMessage>> getMessagesStream(String chatId) {
     return _firestore
         .collection('chat_rooms')
@@ -219,7 +233,7 @@ class ChatService {
             .toList());
   }
 
-  /// Get chat room details
+  // Get chat room details
   static Future<ChatRoom?> getChatRoom(String chatId) async {
     try {
       DocumentSnapshot doc =
@@ -235,7 +249,7 @@ class ChatService {
     }
   }
 
-  /// Get chat room by booking ID
+  // Get chat room by booking ID
   static Future<String?> getChatRoomByBookingId(String bookingId) async {
     try {
       QuerySnapshot snapshot = await _firestore
@@ -254,13 +268,13 @@ class ChatService {
     }
   }
 
-  /// Mark messages as read - SIMPLIFIED VERSION (No complex query, no index needed)
+  // FIXED: Mark messages as read - NO COMPLEX QUERY NEEDED
   static Future<void> markMessagesAsRead({
     required String chatId,
     required String userType,
   }) async {
     try {
-      // SIMPLIFIED: Just get all unread messages without complex filtering
+      // Get all unread messages without filtering by sender
       QuerySnapshot unreadMessages = await _firestore
           .collection('chat_rooms')
           .doc(chatId)
@@ -295,33 +309,9 @@ class ChatService {
         unreadField: 0,
       });
 
-      print(
-          '✅ Marked ${messagesToMark.length} messages as read in chat: $chatId');
+      print('✅ Marked ${messagesToMark.length} messages as read');
     } catch (e) {
-      print('⚠️  Error marking messages as read: $e');
-      // Non-critical error, just log it
+      print('❌ Error marking messages as read: $e');
     }
-  }
-
-  /// Get all chat rooms for a customer
-  static Stream<List<ChatRoom>> getCustomerChatsStream(String customerId) {
-    return _firestore
-        .collection('chat_rooms')
-        .where('customer_id', isEqualTo: customerId)
-        .orderBy('last_message_time', descending: true)
-        .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList());
-  }
-
-  /// Get all chat rooms for a worker
-  static Stream<List<ChatRoom>> getWorkerChatsStream(String workerId) {
-    return _firestore
-        .collection('chat_rooms')
-        .where('worker_id', isEqualTo: workerId)
-        .orderBy('last_message_time', descending: true)
-        .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList());
   }
 }

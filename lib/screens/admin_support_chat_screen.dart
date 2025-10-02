@@ -1,5 +1,5 @@
 // lib/screens/admin_support_chat_screen.dart
-// NEW FILE - Chat between user and admin for support
+// FIXED VERSION - Proper message reading and real-time updates
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -29,6 +29,13 @@ class _AdminSupportChatScreenState extends State<AdminSupportChatScreen> {
   void initState() {
     super.initState();
     _createOrGetSupportChat();
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _createOrGetSupportChat() async {
@@ -70,9 +77,10 @@ class _AdminSupportChatScreenState extends State<AdminSupportChatScreen> {
         );
       }
 
-      // Mark messages as read when opening chat
+      // Mark admin messages as read when opening chat
       _markMessagesAsRead();
     } catch (e) {
+      print('Error creating support chat: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error loading support chat: $e'),
@@ -100,13 +108,18 @@ class _AdminSupportChatScreenState extends State<AdminSupportChatScreen> {
       for (var doc in unreadMessages.docs) {
         batch.update(doc.reference, {'is_read': true});
       }
-      await batch.commit();
+
+      if (unreadMessages.docs.isNotEmpty) {
+        await batch.commit();
+      }
 
       // Reset unread count
       await FirebaseFirestore.instance
           .collection('support_chats')
           .doc(_supportChatId)
           .update({'unread_count_user': 0});
+
+      print('✅ Marked ${unreadMessages.docs.length} messages as read');
     } catch (e) {
       print('Error marking messages as read: $e');
     }
@@ -139,7 +152,10 @@ class _AdminSupportChatScreenState extends State<AdminSupportChatScreen> {
         'last_message_time': FieldValue.serverTimestamp(),
         if (!isAdmin) 'unread_count_admin': FieldValue.increment(1),
       });
+
+      print('✅ Message sent successfully');
     } catch (e) {
+      print('❌ Error sending message: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to send message: $e'),
@@ -211,29 +227,24 @@ class _AdminSupportChatScreenState extends State<AdminSupportChatScreen> {
                 }
 
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error loading messages'));
-                }
-
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.chat_bubble_outline,
-                            size: 64, color: Colors.grey[400]),
+                        Icon(Icons.error_outline, size: 64, color: Colors.red),
                         SizedBox(height: 16),
-                        Text(
-                          'No messages yet',
-                          style:
-                              TextStyle(fontSize: 16, color: Colors.grey[600]),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Start the conversation!',
-                          style:
-                              TextStyle(fontSize: 14, color: Colors.grey[500]),
-                        ),
+                        Text('Error loading messages: ${snapshot.error}'),
                       ],
+                    ),
+                  );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No messages yet.\nStart the conversation!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey[600]),
                     ),
                   );
                 }
@@ -330,35 +341,35 @@ class _AdminSupportChatScreenState extends State<AdminSupportChatScreen> {
         ),
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isCurrentUser ? Colors.blue : Colors.grey[300],
+          color: isCurrentUser ? Colors.blue : Colors.grey[200],
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (!isCurrentUser)
-              Text(
-                senderName,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.orange[800],
-                ),
+            Text(
+              senderName,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: isCurrentUser ? Colors.white70 : Colors.grey[700],
               ),
+            ),
+            SizedBox(height: 4),
             Text(
               message,
               style: TextStyle(
+                fontSize: 15,
                 color: isCurrentUser ? Colors.white : Colors.black87,
-                fontSize: 14,
               ),
             ),
             if (timestamp != null) ...[
               SizedBox(height: 4),
               Text(
-                _formatMessageTime(timestamp),
+                '${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}',
                 style: TextStyle(
                   fontSize: 10,
-                  color: isCurrentUser ? Colors.white70 : Colors.grey[600],
+                  color: isCurrentUser ? Colors.white60 : Colors.grey[600],
                 ),
               ),
             ],
@@ -366,27 +377,5 @@ class _AdminSupportChatScreenState extends State<AdminSupportChatScreen> {
         ),
       ),
     );
-  }
-
-  String _formatMessageTime(DateTime time) {
-    DateTime now = DateTime.now();
-    Duration diff = now.difference(time);
-
-    if (diff.inDays > 0) {
-      return '${time.day}/${time.month}/${time.year} ${time.hour}:${time.minute.toString().padLeft(2, '0')}';
-    } else if (diff.inHours > 0) {
-      return '${diff.inHours}h ago';
-    } else if (diff.inMinutes > 0) {
-      return '${diff.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
-  }
-
-  @override
-  void dispose() {
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
   }
 }
