@@ -12,7 +12,20 @@
           "package_name": "com.example.fixmate"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "112561895353-vi8hpvfh0is8m189nauesb3a0trg8gm3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.fixmate",
+            "certificate_hash": "9f59593d59ebd4ff3cf500032ecf96981ba74075"
+          }
+        },
+        {
+          "client_id": "112561895353-hq944nea8ggnctc5c6edbholgh736u7p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCwu5zwoy9arBK0v-FnJbN76vbkVFlu3nM"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "112561895353-hq944nea8ggnctc5c6edbholgh736u7p.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "112561895353-0tarmdckm9f32rqqn1d07fp6ifo5k7ss.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.fixmate"
+              }
+            }
+          ]
         }
       }
     },
@@ -31,7 +56,12 @@
           "package_name": "com.fixmate.skills"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "112561895353-hq944nea8ggnctc5c6edbholgh736u7p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCwu5zwoy9arBK0v-FnJbN76vbkVFlu3nM"
@@ -39,7 +69,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "112561895353-hq944nea8ggnctc5c6edbholgh736u7p.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "112561895353-0tarmdckm9f32rqqn1d07fp6ifo5k7ss.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.fixmate"
+              }
+            }
+          ]
         }
       }
     }

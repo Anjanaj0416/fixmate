@@ -48,3 +48,16 @@ app.*.map.json
 .env
 .env.local
 .env.production
+
+# Firebase configuration files (IMPORTANT FOR SECURITY)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+ios/firebase_app_id_file.json
+
+# Keystore files (NEVER commit these!)
+*.jks
+*.keystore
+release-keystore.jks
+
+# Google Sign-In sensitive files
+android/app/src/main/res/values/strings.xml

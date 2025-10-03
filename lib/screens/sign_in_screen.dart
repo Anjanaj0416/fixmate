@@ -1,5 +1,5 @@
 // lib/screens/sign_in_screen.dart
-// MODIFIED VERSION - Added admin login check
+// UPDATED VERSION - Added Google OAuth Sign-In
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,6 +9,7 @@ import 'worker_registration_flow.dart';
 import 'admin_dashboard_screen.dart';
 import 'worker_dashboard_screen.dart';
 import 'customer_dashboard.dart';
+import '../services/google_auth_service.dart'; // Import Google Auth Service
 
 class SignInScreen extends StatefulWidget {
   @override
@@ -19,6 +20,8 @@ class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final GoogleAuthService _googleAuthService =
+      GoogleAuthService(); // Initialize Google Auth
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _rememberMe = false;
@@ -44,53 +47,8 @@ class _SignInScreenState extends State<SignInScreen> {
 
       _showSuccessSnackBar('Welcome back!');
 
-      // Check user role in Firestore
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCredential.user!.uid)
-          .get();
-
-      if (userDoc.exists) {
-        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
-        String? role = userData['role'];
-        String? accountType = userData['accountType'];
-
-        // Check if user is admin
-        if (role == 'admin') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => AdminDashboardScreen()),
-          );
-          return;
-        }
-
-        // Check account type for regular users
-        if (accountType == 'service_provider') {
-          // Worker account
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => WorkerDashboardScreen()),
-          );
-        } else if (accountType == 'customer') {
-          // Customer account
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => CustomerDashboard()),
-          );
-        } else {
-          // Account type not set - redirect to account type selection
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => AccountTypeScreen()),
-          );
-        }
-      } else {
-        // User document doesn't exist - redirect to account type selection
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => AccountTypeScreen()),
-        );
-      }
+      // Navigate based on user role
+      await _navigateBasedOnRole(userCredential.user!);
     } on FirebaseAuthException catch (e) {
       String errorMessage;
       switch (e.code) {
@@ -114,6 +72,83 @@ class _SignInScreenState extends State<SignInScreen> {
       _showErrorSnackBar('An unexpected error occurred: ${e.toString()}');
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  /// NEW METHOD: Google Sign-In
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isLoading = true);
+
+    try {
+      UserCredential? userCredential =
+          await _googleAuthService.signInWithGoogle();
+
+      if (userCredential == null) {
+        // User cancelled the sign-in
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      _showSuccessSnackBar(
+          'Welcome ${userCredential.user?.displayName ?? ""}!');
+
+      // Navigate based on user role
+      await _navigateBasedOnRole(userCredential.user!);
+    } catch (e) {
+      _showErrorSnackBar('Google Sign-In failed: ${e.toString()}');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Helper method to navigate based on user role
+  Future<void> _navigateBasedOnRole(User user) async {
+    // Check user role in Firestore
+    DocumentSnapshot userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    if (userDoc.exists) {
+      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+      String? role = userData['role'];
+      String? accountType = userData['accountType'];
+
+      // Check if user is admin
+      if (role == 'admin') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => AdminDashboardScreen()),
+        );
+        return;
+      }
+
+      // Check account type for regular users
+      if (accountType == 'service_provider') {
+        // Worker account
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => WorkerDashboardScreen()),
+        );
+      } else if (accountType == 'customer') {
+        // Customer account
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => CustomerDashboard()),
+        );
+      } else {
+        // Account type not set - redirect to account type selection
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => AccountTypeScreen()),
+        );
+      }
+    } else {
+      // User document doesn't exist - redirect to account type selection
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => AccountTypeScreen()),
+      );
     }
   }
 
@@ -203,13 +238,15 @@ class _SignInScreenState extends State<SignInScreen> {
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
                   ),
                 ),
                 SizedBox(height: 8),
                 Text(
                   'Sign in to continue',
-                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
                 ),
                 SizedBox(height: 40),
 
@@ -219,22 +256,13 @@ class _SignInScreenState extends State<SignInScreen> {
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     labelText: 'Email',
-                    hintText: 'Enter your email',
                     prefixIcon: Icon(Icons.email_outlined),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Color(0xFF2196F3)),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
+                    if (value == null || value.isEmpty) {
                       return 'Please enter your email';
                     }
                     if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
@@ -252,26 +280,21 @@ class _SignInScreenState extends State<SignInScreen> {
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
                     labelText: 'Password',
-                    hintText: 'Enter your password',
                     prefixIcon: Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined),
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
                       onPressed: () {
-                        setState(() => _obscurePassword = !_obscurePassword);
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
                       },
                     ),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Color(0xFF2196F3)),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   validator: (value) {
@@ -281,9 +304,9 @@ class _SignInScreenState extends State<SignInScreen> {
                     return null;
                   },
                 ),
-                SizedBox(height: 16),
+                SizedBox(height: 8),
 
-                // Remember Me & Forgot Password
+                // Remember Me & Forgot Password Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -292,31 +315,21 @@ class _SignInScreenState extends State<SignInScreen> {
                         Checkbox(
                           value: _rememberMe,
                           onChanged: (value) {
-                            setState(() => _rememberMe = value ?? false);
+                            setState(() {
+                              _rememberMe = value ?? false;
+                            });
                           },
-                          activeColor: Color(0xFF2196F3),
                         ),
-                        Text(
-                          'Remember me',
-                          style:
-                              TextStyle(color: Colors.grey[700], fontSize: 14),
-                        ),
+                        Text('Remember me'),
                       ],
                     ),
                     TextButton(
                       onPressed: _resetPassword,
-                      child: Text(
-                        'Forgot password?',
-                        style: TextStyle(
-                          color: Color(0xFF2196F3),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      child: Text('Forgot Password?'),
                     ),
                   ],
                 ),
-                SizedBox(height: 32),
+                SizedBox(height: 24),
 
                 // Sign In Button
                 SizedBox(
@@ -325,73 +338,102 @@ class _SignInScreenState extends State<SignInScreen> {
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _signIn,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF2196F3),
-                      foregroundColor: Colors.white,
+                      backgroundColor: Colors.blue,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      elevation: 0,
-                      disabledBackgroundColor: Colors.grey[300],
                     ),
                     child: _isLoading
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
+                        ? CircularProgressIndicator(color: Colors.white)
                         : Text(
                             'Sign In',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
                           ),
                   ),
                 ),
-                SizedBox(height: 40),
+                SizedBox(height: 24),
 
-                // Sign Up Link
-                Center(
-                  child: TextButton(
-                    onPressed: _isLoading
-                        ? null
-                        : () {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => CreateAccountScreen(),
-                              ),
-                            );
-                          },
-                    child: RichText(
-                      text: TextSpan(
-                        text: "Don't have an account? ",
-                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                        children: [
-                          TextSpan(
-                            text: 'Sign up',
-                            style: TextStyle(
-                              color: Color(0xFF2196F3),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                // OR Divider
+                Row(
+                  children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'OR',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider()),
+                  ],
+                ),
+                SizedBox(height: 24),
+
+                // NEW: Google Sign-In Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _signInWithGoogle,
+                    icon: Image.asset(
+                      'assets/google_logo.png', // You'll need to add this asset
+                      height: 24,
+                      width: 24,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Fallback if image not found
+                        return Icon(Icons.g_mobiledata, size: 24);
+                      },
+                    ),
+                    label: Text(
+                      'Continue with Google',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey[300]!),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                   ),
                 ),
-                SizedBox(height: 48),
+                SizedBox(height: 24),
 
-                // Terms and Privacy
-                Center(
-                  child: Text(
-                    'By signing in, you agree to our Terms of Service and Privacy Policy',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
+                // Create Account Link
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "Don't have an account? ",
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CreateAccountScreen(),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        'Create Account',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
