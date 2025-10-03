@@ -10,6 +10,7 @@ import 'customer_bookings_screen.dart';
 import 'ai_chat_screen.dart';
 import 'customer_chats_screen.dart';
 import 'customer_notifications_screen.dart'; // NEW: Import notifications screen
+import 'dart:async';
 
 class CustomerDashboard extends StatefulWidget {
   @override
@@ -21,12 +22,68 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   String _userLocation = 'Loading...'; // Changed from _selectedLocation
   int _unreadNotificationCount = 0; // NEW: Track unread notifications
   String? _customerId; // NEW: Store customer ID
+  StreamSubscription? _notificationSubscription; // ADD THIS LINE
 
   @override
   void initState() {
     super.initState();
     _loadUserLocation(); // NEW: Load location from database
     _loadCustomerIdAndListenToNotifications(); // NEW: Load notifications
+  }
+
+  @override
+  void dispose() {
+    _notificationSubscription?.cancel(); // Cancel the stream subscription
+    super.dispose();
+  }
+
+  Future<void> _loadCustomerIdAndListenToNotifications() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+            .collection('customers')
+            .doc(user.uid)
+            .get();
+
+        if (customerDoc.exists) {
+          Map<String, dynamic> customerData =
+              customerDoc.data() as Map<String, dynamic>;
+
+          if (mounted) {
+            // ADD THIS CHECK
+            setState(() {
+              _customerId = customerData['customer_id'] ?? user.uid;
+            });
+          }
+
+          // Listen to unread notifications - STORE THE SUBSCRIPTION
+          _notificationSubscription = FirebaseFirestore.instance
+              .collection('notifications')
+              .where('recipient_type', isEqualTo: 'customer')
+              .where('read', isEqualTo: false)
+              .snapshots()
+              .listen((snapshot) {
+            // Filter for this specific customer
+            int count = snapshot.docs.where((doc) {
+              var data = doc.data();
+              String? customerId = data['customer_id'];
+              String? recipientId = data['recipient_id'];
+              return customerId == _customerId || recipientId == _customerId;
+            }).length;
+
+            // ADD MOUNTED CHECK BEFORE setState
+            if (mounted) {
+              setState(() {
+                _unreadNotificationCount = count;
+              });
+            }
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading notifications: $e');
+    }
   }
 
   // NEW: Load user's nearest town from database
@@ -46,9 +103,12 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           String? nearestTown = userData['nearestTown'];
 
           if (nearestTown != null && nearestTown.isNotEmpty) {
-            setState(() {
-              _userLocation = nearestTown;
-            });
+            if (mounted) {
+              // ADD THIS CHECK
+              setState(() {
+                _userLocation = nearestTown;
+              });
+            }
             return;
           }
         }
@@ -67,67 +127,37 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           if (customerData['location'] != null) {
             String? city = customerData['location']['city'];
             if (city != null && city.isNotEmpty) {
-              setState(() {
-                _userLocation = city;
-              });
+              if (mounted) {
+                // ADD THIS CHECK
+                setState(() {
+                  _userLocation = city;
+                });
+              }
               return;
             }
           }
         }
 
         // Fallback if nothing found
-        setState(() {
-          _userLocation = 'Location not set';
-        });
-      }
-    } catch (e) {
-      print('Error loading user location: $e');
-      setState(() {
-        _userLocation = 'Location unavailable';
-      });
-    }
-  }
-
-  // NEW: Load customer ID and listen to notifications
-  Future<void> _loadCustomerIdAndListenToNotifications() async {
-    try {
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        DocumentSnapshot customerDoc = await FirebaseFirestore.instance
-            .collection('customers')
-            .doc(user.uid)
-            .get();
-
-        if (customerDoc.exists) {
-          Map<String, dynamic> customerData =
-              customerDoc.data() as Map<String, dynamic>;
-          _customerId = customerData['customer_id'] ?? user.uid;
-
-          // Listen to unread notifications - query by recipient_type and filter locally
-          FirebaseFirestore.instance
-              .collection('notifications')
-              .where('recipient_type', isEqualTo: 'customer')
-              .where('read', isEqualTo: false)
-              .snapshots()
-              .listen((snapshot) {
-            // Filter for this specific customer
-            int count = snapshot.docs.where((doc) {
-              var data = doc.data() as Map<String, dynamic>;
-              String? customerId = data['customer_id'];
-              String? recipientId = data['recipient_id'];
-              return customerId == _customerId || recipientId == _customerId;
-            }).length;
-
-            setState(() {
-              _unreadNotificationCount = count;
-            });
+        if (mounted) {
+          // ADD THIS CHECK
+          setState(() {
+            _userLocation = 'Location not set';
           });
         }
       }
     } catch (e) {
-      print('Error loading customer ID and notifications: $e');
+      print('Error loading user location: $e');
+      if (mounted) {
+        // ADD THIS CHECK
+        setState(() {
+          _userLocation = 'Location unavailable';
+        });
+      }
     }
   }
+
+  // NEW: Load customer ID and listen to notifications
 
   final List<Map<String, dynamic>> _serviceCategories = [
     {

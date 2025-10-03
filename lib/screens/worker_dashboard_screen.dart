@@ -10,6 +10,7 @@ import '../screens/worker_reviews_screen.dart';
 import '../screens/worker_chats_screen.dart'; // NEW IMPORT
 import '../services/rating_service.dart';
 import 'worker_chats_screen.dart';
+import 'worker_notifications_screen.dart';
 
 class WorkerDashboardScreen extends StatefulWidget {
   @override
@@ -171,6 +172,68 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         title: Text('Worker Dashboard'),
         backgroundColor: Color(0xFFFF9800),
         actions: [
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('notifications')
+                .where('recipient_type', isEqualTo: 'worker')
+                .where('read', isEqualTo: false)
+                .snapshots(),
+            builder: (context, snapshot) {
+              int unreadCount = 0;
+
+              if (snapshot.hasData && _worker != null) {
+                // Filter for this specific worker
+                unreadCount = snapshot.data!.docs.where((doc) {
+                  var data = doc.data() as Map<String, dynamic>;
+                  String? workerId = data['worker_id'];
+                  String? recipientId = data['recipient_id'];
+                  return workerId == _worker!.workerId ||
+                      recipientId == _worker!.workerId;
+                }).length;
+              }
+
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.notifications),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => WorkerNotificationsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        child: Text(
+                          unreadCount > 9 ? '9+' : unreadCount.toString(),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: _loadWorkerData,
@@ -480,6 +543,20 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => WorkerBookingsScreen(),
+                  ),
+                );
+              },
+            ),
+            // ADD THIS: Notifications card
+            _buildActionCard(
+              'Notifications',
+              Icons.notifications,
+              Colors.orange,
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WorkerNotificationsScreen(),
                   ),
                 );
               },
