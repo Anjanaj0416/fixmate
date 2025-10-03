@@ -1,5 +1,5 @@
 // lib/screens/sign_in_screen.dart
-// UPDATED VERSION - Added Google OAuth Sign-In
+// FIXED VERSION - Always navigate customers to customer dashboard first
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,7 +9,7 @@ import 'worker_registration_flow.dart';
 import 'admin_dashboard_screen.dart';
 import 'worker_dashboard_screen.dart';
 import 'customer_dashboard.dart';
-import '../services/google_auth_service.dart'; // Import Google Auth Service
+import '../services/google_auth_service.dart';
 
 class SignInScreen extends StatefulWidget {
   @override
@@ -20,8 +20,7 @@ class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final GoogleAuthService _googleAuthService =
-      GoogleAuthService(); // Initialize Google Auth
+  final GoogleAuthService _googleAuthService = GoogleAuthService();
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _rememberMe = false;
@@ -75,7 +74,6 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  /// NEW METHOD: Google Sign-In
   Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
 
@@ -84,7 +82,6 @@ class _SignInScreenState extends State<SignInScreen> {
           await _googleAuthService.signInWithGoogle();
 
       if (userCredential == null) {
-        // User cancelled the sign-in
         setState(() => _isLoading = false);
         return;
       }
@@ -92,7 +89,6 @@ class _SignInScreenState extends State<SignInScreen> {
       _showSuccessSnackBar(
           'Welcome ${userCredential.user?.displayName ?? ""}!');
 
-      // Navigate based on user role
       await _navigateBasedOnRole(userCredential.user!);
     } catch (e) {
       _showErrorSnackBar('Google Sign-In failed: ${e.toString()}');
@@ -101,20 +97,29 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  /// Helper method to navigate based on user role
+  /// FIXED: Navigate based on user role with proper priority
+  /// Priority: Admin > Customer > Worker > Account Selection
   Future<void> _navigateBasedOnRole(User user) async {
-    // Check user role in Firestore
-    DocumentSnapshot userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
+    try {
+      // Get user document
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
 
-    if (userDoc.exists) {
+      if (!userDoc.exists) {
+        // User document doesn't exist - redirect to account type selection
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => AccountTypeScreen()),
+        );
+        return;
+      }
+
       Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
       String? role = userData['role'];
-      String? accountType = userData['accountType'];
 
-      // Check if user is admin
+      // Priority 1: Check if user is admin
       if (role == 'admin') {
         Navigator.pushReplacement(
           context,
@@ -123,28 +128,51 @@ class _SignInScreenState extends State<SignInScreen> {
         return;
       }
 
-      // Check account type for regular users
-      if (accountType == 'service_provider') {
-        // Worker account
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => WorkerDashboardScreen()),
-        );
-      } else if (accountType == 'customer') {
-        // Customer account
+      // Priority 2: Check if customer account exists
+      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .get();
+
+      if (customerDoc.exists) {
+        // Customer account exists - ALWAYS navigate to customer dashboard
+        print('✅ Customer account found - navigating to customer dashboard');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => CustomerDashboard()),
         );
-      } else {
-        // Account type not set - redirect to account type selection
+        return;
+      }
+
+      // Priority 3: Check if worker account exists (only if no customer account)
+      DocumentSnapshot workerDoc = await FirebaseFirestore.instance
+          .collection('workers')
+          .doc(user.uid)
+          .get();
+
+      if (workerDoc.exists) {
+        // Only worker account exists - navigate to worker dashboard
+        print(
+            '✅ Worker account found (no customer) - navigating to worker dashboard');
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => AccountTypeScreen()),
+          MaterialPageRoute(builder: (context) => WorkerDashboardScreen()),
         );
+        return;
       }
-    } else {
-      // User document doesn't exist - redirect to account type selection
+
+      // Priority 4: No account exists - redirect to account type selection
+      print(
+          '⚠️ No customer or worker account found - redirecting to account type selection');
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => AccountTypeScreen()),
+      );
+    } catch (e) {
+      print('❌ Error in navigation: $e');
+      _showErrorSnackBar('Navigation error: ${e.toString()}');
+
+      // Fallback to account type selection
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => AccountTypeScreen()),
@@ -177,21 +205,17 @@ class _SignInScreenState extends State<SignInScreen> {
           errorMessage = 'An error occurred. Please try again.';
       }
       _showErrorSnackBar(errorMessage);
+    } catch (e) {
+      _showErrorSnackBar('Password reset failed: ${e.toString()}');
     }
   }
 
   void _showSuccessSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.white),
-            SizedBox(width: 8),
-            Expanded(child: Text(message)),
-          ],
-        ),
+        content: Text(message),
         backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
       ),
     );
   }
@@ -199,15 +223,9 @@ class _SignInScreenState extends State<SignInScreen> {
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.error, color: Colors.white),
-            SizedBox(width: 8),
-            Expanded(child: Text(message)),
-          ],
-        ),
+        content: Text(message),
         backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -216,229 +234,244 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Text(
-                  'Welcome Back!',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Sign in to continue',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                SizedBox(height: 40),
+        child: _isLoading
+            ? Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(height: 40),
 
-                // Email Field
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                        .hasMatch(value)) {
-                      return 'Please enter a valid email';
-                    }
-                    return null;
-                  },
-                ),
-                SizedBox(height: 16),
-
-                // Password Field
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    return null;
-                  },
-                ),
-                SizedBox(height: 8),
-
-                // Remember Me & Forgot Password Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: _rememberMe,
-                          onChanged: (value) {
-                            setState(() {
-                              _rememberMe = value ?? false;
-                            });
-                          },
+                      // Logo/Title
+                      Text(
+                        'FixMate',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2196F3),
                         ),
-                        Text('Remember me'),
-                      ],
-                    ),
-                    TextButton(
-                      onPressed: _resetPassword,
-                      child: Text('Forgot Password?'),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 24),
-
-                // Sign In Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _signIn,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ),
-                    child: _isLoading
-                        ? CircularProgressIndicator(color: Colors.white)
-                        : Text(
+                      SizedBox(height: 8),
+                      Text(
+                        'Welcome back!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      SizedBox(height: 48),
+
+                      // Email Field
+                      TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Color(0xFF2196F3)),
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your email';
+                          }
+                          if (!value.contains('@')) {
+                            return 'Please enter a valid email';
+                          }
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: 16),
+
+                      // Password Field
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          prefixIcon: Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Color(0xFF2196F3)),
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your password';
+                          }
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: 12),
+
+                      // Remember Me & Forgot Password
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _rememberMe,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _rememberMe = value ?? false;
+                                  });
+                                },
+                                activeColor: Color(0xFF2196F3),
+                              ),
+                              Text(
+                                'Remember me',
+                                style: TextStyle(color: Colors.grey[700]),
+                              ),
+                            ],
+                          ),
+                          TextButton(
+                            onPressed: _resetPassword,
+                            child: Text(
+                              'Forgot Password?',
+                              style: TextStyle(color: Color(0xFF2196F3)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 24),
+
+                      // Sign In Button
+                      SizedBox(
+                        height: 54,
+                        child: ElevatedButton(
+                          onPressed: _signIn,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color(0xFF2196F3),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
                             'Sign In',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
                             ),
                           ),
-                  ),
-                ),
-                SizedBox(height: 24),
-
-                // OR Divider
-                Row(
-                  children: [
-                    Expanded(child: Divider()),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'OR',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                    ),
-                    Expanded(child: Divider()),
-                  ],
-                ),
-                SizedBox(height: 24),
+                      SizedBox(height: 24),
 
-                // NEW: Google Sign-In Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: OutlinedButton.icon(
-                    onPressed: _isLoading ? null : _signInWithGoogle,
-                    icon: Image.asset(
-                      'assets/google_logo.png', // You'll need to add this asset
-                      height: 24,
-                      width: 24,
-                      errorBuilder: (context, error, stackTrace) {
-                        // Fallback if image not found
-                        return Icon(Icons.g_mobiledata, size: 24);
-                      },
-                    ),
-                    label: Text(
-                      'Continue with Google',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.grey[300]!),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 24),
-
-                // Create Account Link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Don't have an account? ",
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => CreateAccountScreen(),
+                      // Divider
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: Colors.grey[300])),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              'OR',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
                           ),
-                        );
-                      },
-                      child: Text(
-                        'Create Account',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
+                          Expanded(child: Divider(color: Colors.grey[300])),
+                        ],
+                      ),
+                      SizedBox(height: 24),
+
+                      // Google Sign In Button
+                      SizedBox(
+                        height: 54,
+                        child: OutlinedButton.icon(
+                          onPressed: _signInWithGoogle,
+                          icon: Image.asset(
+                            'assets/google_logo.png',
+                            height: 24,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(Icons.g_mobiledata,
+                                  color: Colors.red, size: 24);
+                            },
+                          ),
+                          label: Text(
+                            'Sign in with Google',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[800],
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: Colors.grey[300]!),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      SizedBox(height: 24),
+
+                      // Sign Up Link
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "Don't have an account? ",
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => CreateAccountScreen(),
+                                ),
+                              );
+                            },
+                            child: Text(
+                              'Sign Up',
+                              style: TextStyle(
+                                color: Color(0xFF2196F3),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 20),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ),
-        ),
+              ),
       ),
     );
   }

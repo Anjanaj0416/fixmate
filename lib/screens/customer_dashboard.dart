@@ -1,5 +1,6 @@
 // lib/screens/customer_dashboard.dart
 // FIXED VERSION - Added notification functionality and correct location display
+// PLUS Worker Account Switch Feature (Minimal Changes)
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,7 +10,9 @@ import 'customer_profile_screen.dart';
 import 'customer_bookings_screen.dart';
 import 'ai_chat_screen.dart';
 import 'customer_chats_screen.dart';
-import 'customer_notifications_screen.dart'; // NEW: Import notifications screen
+import 'customer_notifications_screen.dart';
+import 'worker_registration_flow.dart'; // NEW: Import worker registration
+import 'worker_dashboard_screen.dart'; // NEW: Import worker dashboard
 import 'dart:async';
 
 class CustomerDashboard extends StatefulWidget {
@@ -19,21 +22,21 @@ class CustomerDashboard extends StatefulWidget {
 
 class _CustomerDashboardState extends State<CustomerDashboard> {
   int _currentIndex = 0;
-  String _userLocation = 'Loading...'; // Changed from _selectedLocation
-  int _unreadNotificationCount = 0; // NEW: Track unread notifications
-  String? _customerId; // NEW: Store customer ID
-  StreamSubscription? _notificationSubscription; // ADD THIS LINE
+  String _userLocation = 'Loading...';
+  int _unreadNotificationCount = 0;
+  String? _customerId;
+  StreamSubscription? _notificationSubscription;
 
   @override
   void initState() {
     super.initState();
-    _loadUserLocation(); // NEW: Load location from database
-    _loadCustomerIdAndListenToNotifications(); // NEW: Load notifications
+    _loadUserLocation();
+    _loadCustomerIdAndListenToNotifications();
   }
 
   @override
   void dispose() {
-    _notificationSubscription?.cancel(); // Cancel the stream subscription
+    _notificationSubscription?.cancel();
     super.dispose();
   }
 
@@ -51,20 +54,17 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               customerDoc.data() as Map<String, dynamic>;
 
           if (mounted) {
-            // ADD THIS CHECK
             setState(() {
               _customerId = customerData['customer_id'] ?? user.uid;
             });
           }
 
-          // Listen to unread notifications - STORE THE SUBSCRIPTION
           _notificationSubscription = FirebaseFirestore.instance
               .collection('notifications')
               .where('recipient_type', isEqualTo: 'customer')
               .where('read', isEqualTo: false)
               .snapshots()
               .listen((snapshot) {
-            // Filter for this specific customer
             int count = snapshot.docs.where((doc) {
               var data = doc.data();
               String? customerId = data['customer_id'];
@@ -72,7 +72,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               return customerId == _customerId || recipientId == _customerId;
             }).length;
 
-            // ADD MOUNTED CHECK BEFORE setState
             if (mounted) {
               setState(() {
                 _unreadNotificationCount = count;
@@ -86,12 +85,10 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     }
   }
 
-  // NEW: Load user's nearest town from database
   Future<void> _loadUserLocation() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        // First check users collection for nearestTown
         DocumentSnapshot userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -104,7 +101,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
 
           if (nearestTown != null && nearestTown.isNotEmpty) {
             if (mounted) {
-              // ADD THIS CHECK
               setState(() {
                 _userLocation = nearestTown;
               });
@@ -113,7 +109,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           }
         }
 
-        // If not found in users, check customers collection
         DocumentSnapshot customerDoc = await FirebaseFirestore.instance
             .collection('customers')
             .doc(user.uid)
@@ -123,12 +118,10 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           Map<String, dynamic> customerData =
               customerDoc.data() as Map<String, dynamic>;
 
-          // Try to get city from location object
           if (customerData['location'] != null) {
             String? city = customerData['location']['city'];
             if (city != null && city.isNotEmpty) {
               if (mounted) {
-                // ADD THIS CHECK
                 setState(() {
                   _userLocation = city;
                 });
@@ -138,9 +131,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           }
         }
 
-        // Fallback if nothing found
         if (mounted) {
-          // ADD THIS CHECK
           setState(() {
             _userLocation = 'Location not set';
           });
@@ -149,7 +140,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     } catch (e) {
       print('Error loading user location: $e');
       if (mounted) {
-        // ADD THIS CHECK
         setState(() {
           _userLocation = 'Location unavailable';
         });
@@ -157,7 +147,124 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     }
   }
 
-  // NEW: Load customer ID and listen to notifications
+  // NEW METHOD: Check if user already has a worker account
+  Future<void> _handleWorkerAccountSwitch() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      DocumentSnapshot workerDoc = await FirebaseFirestore.instance
+          .collection('workers')
+          .doc(user.uid)
+          .get();
+
+      Navigator.pop(context);
+
+      if (workerDoc.exists) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Switching to your worker account...'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
+          ),
+        );
+
+        await Future.delayed(Duration(seconds: 1));
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WorkerDashboardScreen(),
+          ),
+        );
+      } else {
+        bool? shouldRegister = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.work, color: Colors.blue),
+                SizedBox(width: 8),
+                Text('Become a Service Provider'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'You don\'t have a worker account yet.',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'Would you like to register as a service provider? This will allow you to:',
+                ),
+                SizedBox(height: 8),
+                _buildBenefitItem('💼', 'Offer your services to customers'),
+                _buildBenefitItem('💰', 'Earn money by completing jobs'),
+                _buildBenefitItem('⭐', 'Build your reputation'),
+                _buildBenefitItem('📊', 'Manage your bookings'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Maybe Later'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                ),
+                child: Text('Register Now'),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldRegister == true) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => WorkerRegistrationFlow(),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildBenefitItem(String emoji, String text) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text(emoji, style: TextStyle(fontSize: 18)),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: TextStyle(fontSize: 13)),
+          ),
+        ],
+      ),
+    );
+  }
 
   final List<Map<String, dynamic>> _serviceCategories = [
     {
@@ -269,7 +376,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     return SafeArea(
       child: CustomScrollView(
         slivers: [
-          // Custom App Bar
           SliverAppBar(
             floating: true,
             backgroundColor: Colors.white,
@@ -312,7 +418,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                     size: 16, color: Colors.grey[600]),
                                 SizedBox(width: 4),
                                 Text(
-                                  _userLocation, // FIXED: Now shows actual location from database
+                                  _userLocation,
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Colors.grey[600],
@@ -322,13 +428,11 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                             ),
                           ],
                         ),
-                        // FIXED: Added functionality to notification button
                         Stack(
                           children: [
                             IconButton(
                               icon: Icon(Icons.notifications_outlined),
                               onPressed: () {
-                                // Navigate to notifications screen
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -338,7 +442,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                 );
                               },
                             ),
-                            // Show unread count badge
                             if (_unreadNotificationCount > 0)
                               Positioned(
                                 right: 8,
@@ -375,18 +478,13 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               ),
             ),
           ),
-
           SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(height: 16),
-
-                // AI ASSISTANT BANNER
                 _buildAIAssistantBanner(),
                 SizedBox(height: 24),
-
-                // Search bar
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: TextField(
@@ -405,8 +503,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   ),
                 ),
                 SizedBox(height: 24),
-
-                // Services Section
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
@@ -431,8 +527,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   ),
                 ),
                 SizedBox(height: 12),
-
-                // Service Grid
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: GridView.builder(
@@ -451,8 +545,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   ),
                 ),
                 SizedBox(height: 24),
-
-                // Quick Actions
                 _buildQuickActions(),
                 SizedBox(height: 24),
               ],
@@ -587,6 +679,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               ),
               Container(
                 width: 130,
+                margin: EdgeInsets.only(right: 12),
                 child: _buildQuickActionCard(
                   'Support',
                   Icons.help_outline,
@@ -594,6 +687,16 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   () {
                     // Navigate to support
                   },
+                ),
+              ),
+              // NEW: Worker Account button
+              Container(
+                width: 130,
+                child: _buildQuickActionCard(
+                  'Worker Account',
+                  Icons.work_outline,
+                  Colors.orange,
+                  _handleWorkerAccountSwitch,
                 ),
               ),
             ],
@@ -799,7 +902,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                     Colors.orange,
                     () {
                       Navigator.pop(context);
-                      // Navigate to service details
                     },
                   ),
                 ],
