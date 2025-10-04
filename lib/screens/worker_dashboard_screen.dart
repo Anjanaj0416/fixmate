@@ -1,5 +1,5 @@
 // lib/screens/worker_dashboard_screen.dart
-// ENHANCED VERSION - Added Chat/Messages navigation
+// ENHANCED VERSION - Added Customer Account Switch + Chat/Messages navigation
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,10 +7,10 @@ import '../models/worker_model.dart';
 import '../screens/worker_profile_screen.dart';
 import '../screens/worker_bookings_screen.dart';
 import '../screens/worker_reviews_screen.dart';
-import '../screens/worker_chats_screen.dart'; // NEW IMPORT
+import '../screens/worker_chats_screen.dart';
 import '../services/rating_service.dart';
-import 'worker_chats_screen.dart';
 import 'worker_notifications_screen.dart';
+import 'customer_dashboard.dart'; // NEW: Import customer dashboard
 
 class WorkerDashboardScreen extends StatefulWidget {
   @override
@@ -92,23 +92,178 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      setState(() => _isAvailable = !_isAvailable);
+      bool newAvailability = !_isAvailable;
 
       await FirebaseFirestore.instance
           .collection('workers')
           .doc(user.uid)
           .update({
-        'availability.available_today': _isAvailable,
-        'availability.updated_at': FieldValue.serverTimestamp(),
+        'availability.available_today': newAvailability,
+        'last_active': FieldValue.serverTimestamp(),
+      });
+
+      setState(() {
+        _isAvailable = newAvailability;
       });
 
       _showSuccessSnackBar(
-        _isAvailable ? 'You are now available' : 'You are now unavailable',
+        newAvailability ? 'You are now available' : 'You are now unavailable',
       );
     } catch (e) {
-      setState(() => _isAvailable = !_isAvailable);
+      print('❌ Error toggling availability: $e');
       _showErrorSnackBar('Failed to update availability');
     }
+  }
+
+  // NEW METHOD: Check if user has a customer account, create if needed, then switch
+  Future<void> _handleCustomerAccountSwitch() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Check if customer account exists
+      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .get();
+
+      if (customerDoc.exists) {
+        // Customer account exists - switch to it
+        Navigator.pop(context); // Close loading dialog
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Switching to your customer account...'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
+          ),
+        );
+
+        await Future.delayed(Duration(seconds: 1));
+
+        // Navigate to customer dashboard
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CustomerDashboard(),
+          ),
+        );
+      } else {
+        // No customer account exists - create it now
+        await _createCustomerAccount(user);
+
+        Navigator.pop(context); // Close loading dialog
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Customer account created! Switching...'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
+          ),
+        );
+
+        await Future.delayed(Duration(seconds: 1));
+
+        // Navigate to customer dashboard
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CustomerDashboard(),
+          ),
+        );
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog if still open
+      print('❌ Error switching to customer account: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // NEW METHOD: Create customer account for the worker
+  Future<void> _createCustomerAccount(User user) async {
+    try {
+      // Get user data from users collection
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
+
+      // Generate customer ID
+      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      String customerId = 'CUST_${timestamp}_${_generateRandomSuffix()}';
+
+      // Get worker's name and contact info
+      String customerName =
+          _worker?.workerName ?? userData?['name'] ?? 'Customer';
+      String firstName =
+          _worker?.firstName ?? userData?['name']?.split(' ')[0] ?? '';
+      String lastName = _worker?.lastName ??
+          userData?['name']?.split(' ').skip(1).join(' ') ??
+          '';
+      String email = _worker?.contact.email ?? user.email ?? '';
+      String phone = _worker?.contact.phoneNumber ?? userData?['phone'] ?? '';
+
+      // Create customer document
+      await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .set({
+        'customer_id': customerId,
+        'customer_name': customerName,
+        'first_name': firstName,
+        'last_name': lastName,
+        'email': email,
+        'phone_number': phone,
+        'location': null,
+        'preferred_services': [],
+        'preferences': {
+          'notifications_enabled': true,
+          'email_notifications': true,
+          'sms_notifications': false,
+        },
+        'verified': false,
+        'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      // Update user document - Keep accountType as 'worker' since worker was primary
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'accountType': 'both', // User has both accounts now
+        'customerId': customerId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      print('✅ Customer account created: $customerId');
+    } catch (e) {
+      print('❌ Error creating customer account: $e');
+      throw Exception('Failed to create customer account: $e');
+    }
+  }
+
+  // Helper method to generate random suffix for customer ID
+  String _generateRandomSuffix() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final random = DateTime.now().millisecondsSinceEpoch;
+    return chars[(random % chars.length)];
   }
 
   void _showSuccessSnackBar(String message) {
@@ -135,11 +290,9 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text('Worker Dashboard'),
-          backgroundColor: Color(0xFFFF9800),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFFFF9800)),
         ),
-        body: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -148,17 +301,32 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         appBar: AppBar(
           title: Text('Worker Dashboard'),
           backgroundColor: Color(0xFFFF9800),
+          foregroundColor: Colors.white,
         ),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, size: 64, color: Colors.red),
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.grey[400],
+              ),
               SizedBox(height: 16),
-              Text('Failed to load worker profile'),
-              SizedBox(height: 16),
+              Text(
+                'Worker profile not found',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[600],
+                ),
+              ),
+              SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _loadWorkerData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFFF9800),
+                  foregroundColor: Colors.white,
+                ),
                 child: Text('Retry'),
               ),
             ],
@@ -171,77 +339,12 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
       appBar: AppBar(
         title: Text('Worker Dashboard'),
         backgroundColor: Color(0xFFFF9800),
-        actions: [
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('notifications')
-                .where('recipient_type', isEqualTo: 'worker')
-                .where('read', isEqualTo: false)
-                .snapshots(),
-            builder: (context, snapshot) {
-              int unreadCount = 0;
-
-              if (snapshot.hasData && _worker != null) {
-                // Filter for this specific worker
-                unreadCount = snapshot.data!.docs.where((doc) {
-                  var data = doc.data() as Map<String, dynamic>;
-                  String? workerId = data['worker_id'];
-                  String? recipientId = data['recipient_id'];
-                  return workerId == _worker!.workerId ||
-                      recipientId == _worker!.workerId;
-                }).length;
-              }
-
-              return Stack(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.notifications),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => WorkerNotificationsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  if (unreadCount > 0)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        padding: EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: BoxConstraints(
-                          minWidth: 18,
-                          minHeight: 18,
-                        ),
-                        child: Text(
-                          unreadCount > 9 ? '9+' : unreadCount.toString(),
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: _loadWorkerData,
-          ),
-        ],
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: RefreshIndicator(
         onRefresh: _loadWorkerData,
+        color: Color(0xFFFF9800),
         child: SingleChildScrollView(
           physics: AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.all(16),
@@ -252,9 +355,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
               SizedBox(height: 16),
               _buildAvailabilityCard(),
               SizedBox(height: 16),
-              _buildRatingsCard(),
-              SizedBox(height: 16),
-              _buildQuickStats(),
+              _buildStatsCard(),
               SizedBox(height: 16),
               _buildQuickActions(),
             ],
@@ -338,11 +439,6 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
     );
   }
 
-  Widget _buildInboxScreen() {
-    // NEW: Show actual worker chat list instead of placeholder
-    return WorkerChatsScreen();
-  }
-
   Widget _buildAvailabilityCard() {
     return Card(
       elevation: 2,
@@ -357,7 +453,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                 Icon(
                   _isAvailable ? Icons.check_circle : Icons.cancel,
                   color: _isAvailable ? Colors.green : Colors.red,
-                  size: 28,
+                  size: 24,
                 ),
                 SizedBox(width: 12),
                 Column(
@@ -366,14 +462,14 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                     Text(
                       'Availability Status',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 12,
                         color: Colors.grey[600],
                       ),
                     ),
                     Text(
                       _isAvailable ? 'Available' : 'Unavailable',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: _isAvailable ? Colors.green : Colors.red,
                       ),
@@ -393,14 +489,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
     );
   }
 
-  Widget _buildRatingsCard() {
-    if (_ratingStats.isEmpty) {
-      return SizedBox.shrink();
-    }
-
-    double avgRating = _ratingStats['average_rating'] ?? 0.0;
-    int totalReviews = _ratingStats['total_reviews'] ?? 0;
-
+  Widget _buildStatsCard() {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -410,53 +499,9 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Your Ratings',
+              'Performance Stats',
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(Icons.star, color: Colors.amber, size: 32),
-                SizedBox(width: 8),
-                Text(
-                  avgRating.toStringAsFixed(1),
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(width: 8),
-                Text(
-                  '($totalReviews reviews)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickStats() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Quick Stats',
-              style: TextStyle(
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -465,10 +510,10 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildStatItem(
-                  'Completed',
+                  'Jobs',
                   _worker!.jobsCompleted.toString(),
-                  Icons.check_circle,
-                  Colors.green,
+                  Icons.work,
+                  Color(0xFFFF9800),
                 ),
                 _buildStatItem(
                   'Rating',
@@ -478,7 +523,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                 ),
                 _buildStatItem(
                   'Reviews',
-                  (_ratingStats['total_reviews'] ?? 0).toString(),
+                  (_ratingStats['totalRatings'] ?? 0).toString(),
                   Icons.rate_review,
                   Colors.blue,
                 ),
@@ -547,7 +592,6 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                 );
               },
             ),
-            // ADD THIS: Notifications card
             _buildActionCard(
               'Notifications',
               Icons.notifications,
@@ -603,6 +647,13 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                 );
               },
             ),
+            // NEW: Customer Account button
+            _buildActionCard(
+              'Customer Account',
+              Icons.shopping_bag,
+              Colors.teal,
+              _handleCustomerAccountSwitch,
+            ),
           ],
         ),
       ],
@@ -637,6 +688,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                   fontWeight: FontWeight.bold,
                   color: Colors.grey[800],
                 ),
+                textAlign: TextAlign.center,
               ),
             ],
           ),
