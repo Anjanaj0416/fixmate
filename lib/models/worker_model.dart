@@ -1,3 +1,5 @@
+// lib/models/worker_model.dart
+// MODIFIED VERSION - Added profilePictureUrl field
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class WorkerModel {
@@ -21,6 +23,7 @@ class WorkerModel {
   final DateTime? createdAt;
   final DateTime? lastActive;
   final bool verified;
+  final String? profilePictureUrl; // ✅ NEW FIELD
 
   WorkerModel({
     this.workerId,
@@ -43,6 +46,7 @@ class WorkerModel {
     this.createdAt,
     this.lastActive,
     this.verified = false,
+    this.profilePictureUrl, // ✅ NEW PARAMETER
   });
 
   factory WorkerModel.fromFirestore(DocumentSnapshot doc) {
@@ -68,6 +72,7 @@ class WorkerModel {
       createdAt: data['created_at']?.toDate(),
       lastActive: data['last_active']?.toDate(),
       verified: data['verified'] ?? false,
+      profilePictureUrl: data['profile_picture_url'], // ✅ NEW FIELD
     );
   }
 
@@ -93,6 +98,7 @@ class WorkerModel {
       'created_at': createdAt ?? FieldValue.serverTimestamp(),
       'last_active': lastActive ?? FieldValue.serverTimestamp(),
       'verified': verified,
+      'profile_picture_url': profilePictureUrl, // ✅ NEW FIELD
     };
   }
 }

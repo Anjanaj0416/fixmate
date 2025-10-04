@@ -1,8 +1,12 @@
+// lib/screens/worker_profile_screen.dart
+// MODIFIED VERSION - Added profile picture upload functionality
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/worker_model.dart';
 import '../constants/service_constants.dart';
+import '../services/storage_service.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
   final WorkerModel worker;
@@ -16,7 +20,9 @@ class WorkerProfileScreen extends StatefulWidget {
 class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   bool _isEditing = false;
   bool _isLoading = false;
+  bool _isUploadingImage = false;
   late WorkerModel _worker;
+  final ImagePicker _imagePicker = ImagePicker();
 
   // Controllers for editable fields
   late TextEditingController _firstNameController;
@@ -91,6 +97,75 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     super.dispose();
   }
 
+  Future<void> _uploadProfilePicture() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (image == null) return;
+
+      setState(() {
+        _isUploadingImage = true;
+      });
+
+      String downloadUrl = await StorageService.uploadWorkerProfilePicture(
+        imageFile: image,
+      );
+
+      if (_worker.profilePictureUrl != null &&
+          _worker.profilePictureUrl!.isNotEmpty) {
+        await StorageService.deleteProfilePicture(_worker.profilePictureUrl!);
+      }
+
+      _worker = WorkerModel(
+        workerId: _worker.workerId,
+        workerName: _worker.workerName,
+        firstName: _worker.firstName,
+        lastName: _worker.lastName,
+        serviceType: _worker.serviceType,
+        serviceCategory: _worker.serviceCategory,
+        businessName: _worker.businessName,
+        location: _worker.location,
+        rating: _worker.rating,
+        experienceYears: _worker.experienceYears,
+        jobsCompleted: _worker.jobsCompleted,
+        successRate: _worker.successRate,
+        pricing: _worker.pricing,
+        availability: _worker.availability,
+        capabilities: _worker.capabilities,
+        contact: _worker.contact,
+        profile: _worker.profile,
+        verified: _worker.verified,
+        createdAt: _worker.createdAt,
+        lastActive: _worker.lastActive,
+        profilePictureUrl: downloadUrl,
+      );
+
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('workers')
+            .doc(user.uid)
+            .update({'profile_picture_url': downloadUrl});
+      }
+
+      setState(() {
+        _isUploadingImage = false;
+      });
+
+      _showSuccessSnackBar('Profile picture updated successfully!');
+    } catch (e) {
+      setState(() {
+        _isUploadingImage = false;
+      });
+      _showErrorSnackBar('Failed to upload profile picture: ${e.toString()}');
+    }
+  }
+
   Future<void> _saveProfile() async {
     setState(() {
       _isLoading = true;
@@ -102,7 +177,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
         throw Exception('User not authenticated');
       }
 
-      // Update worker model with new data
       _worker = WorkerModel(
         workerId: _worker.workerId,
         workerName:
@@ -154,9 +228,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
         verified: _worker.verified,
         createdAt: _worker.createdAt,
         lastActive: _worker.lastActive,
+        profilePictureUrl: _worker.profilePictureUrl,
       );
 
-      // Save to Firestore
       await FirebaseFirestore.instance
           .collection('workers')
           .doc(user.uid)
@@ -168,8 +242,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       });
 
       _showSuccessSnackBar('Profile updated successfully!');
-      Navigator.pop(
-          context, true); // Return true to indicate profile was updated
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -178,11 +250,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     }
   }
 
-  void _cancelEditing() {
-    setState(() {
-      _isEditing = false;
-    });
-    _initializeControllers(); // Reset controllers to original values
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   void _showErrorSnackBar(String message) {
@@ -190,21 +265,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -212,101 +273,29 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'My Profile',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
+        title: Text('Worker Profile'),
+        backgroundColor: Color(0xFFFF9800),
+        foregroundColor: Colors.white,
         actions: [
           if (!_isEditing)
             IconButton(
-              icon: Icon(Icons.edit, color: Color(0xFFFF9800)),
-              onPressed: () {
-                setState(() {
-                  _isEditing = true;
-                });
-              },
+              icon: Icon(Icons.edit),
+              onPressed: () => setState(() => _isEditing = true),
             ),
-          if (_isEditing) ...[
-            IconButton(
-              icon: Icon(Icons.close, color: Colors.red),
-              onPressed: _cancelEditing,
-            ),
-            IconButton(
-              icon: Icon(Icons.check, color: Colors.green),
-              onPressed: _isLoading ? null : _saveProfile,
-            ),
-          ],
         ],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Profile Header
             _buildProfileHeader(),
-            SizedBox(height: 24),
-
-            // Personal Information
-            _buildSection('Personal Information', [
-              _buildTextField('First Name', _firstNameController),
-              _buildTextField('Last Name', _lastNameController),
-              _buildTextField('Email', _emailController,
-                  keyboardType: TextInputType.emailAddress),
-              _buildTextField('Phone Number', _phoneController,
-                  keyboardType: TextInputType.phone),
-            ]),
-            SizedBox(height: 24),
-
-            // Business Information
-            _buildSection('Business Information', [
-              _buildTextField('Business Name', _businessNameController),
-              _buildTextField('Bio', _bioController, maxLines: 3),
-              _buildTextField('Experience (Years)', _experienceController,
-                  keyboardType: TextInputType.number),
-              _buildTextField('Website (Optional)', _websiteController),
-            ]),
-            SizedBox(height: 24),
-
-            // Location Information
-            _buildSection('Location Information', [
-              _buildTextField('City', _cityController),
-              _buildTextField('State/Province', _stateController),
-              _buildTextField('Postal Code', _postalCodeController),
-              _buildTextField('Service Radius (km)', _serviceRadiusController,
-                  keyboardType: TextInputType.number),
-            ]),
-            SizedBox(height: 24),
-
-            // Pricing Information
-            _buildSection('Pricing Information', [
-              _buildTextField('Daily Wage (LKR)', _dailyWageController,
-                  keyboardType: TextInputType.number),
-              _buildTextField('Half Day Rate (LKR)', _halfDayRateController,
-                  keyboardType: TextInputType.number),
-              _buildTextField('Minimum Charge (LKR)', _minimumChargeController,
-                  keyboardType: TextInputType.number),
-              _buildTextField(
-                  'Overtime Rate (LKR/hour)', _overtimeRateController,
-                  keyboardType: TextInputType.number),
-            ]),
-            SizedBox(height: 24),
-
-            // Specializations and Capabilities (Read-only for now)
-            _buildReadOnlySection(),
-            SizedBox(height: 100), // Extra space for FAB
+            SizedBox(height: 16),
+            if (_isEditing) ...[
+              _buildEditableFields(),
+            ] else ...[
+              _buildViewOnlyFields(),
+            ],
           ],
         ),
       ),
@@ -338,17 +327,64 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
         padding: EdgeInsets.all(20),
         child: Column(
           children: [
-            CircleAvatar(
-              radius: 40,
-              backgroundColor: Color(0xFFFF9800),
-              child: Text(
-                _worker.firstName[0].toUpperCase(),
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Color(0xFFFF9800),
+                  backgroundImage: _worker.profilePictureUrl != null &&
+                          _worker.profilePictureUrl!.isNotEmpty
+                      ? NetworkImage(_worker.profilePictureUrl!)
+                      : null,
+                  child: _worker.profilePictureUrl == null ||
+                          _worker.profilePictureUrl!.isEmpty
+                      ? Text(
+                          _worker.firstName[0].toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 40,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        )
+                      : null,
                 ),
-              ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: GestureDetector(
+                    onTap: _isUploadingImage ? null : _uploadProfilePicture,
+                    child: Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: _isUploadingImage
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    Color(0xFFFF9800)),
+                              ),
+                            )
+                          : Icon(
+                              Icons.camera_alt,
+                              color: Color(0xFFFF9800),
+                              size: 20,
+                            ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             SizedBox(height: 16),
             Text(
@@ -415,7 +451,237 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     );
   }
 
-  Widget _buildSection(String title, List<Widget> fields) {
+  Widget _buildEditableFields() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Personal Information',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 16),
+            TextField(
+              controller: _firstNameController,
+              decoration: InputDecoration(
+                labelText: 'First Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: _lastNameController,
+              decoration: InputDecoration(
+                labelText: 'Last Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: _businessNameController,
+              decoration: InputDecoration(
+                labelText: 'Business Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: _bioController,
+              decoration: InputDecoration(
+                labelText: 'Bio',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+            SizedBox(height: 24),
+            Text(
+              'Contact Information',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 16),
+            TextField(
+              controller: _phoneController,
+              decoration: InputDecoration(
+                labelText: 'Phone Number',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: _emailController,
+              decoration: InputDecoration(
+                labelText: 'Email',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: _websiteController,
+              decoration: InputDecoration(
+                labelText: 'Website (Optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 24),
+            Text(
+              'Location',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 16),
+            TextField(
+              controller: _cityController,
+              decoration: InputDecoration(
+                labelText: 'City',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: _stateController,
+              decoration: InputDecoration(
+                labelText: 'State',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: _postalCodeController,
+              decoration: InputDecoration(
+                labelText: 'Postal Code',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 24),
+            Text(
+              'Pricing',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 16),
+            TextField(
+              controller: _dailyWageController,
+              decoration: InputDecoration(
+                labelText: 'Daily Wage (LKR)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: _halfDayRateController,
+              decoration: InputDecoration(
+                labelText: 'Half Day Rate (LKR)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: _minimumChargeController,
+              decoration: InputDecoration(
+                labelText: 'Minimum Charge (LKR)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: _overtimeRateController,
+              decoration: InputDecoration(
+                labelText: 'Overtime Rate (LKR/hour)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            SizedBox(height: 24),
+            Text(
+              'Professional Details',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 16),
+            TextField(
+              controller: _experienceController,
+              decoration: InputDecoration(
+                labelText: 'Experience (Years)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: _serviceRadiusController,
+              decoration: InputDecoration(
+                labelText: 'Service Radius (KM)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildViewOnlyFields() {
+    return Column(
+      children: [
+        _buildInfoCard('Personal Information', [
+          _buildInfoRow('Business Name', _worker.businessName),
+          _buildInfoRow('Bio', _worker.profile.bio),
+        ]),
+        SizedBox(height: 16),
+        _buildInfoCard('Contact Information', [
+          _buildInfoRow('Phone', _worker.contact.phoneNumber),
+          _buildInfoRow('Email', _worker.contact.email),
+          if (_worker.contact.website != null)
+            _buildInfoRow('Website', _worker.contact.website!),
+        ]),
+        SizedBox(height: 16),
+        _buildInfoCard('Location', [
+          _buildInfoRow('City', _worker.location.city),
+          _buildInfoRow('State', _worker.location.state),
+          _buildInfoRow('Postal Code', _worker.location.postalCode),
+        ]),
+        SizedBox(height: 16),
+        _buildInfoCard('Pricing', [
+          _buildInfoRow('Daily Wage',
+              'LKR ${_worker.pricing.dailyWageLkr.toStringAsFixed(0)}'),
+          _buildInfoRow('Half Day Rate',
+              'LKR ${_worker.pricing.halfDayRateLkr.toStringAsFixed(0)}'),
+          _buildInfoRow('Minimum Charge',
+              'LKR ${_worker.pricing.minimumChargeLkr.toStringAsFixed(0)}'),
+          _buildInfoRow('Overtime Rate',
+              'LKR ${_worker.pricing.overtimeHourlyLkr.toStringAsFixed(0)}/hour'),
+        ]),
+        SizedBox(height: 16),
+        _buildInfoCard('Professional Details', [
+          _buildInfoRow('Experience', '${_worker.experienceYears} years'),
+          _buildInfoRow(
+              'Service Radius', '${_worker.profile.serviceRadiusKm} km'),
+        ]),
+      ],
+    );
+  }
+
+  Widget _buildInfoCard(String title, List<Widget> children) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -429,202 +695,38 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFFFF9800),
               ),
             ),
-            SizedBox(height: 16),
-            ...fields,
+            SizedBox(height: 12),
+            ...children,
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTextField(
-    String label,
-    TextEditingController controller, {
-    TextInputType keyboardType = TextInputType.text,
-    int maxLines = 1,
-  }) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 16),
-      child: TextFormField(
-        controller: controller,
-        enabled: _isEditing,
-        keyboardType: keyboardType,
-        maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(
-            color: _isEditing ? Color(0xFFFF9800) : Colors.grey[600],
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.grey[300]!),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.grey[300]!),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Color(0xFFFF9800), width: 2),
-          ),
-          disabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.grey[200]!),
-          ),
-          filled: true,
-          fillColor: _isEditing ? Colors.white : Colors.grey[50],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReadOnlySection() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Skills & Capabilities',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFFFF9800),
-              ),
-            ),
-            SizedBox(height: 16),
-
-            // Specializations
-            Text(
-              'Specializations',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _worker.profile.specializations.map((spec) {
-                return Chip(
-                  label: Text(spec),
-                  backgroundColor: Color(0xFFFF9800).withOpacity(0.1),
-                  labelStyle: TextStyle(color: Color(0xFFFF9800)),
-                );
-              }).toList(),
-            ),
-            SizedBox(height: 16),
-
-            // Languages
-            Text(
-              'Languages',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _worker.capabilities.languages.map((lang) {
-                return Chip(
-                  label: Text(lang),
-                  backgroundColor: Colors.blue.withOpacity(0.1),
-                  labelStyle: TextStyle(color: Colors.blue),
-                );
-              }).toList(),
-            ),
-            SizedBox(height: 16),
-
-            // Capabilities
-            Text(
-              'Capabilities',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            SizedBox(height: 8),
-            _buildCapabilityRow('Own Tools', _worker.capabilities.toolsOwned),
-            _buildCapabilityRow(
-                'Vehicle Available', _worker.capabilities.vehicleAvailable),
-            _buildCapabilityRow('Certified', _worker.capabilities.certified),
-            _buildCapabilityRow('Insured', _worker.capabilities.insurance),
-            _buildCapabilityRow(
-                'WhatsApp Available', _worker.contact.whatsappAvailable),
-            _buildCapabilityRow(
-                'Emergency Service', _worker.availability.emergencyService),
-
-            SizedBox(height: 16),
-
-            // Working Hours
-            Text(
-              'Working Hours',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            SizedBox(height: 8),
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey[300]!),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.access_time, color: Colors.grey[600], size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    _worker.availability.workingHours,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Spacer(),
-                  Text(
-                    'Response: ${_worker.availability.responseTimeMinutes} min',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCapabilityRow(String title, bool value) {
+  Widget _buildInfoRow(String label, String value) {
     return Padding(
       padding: EdgeInsets.only(bottom: 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            value ? Icons.check_circle : Icons.cancel,
-            color: value ? Colors.green : Colors.red,
-            size: 20,
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[600],
+              ),
+            ),
           ),
-          SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.w400,
+              ),
             ),
           ),
         ],

@@ -602,6 +602,9 @@ class _EnhancedWorkerSelectionScreenState
     );
   }
 
+  // REPLACE THE _buildWorkerCard METHOD IN enhanced_worker_selection_screen.dart
+// Find the existing _buildWorkerCard method and replace it with this version
+
   Widget _buildWorkerCard(WorkerModel worker) {
     return Card(
       elevation: 2,
@@ -612,22 +615,30 @@ class _EnhancedWorkerSelectionScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Worker Header
+            // Worker Header with Profile Picture
             Row(
               children: [
+                // ✅ Profile Picture with fallback to avatar
                 CircleAvatar(
                   radius: 30,
                   backgroundColor: Colors.orange[100],
-                  child: Text(
-                    worker.workerName.isNotEmpty
-                        ? worker.workerName[0].toUpperCase()
-                        : 'W',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange[700],
-                    ),
-                  ),
+                  backgroundImage: worker.profilePictureUrl != null &&
+                          worker.profilePictureUrl!.isNotEmpty
+                      ? NetworkImage(worker.profilePictureUrl!)
+                      : null,
+                  child: worker.profilePictureUrl == null ||
+                          worker.profilePictureUrl!.isEmpty
+                      ? Text(
+                          worker.workerName.isNotEmpty
+                              ? worker.workerName[0].toUpperCase()
+                              : 'W',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange[700],
+                          ),
+                        )
+                      : null,
                 ),
                 SizedBox(width: 12),
                 Expanded(
@@ -676,7 +687,9 @@ class _EnhancedWorkerSelectionScreenState
               children: [
                 _buildStatItem(
                   Icons.star,
-                  worker.rating > 0 ? worker.rating.toStringAsFixed(1) : 'New',
+                  worker.rating > 0
+                      ? '${worker.rating.toStringAsFixed(1)}'
+                      : 'New',
                   'Rating',
                 ),
                 _buildStatItem(
@@ -693,10 +706,8 @@ class _EnhancedWorkerSelectionScreenState
             ),
 
             SizedBox(height: 12),
-            Divider(),
-            SizedBox(height: 8),
 
-            // Pricing and Location
+            // Minimum Charge and Location
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -720,40 +731,17 @@ class _EnhancedWorkerSelectionScreenState
                     ),
                   ],
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Icon(Icons.location_on, size: 14, color: Colors.grey),
-                        SizedBox(width: 4),
-                        Text(
-                          worker.location.city,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (worker.availability.availableToday)
-                      Container(
-                        margin: EdgeInsets.only(top: 4),
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.green[50],
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'Available Today',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.green[700],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                    Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                    SizedBox(width: 4),
+                    Text(
+                      worker.location.city,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
                       ),
+                    ),
                   ],
                 ),
               ],
@@ -761,7 +749,84 @@ class _EnhancedWorkerSelectionScreenState
 
             SizedBox(height: 12),
 
-            // Select Button
+            // Availability Badge
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: worker.availability.availableToday
+                    ? Colors.green[50]
+                    : Colors.orange[50],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                worker.availability.availableToday
+                    ? 'Available Today'
+                    : 'Schedule Required',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: worker.availability.availableToday
+                      ? Colors.green[700]
+                      : Colors.orange[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+
+            SizedBox(height: 12),
+            Divider(),
+            SizedBox(height: 8),
+
+            // ✅ Action Buttons Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // View Details Button
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showWorkerDetailsDialog(worker),
+                    icon: Icon(Icons.info_outline, size: 18),
+                    label: Text('Details'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orange,
+                      side: BorderSide(color: Colors.orange),
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8),
+                // View Rates Button
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showRatesDialog(worker),
+                    icon: Icon(Icons.attach_money, size: 18),
+                    label: Text('Rates'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.green,
+                      side: BorderSide(color: Colors.green),
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8),
+                // View Reviews Button
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showReviewsDialog(worker),
+                    icon: Icon(Icons.rate_review, size: 18),
+                    label: Text('Reviews'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.blue,
+                      side: BorderSide(color: Colors.blue),
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            SizedBox(height: 12),
+
+            // Select Worker Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -777,14 +842,729 @@ class _EnhancedWorkerSelectionScreenState
                   'Select Worker',
                   style: TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.w600,
                     fontSize: 16,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+// ✅ NEW: Show Worker Details Dialog
+  void _showWorkerDetailsDialog(WorkerModel worker) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          constraints: BoxConstraints(maxHeight: 600, maxWidth: 500),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header with profile picture
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 40,
+                        backgroundColor: Colors.orange[100],
+                        backgroundImage: worker.profilePictureUrl != null &&
+                                worker.profilePictureUrl!.isNotEmpty
+                            ? NetworkImage(worker.profilePictureUrl!)
+                            : null,
+                        child: worker.profilePictureUrl == null ||
+                                worker.profilePictureUrl!.isEmpty
+                            ? Text(
+                                worker.workerName[0].toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange[700],
+                                ),
+                              )
+                            : null,
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              worker.workerName,
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              worker.businessName,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            if (worker.verified)
+                              Row(
+                                children: [
+                                  Icon(Icons.verified,
+                                      size: 16, color: Colors.blue),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Verified Professional',
+                                    style: TextStyle(
+                                      color: Colors.blue,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 20),
+                  Divider(),
+                  SizedBox(height: 16),
+
+                  // Bio
+                  Text(
+                    'About',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    worker.profile.bio,
+                    style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                  ),
+                  SizedBox(height: 16),
+
+                  // Contact Information
+                  Text(
+                    'Contact Information',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  _buildDetailRow(Icons.phone, worker.contact.phoneNumber),
+                  _buildDetailRow(Icons.email, worker.contact.email),
+                  if (worker.contact.website != null)
+                    _buildDetailRow(Icons.language, worker.contact.website!),
+                  SizedBox(height: 16),
+
+                  // Location
+                  Text(
+                    'Location',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  _buildDetailRow(Icons.location_city,
+                      '${worker.location.city}, ${worker.location.state}'),
+                  _buildDetailRow(Icons.map,
+                      'Service Radius: ${worker.profile.serviceRadiusKm} km'),
+                  SizedBox(height: 16),
+
+                  // Specializations
+                  Text(
+                    'Specializations',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: worker.profile.specializations.map((spec) {
+                      return Chip(
+                        label: Text(spec, style: TextStyle(fontSize: 12)),
+                        backgroundColor: Colors.orange[50],
+                        labelStyle: TextStyle(color: Colors.orange[700]),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      );
+                    }).toList(),
+                  ),
+                  SizedBox(height: 16),
+
+                  // Languages
+                  Text(
+                    'Languages',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    worker.capabilities.languages.join(', '),
+                    style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                  ),
+                  SizedBox(height: 16),
+
+                  // Capabilities
+                  Text(
+                    'Capabilities',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  if (worker.capabilities.toolsOwned)
+                    _buildCapabilityChip('Tools Owned', Icons.build),
+                  if (worker.capabilities.vehicleAvailable)
+                    _buildCapabilityChip(
+                        'Vehicle Available', Icons.directions_car),
+                  if (worker.capabilities.certified)
+                    _buildCapabilityChip('Certified', Icons.verified),
+                  if (worker.capabilities.insurance)
+                    _buildCapabilityChip('Insured', Icons.shield),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+// ✅ NEW: Show Rates Dialog
+  void _showRatesDialog(WorkerModel worker) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.attach_money, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Pricing Details'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildPriceRow('Daily Wage',
+                'LKR ${worker.pricing.dailyWageLkr.toStringAsFixed(0)}'),
+            _buildPriceRow('Half Day Rate',
+                'LKR ${worker.pricing.halfDayRateLkr.toStringAsFixed(0)}'),
+            _buildPriceRow('Minimum Charge',
+                'LKR ${worker.pricing.minimumChargeLkr.toStringAsFixed(0)}'),
+            _buildPriceRow('Overtime Rate',
+                'LKR ${worker.pricing.overtimeHourlyLkr.toStringAsFixed(0)}/hour'),
+            if (worker.pricing.emergencyRateMultiplier > 1.0)
+              _buildPriceRow('Emergency Multiplier',
+                  '${worker.pricing.emergencyRateMultiplier}x'),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 20, color: Colors.blue[700]),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Final price may vary based on job complexity and duration',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.blue[700],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _selectWorker(worker);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: Text('Select Worker', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+// ✅ NEW: Show Reviews Dialog
+  // REPLACE the _showReviewsDialog method in enhanced_worker_selection_screen.dart
+// This version works WITHOUT requiring a Firestore index
+
+// ✅ FIXED: Show Reviews Dialog - No index required
+  void _showReviewsDialog(WorkerModel worker) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.rate_review, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('Reviews & Ratings'),
+          ],
+        ),
+        content: Container(
+          width: double.maxFinite,
+          constraints: BoxConstraints(maxHeight: 500),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Overall Rating
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(
+                      children: [
+                        Text(
+                          worker.rating.toStringAsFixed(1),
+                          style: TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange[700],
+                          ),
+                        ),
+                        Row(
+                          children: List.generate(5, (index) {
+                            return Icon(
+                              index < worker.rating.floor()
+                                  ? Icons.star
+                                  : Icons.star_border,
+                              color: Colors.orange,
+                              size: 20,
+                            );
+                          }),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          '${worker.jobsCompleted} reviews',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Success Rate',
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                        Text(
+                          '${worker.successRate.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 16),
+
+              // ✅ Load reviews WITHOUT orderBy (no index required)
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('reviews')
+                      .where('worker_id', isEqualTo: worker.workerId)
+                      .limit(50)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Center(
+                        child: CircularProgressIndicator(color: Colors.orange),
+                      );
+                    }
+
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline,
+                                size: 48, color: Colors.red),
+                            SizedBox(height: 8),
+                            Text(
+                              'Error loading reviews',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                            SizedBox(height: 4),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16),
+                              child: Text(
+                                snapshot.error.toString(),
+                                style:
+                                    TextStyle(fontSize: 11, color: Colors.grey),
+                                textAlign: TextAlign.center,
+                                maxLines: 3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.rate_review_outlined,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              'No reviews yet',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Be the first to review this worker',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[500],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    // ✅ Sort reviews manually after fetching (no index needed)
+                    List<DocumentSnapshot> reviewDocs = snapshot.data!.docs;
+                    reviewDocs.sort((a, b) {
+                      try {
+                        var aData = a.data() as Map<String, dynamic>;
+                        var bData = b.data() as Map<String, dynamic>;
+
+                        Timestamp? aTime = aData['created_at'] as Timestamp?;
+                        Timestamp? bTime = bData['created_at'] as Timestamp?;
+
+                        if (aTime == null && bTime == null) return 0;
+                        if (aTime == null) return 1;
+                        if (bTime == null) return -1;
+
+                        return bTime.compareTo(aTime); // Newest first
+                      } catch (e) {
+                        return 0;
+                      }
+                    });
+
+                    // Display reviews
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: reviewDocs.length,
+                      itemBuilder: (context, index) {
+                        Map<String, dynamic> reviewData =
+                            reviewDocs[index].data() as Map<String, dynamic>;
+
+                        return _buildReviewCard(reviewData);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+// ✅ Build individual review card
+  Widget _buildReviewCard(Map<String, dynamic> reviewData) {
+    String customerName = reviewData['customer_name'] ?? 'Anonymous';
+    int rating = reviewData['rating'] ?? 0;
+    String reviewText = reviewData['review'] ?? '';
+    String serviceType = reviewData['service_type'] ?? 'Service';
+    List<dynamic> tags = reviewData['tags'] ?? [];
+    DateTime? createdAt;
+
+    try {
+      if (reviewData['created_at'] != null) {
+        createdAt = (reviewData['created_at'] as Timestamp).toDate();
+      }
+    } catch (e) {
+      print('Error parsing date: $e');
+    }
+
+    return Card(
+      margin: EdgeInsets.only(bottom: 12),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header: Customer name and rating
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: Colors.blue[100],
+                        child: Text(
+                          customerName[0].toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue[700],
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              customerName,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (createdAt != null)
+                              Text(
+                                _formatDate(createdAt),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Star rating
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.star, color: Colors.orange, size: 14),
+                      SizedBox(width: 4),
+                      Text(
+                        rating.toString(),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: Colors.orange[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            SizedBox(height: 8),
+
+            // Service type badge
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                serviceType.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue[700],
+                ),
+              ),
+            ),
+
+            SizedBox(height: 8),
+
+            // Review text
+            if (reviewText.isNotEmpty)
+              Text(
+                reviewText,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey[800],
+                  height: 1.4,
+                ),
+              ),
+
+            // Tags
+            if (tags.isNotEmpty) ...[
+              SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: tags.map((tag) {
+                  return Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Text(
+                      tag.toString(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+// ✅ Format date helper
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inDays == 0) {
+      if (difference.inHours == 0) {
+        return '${difference.inMinutes}m ago';
+      }
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inDays < 30) {
+      return '${(difference.inDays / 7).floor()}w ago';
+    } else if (difference.inDays < 365) {
+      return '${(difference.inDays / 30).floor()}mo ago';
+    } else {
+      return '${(difference.inDays / 365).floor()}y ago';
+    }
+  }
+
+// Helper Widgets
+  Widget _buildDetailRow(IconData icon, String text) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.grey[600]),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPriceRow(String label, String price) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+          ),
+          Text(
+            price,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.green[700],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCapabilityChip(String label, IconData icon) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.green[700]),
+          SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+          ),
+        ],
       ),
     );
   }

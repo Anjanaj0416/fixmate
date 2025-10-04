@@ -365,6 +365,14 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
     );
   }
 
+  // lib/screens/worker_dashboard_screen.dart
+// MODIFICATION: Update _buildProfileHeader() method only
+// Replace the existing _buildProfileHeader() method with this updated version
+
+  // lib/screens/worker_dashboard_screen.dart
+// MODIFICATION: Update _buildProfileHeader() method only
+// Replace the existing _buildProfileHeader() method with this updated version
+
   Widget _buildProfileHeader() {
     return Card(
       elevation: 2,
@@ -373,17 +381,25 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         padding: EdgeInsets.all(16),
         child: Row(
           children: [
+            // ✅ MODIFIED: Show profile picture if available
             CircleAvatar(
               radius: 30,
               backgroundColor: Color(0xFFFF9800),
-              child: Text(
-                _worker!.firstName[0].toUpperCase(),
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
+              backgroundImage: _worker!.profilePictureUrl != null &&
+                      _worker!.profilePictureUrl!.isNotEmpty
+                  ? NetworkImage(_worker!.profilePictureUrl!)
+                  : null,
+              child: _worker!.profilePictureUrl == null ||
+                      _worker!.profilePictureUrl!.isEmpty
+                  ? Text(
+                      _worker!.firstName[0].toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    )
+                  : null,
             ),
             SizedBox(width: 16),
             Expanded(
@@ -412,10 +428,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                       SizedBox(width: 4),
                       Text(
                         '${_worker!.rating.toStringAsFixed(1)} (${_worker!.jobsCompleted} jobs)',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 12),
                       ),
                     ],
                   ),
@@ -430,7 +443,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                   MaterialPageRoute(
                     builder: (context) => WorkerProfileScreen(worker: _worker!),
                   ),
-                );
+                ).then((_) => _loadWorkerData());
               },
             ),
           ],
