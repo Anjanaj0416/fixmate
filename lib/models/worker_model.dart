@@ -1,5 +1,5 @@
 // lib/models/worker_model.dart
-// MODIFIED VERSION - Added profilePictureUrl field
+// FIXED VERSION - Handles both old and new data structures
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class WorkerModel {
@@ -23,7 +23,7 @@ class WorkerModel {
   final DateTime? createdAt;
   final DateTime? lastActive;
   final bool verified;
-  final String? profilePictureUrl; // ✅ NEW FIELD
+  final String? profilePictureUrl;
 
   WorkerModel({
     this.workerId,
@@ -46,11 +46,27 @@ class WorkerModel {
     this.createdAt,
     this.lastActive,
     this.verified = false,
-    this.profilePictureUrl, // ✅ NEW PARAMETER
+    this.profilePictureUrl,
   });
 
   factory WorkerModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+    // FIXED: Handle contact data at root level OR nested
+    Map<String, dynamic> contactData;
+    if (data.containsKey('contact') && data['contact'] is Map) {
+      // New structure: nested contact object
+      contactData = data['contact'] as Map<String, dynamic>;
+    } else {
+      // Old structure: contact fields at root level
+      contactData = {
+        'phone_number': data['phone_number'] ?? '',
+        'email': data['email'] ?? '',
+        'whatsapp_available': data['whatsapp_available'] ?? false,
+        'website': data['website'],
+      };
+    }
+
     return WorkerModel(
       workerId: data['worker_id'],
       workerName: data['worker_name'] ?? '',
@@ -66,13 +82,14 @@ class WorkerModel {
       successRate: (data['success_rate'] ?? 0.0).toDouble(),
       pricing: WorkerPricing.fromMap(data['pricing'] ?? {}),
       availability: WorkerAvailability.fromMap(data['availability'] ?? {}),
-      capabilities: WorkerCapabilities.fromMap(data['capabilities'] ?? {}),
-      contact: WorkerContact.fromMap(data['contact'] ?? {}),
+      capabilities: WorkerCapabilities.fromMap(data['capabilities'] ?? []),
+      contact: WorkerContact.fromMap(contactData),
       profile: WorkerProfile.fromMap(data['profile'] ?? {}),
       createdAt: data['created_at']?.toDate(),
       lastActive: data['last_active']?.toDate(),
       verified: data['verified'] ?? false,
-      profilePictureUrl: data['profile_picture_url'], // ✅ NEW FIELD
+      profilePictureUrl:
+          data['profile_picture_url'] ?? data['profilePictureUrl'],
     );
   }
 
@@ -98,7 +115,7 @@ class WorkerModel {
       'created_at': createdAt ?? FieldValue.serverTimestamp(),
       'last_active': lastActive ?? FieldValue.serverTimestamp(),
       'verified': verified,
-      'profile_picture_url': profilePictureUrl, // ✅ NEW FIELD
+      'profile_picture_url': profilePictureUrl,
     };
   }
 }
@@ -122,8 +139,8 @@ class WorkerLocation {
     return WorkerLocation(
       latitude: (map['latitude'] ?? 0.0).toDouble(),
       longitude: (map['longitude'] ?? 0.0).toDouble(),
-      city: map['city'] ?? '',
-      state: map['state'] ?? '',
+      city: map['city'] ?? map['district'] ?? '',
+      state: map['state'] ?? map['district'] ?? '',
       postalCode: map['postal_code'] ?? '',
     );
   }
@@ -161,7 +178,9 @@ class WorkerPricing {
       minimumChargeLkr: (map['minimum_charge_lkr'] ?? 0.0).toDouble(),
       emergencyRateMultiplier:
           (map['emergency_rate_multiplier'] ?? 1.0).toDouble(),
-      overtimeHourlyLkr: (map['overtime_hourly_lkr'] ?? 0.0).toDouble(),
+      overtimeHourlyLkr:
+          (map['overtime_hourly_lkr'] ?? map['hourly_rate_lkr'] ?? 0.0)
+              .toDouble(),
     );
   }
 
@@ -192,11 +211,24 @@ class WorkerAvailability {
   });
 
   factory WorkerAvailability.fromMap(Map<String, dynamic> map) {
+    // Handle working_hours as either String or Map
+    String workingHoursStr = '';
+    if (map['working_hours'] != null) {
+      if (map['working_hours'] is String) {
+        workingHoursStr = map['working_hours'];
+      } else if (map['working_hours'] is Map) {
+        Map hrs = map['working_hours'] as Map;
+        String start = hrs['start'] ?? '08:00';
+        String end = hrs['end'] ?? '18:00';
+        workingHoursStr = '$start - $end';
+      }
+    }
+
     return WorkerAvailability(
       availableToday: map['available_today'] ?? false,
       availableWeekends: map['available_weekends'] ?? false,
       emergencyService: map['emergency_service'] ?? false,
-      workingHours: map['working_hours'] ?? '',
+      workingHours: workingHoursStr,
       responseTimeMinutes: map['response_time_minutes'] ?? 0,
     );
   }
@@ -227,7 +259,19 @@ class WorkerCapabilities {
     required this.languages,
   });
 
-  factory WorkerCapabilities.fromMap(Map<String, dynamic> map) {
+  factory WorkerCapabilities.fromMap(dynamic mapOrList) {
+    // Handle capabilities as either Map or empty List
+    if (mapOrList is List) {
+      return WorkerCapabilities(
+        toolsOwned: false,
+        vehicleAvailable: false,
+        certified: false,
+        insurance: false,
+        languages: [],
+      );
+    }
+
+    Map<String, dynamic> map = mapOrList as Map<String, dynamic>;
     return WorkerCapabilities(
       toolsOwned: map['tools_owned'] ?? false,
       vehicleAvailable: map['vehicle_available'] ?? false,
@@ -292,9 +336,17 @@ class WorkerProfile {
   });
 
   factory WorkerProfile.fromMap(Map<String, dynamic> map) {
+    // Handle certifications if present, but map to specializations
+    List<String> specs = [];
+    if (map['specializations'] != null) {
+      specs = List<String>.from(map['specializations']);
+    } else if (map['certifications'] != null) {
+      specs = List<String>.from(map['certifications']);
+    }
+
     return WorkerProfile(
       bio: map['bio'] ?? '',
-      specializations: List<String>.from(map['specializations'] ?? []),
+      specializations: specs,
       serviceRadiusKm: (map['service_radius_km'] ?? 0.0).toDouble(),
     );
   }

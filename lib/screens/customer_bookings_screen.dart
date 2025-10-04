@@ -1,12 +1,12 @@
 // lib/screens/customer_bookings_screen.dart
-// NEW FILE - Customer bookings list with chat access
+// FIXED VERSION - Corrected to match actual BookingModel fields
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/booking_model.dart';
 import '../services/booking_service.dart';
 import 'booking_detail_customer_screen.dart';
-import '../utils/string_utils.dart';
+import 'worker_profile_view_screen.dart';
 
 class CustomerBookingsScreen extends StatefulWidget {
   @override
@@ -38,6 +38,89 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                   user.uid;
         });
       }
+    }
+  }
+
+  // Delete booking function
+  Future<void> _deleteBooking(BookingModel booking) async {
+    if (booking.status != BookingStatus.requested) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('You can only cancel pending bookings'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Cancel Booking'),
+        content: Text('Are you sure you want to cancel this booking?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Yes, Cancel'),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()),
+      );
+
+      // Delete the booking
+      await FirebaseFirestore.instance
+          .collection('bookings')
+          .doc(booking.bookingId)
+          .delete();
+
+      // Send notification to worker
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'recipient_id': booking.workerId,
+        'recipient_type': 'worker',
+        'worker_id': booking.workerId,
+        'type': 'booking_cancelled',
+        'title': 'Booking Cancelled',
+        'message':
+            '${booking.customerName} has cancelled a ${booking.serviceType} booking request',
+        'booking_id': booking.bookingId,
+        'created_at': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+
+      // Close loading
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Booking cancelled successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      // Close loading
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to cancel booking: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -178,36 +261,135 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Worker Info with Profile Photo
               Row(
                 children: [
+                  // Worker Profile Photo
+                  FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('workers')
+                        .doc(booking.workerId)
+                        .get(),
+                    builder: (context, snapshot) {
+                      String? profileUrl;
+
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return CircleAvatar(
+                          radius: 28,
+                          backgroundColor: Colors.blue[100],
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        );
+                      }
+
+                      if (snapshot.hasData && snapshot.data!.exists) {
+                        var data =
+                            snapshot.data!.data() as Map<String, dynamic>?;
+                        profileUrl = data?['profilePictureUrl'] ??
+                            data?['profile_picture_url'];
+                        print(
+                            '📸 Profile URL for ${booking.workerName}: $profileUrl');
+                      } else {
+                        print(
+                            '⚠️ Worker document not found for ID: ${booking.workerId}');
+                      }
+
+                      return GestureDetector(
+                        onTap: () => _showWorkerProfile(booking.workerId),
+                        child: CircleAvatar(
+                          radius: 28,
+                          backgroundColor: Colors.blue[100],
+                          backgroundImage:
+                              profileUrl != null && profileUrl.isNotEmpty
+                                  ? NetworkImage(profileUrl)
+                                  : null,
+                          child: profileUrl == null || profileUrl.isEmpty
+                              ? Text(
+                                  booking.workerName.isNotEmpty
+                                      ? booking.workerName[0].toUpperCase()
+                                      : 'W',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue[700],
+                                  ),
+                                )
+                              : null,
+                        ),
+                      );
+                    },
+                  ),
+                  SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          booking.workerName,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                booking.workerName,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            _buildStatusBadge(booking.status),
+                          ],
                         ),
                         SizedBox(height: 4),
                         Text(
-                          booking.serviceType
-                              .replaceAll('_', ' ')
-                              .toUpperCase(),
+                          booking.serviceType,
                           style: TextStyle(
                             color: Colors.grey[600],
-                            fontSize: 13,
+                            fontSize: 14,
                           ),
+                        ),
+                        // Show worker rating
+                        FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance
+                              .collection('workers')
+                              .doc(booking.workerId)
+                              .get(),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData ||
+                                !snapshot.data!.exists ||
+                                snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                              return SizedBox.shrink();
+                            }
+
+                            var data =
+                                snapshot.data!.data() as Map<String, dynamic>?;
+                            double rating = (data?['rating'] ?? 0.0).toDouble();
+
+                            return Row(
+                              children: [
+                                Icon(Icons.star, size: 14, color: Colors.amber),
+                                SizedBox(width: 4),
+                                Text(
+                                  rating > 0
+                                      ? rating.toStringAsFixed(1)
+                                      : 'New',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[700],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       ],
                     ),
                   ),
-                  _buildStatusBadge(booking.status),
                 ],
               ),
-              SizedBox(height: 12),
+
+              Divider(height: 24),
+
+              // Location and Date
               Row(
                 children: [
                   Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
@@ -215,46 +397,110 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                   Expanded(
                     child: Text(
                       booking.location,
-                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                      style: TextStyle(fontSize: 13, color: Colors.grey[700]),
                     ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
-                  SizedBox(width: 4),
-                  Text(
-                    '${_formatDate(booking.scheduledDate)} at ${booking.scheduledTime}',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
                   ),
                 ],
               ),
               SizedBox(height: 8),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                  SizedBox(width: 4),
                   Text(
-                    booking.budgetRange,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.blue,
+                    _formatDate(booking.scheduledDate),
+                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                  ),
+                  SizedBox(width: 16),
+                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                  SizedBox(width: 4),
+                  Text(
+                    booking.scheduledTime,
+                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                  ),
+                ],
+              ),
+
+              // Budget Range
+              if (booking.budgetRange.isNotEmpty) ...[
+                SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.payments, size: 16, color: Colors.blue),
+                    SizedBox(width: 4),
+                    Text(
+                      'Budget: ${booking.budgetRange}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.blue,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
+              // Action buttons at bottom
+              SizedBox(height: 12),
+              Row(
+                children: [
+                  // View Worker Profile Button
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _showWorkerProfile(booking.workerId),
+                      icon: Icon(Icons.person, size: 18),
+                      label: Text('View Profile'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.blue,
+                        side: BorderSide(color: Colors.blue),
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                      ),
                     ),
                   ),
-                  Text(
-                    'ID: ${StringUtils.formatBookingId(booking.bookingId)}...',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[500],
+
+                  // Show delete button only for requested bookings
+                  if (booking.status == BookingStatus.requested) ...[
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _deleteBooking(booking),
+                        icon: Icon(Icons.delete, size: 18),
+                        label: Text('Cancel'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: BorderSide(color: Colors.red),
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // Show worker profile details
+  void _showWorkerProfile(String workerId) {
+    print('🔍 Opening worker profile for workerId: $workerId');
+
+    if (workerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Worker ID not available'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WorkerProfileViewScreen(workerId: workerId),
       ),
     );
   }
@@ -272,26 +518,29 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
         color = Colors.green;
         icon = Icons.check_circle;
         break;
+      case BookingStatus.declined:
+        color = Colors.red;
+        icon = Icons.cancel;
+        break;
       case BookingStatus.inProgress:
         color = Colors.blue;
         icon = Icons.work;
         break;
       case BookingStatus.completed:
-        color = Colors.teal;
+        color = Colors.purple;
         icon = Icons.done_all;
         break;
       case BookingStatus.cancelled:
-      case BookingStatus.declined:
-        color = Colors.red;
-        icon = Icons.cancel;
+        color = Colors.grey;
+        icon = Icons.cancel_outlined;
         break;
       default:
         color = Colors.grey;
-        icon = Icons.info;
+        icon = Icons.help_outline;
     }
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
