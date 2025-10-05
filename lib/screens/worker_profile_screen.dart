@@ -118,14 +118,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
       print('🔄 Starting profile picture upload...');
 
-      // ✅ Upload new profile picture
+      // ✅ Step 1: Upload new profile picture to Storage
       String downloadUrl = await StorageService.uploadWorkerProfilePicture(
         imageFile: image,
       );
 
       print('✅ Upload complete, URL: $downloadUrl');
 
-      // ✅ Update Firestore with new URL FIRST
+      // ✅ Step 2: Update Firestore with new URL
       User? user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         await FirebaseFirestore.instance
@@ -135,42 +135,37 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
           'profile_picture_url': downloadUrl,
           'last_active': FieldValue.serverTimestamp(),
         });
+
         print('✅ Firestore updated with new profile picture URL');
 
-        // ✅ CRITICAL: Wait a moment for Firestore to propagate
-        await Future.delayed(Duration(milliseconds: 300));
+        // ✅ Step 3: Wait for Firestore to propagate changes
+        await Future.delayed(Duration(milliseconds: 500));
       }
 
-      // ✅ Update the worker model with new URL
-      setState(() {
-        _worker = WorkerModel(
-          workerId: _worker.workerId,
-          workerName: _worker.workerName,
-          firstName: _worker.firstName,
-          lastName: _worker.lastName,
-          serviceType: _worker.serviceType,
-          serviceCategory: _worker.serviceCategory,
-          businessName: _worker.businessName,
-          location: _worker.location,
-          rating: _worker.rating,
-          experienceYears: _worker.experienceYears,
-          jobsCompleted: _worker.jobsCompleted,
-          successRate: _worker.successRate,
-          pricing: _worker.pricing,
-          availability: _worker.availability,
-          capabilities: _worker.capabilities,
-          contact: _worker.contact,
-          profile: _worker.profile,
-          verified: _worker.verified,
-          createdAt: _worker.createdAt,
-          lastActive: _worker.lastActive,
-          profilePictureUrl: downloadUrl,
-        );
-        _isUploadingImage = false;
-      });
+      // ✅ Step 4: Force reload from Firestore to get the latest data
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        DocumentSnapshot freshDoc = await FirebaseFirestore.instance
+            .collection('workers')
+            .doc(currentUser.uid)
+            .get();
+
+        if (freshDoc.exists) {
+          setState(() {
+            _worker = WorkerModel.fromFirestore(freshDoc);
+            _isUploadingImage = false;
+          });
+
+          print('✅ Worker profile refreshed from Firestore');
+          print('🔗 New profile picture URL: ${_worker.profilePictureUrl}');
+        } else {
+          setState(() {
+            _isUploadingImage = false;
+          });
+        }
+      }
 
       _showSuccessSnackBar('Profile picture updated successfully!');
-
       print('✅ Profile picture update complete!');
     } catch (e) {
       print('❌ Error uploading profile picture: $e');
@@ -181,6 +176,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     }
   }
 
+// ========== SAVE PROFILE METHOD ==========
   Future<void> _saveProfile() async {
     setState(() {
       _isLoading = true;
@@ -265,6 +261,44 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     }
   }
 
+// ========== HELPER METHODS ==========
+  Widget _buildProfileImage() {
+    if (_worker.profilePictureUrl != null &&
+        _worker.profilePictureUrl!.isNotEmpty) {
+      return Image.network(
+        _worker.profilePictureUrl!,
+        width: 100,
+        height: 100,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          print('❌ Error loading profile image: $error');
+          return _buildDefaultAvatar();
+        },
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                  : null,
+            ),
+          );
+        },
+      );
+    } else {
+      return _buildDefaultAvatar();
+    }
+  }
+
+  Widget _buildDefaultAvatar() {
+    return Icon(
+      Icons.person,
+      size: 50,
+      color: Colors.white,
+    );
+  }
+
   void _showSuccessSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -285,6 +319,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     );
   }
 
+// Helper method to build profile image widget
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -474,42 +509,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   }
 
 // ✅ NEW: Helper method to build profile image with proper error handling
-  Widget _buildProfileImage() {
-    if (_worker.profilePictureUrl != null &&
-        _worker.profilePictureUrl!.isNotEmpty) {
-      // Add cache-busting parameter to force reload
-      String imageUrl = _worker.profilePictureUrl!;
-      if (!imageUrl.contains('&t=')) {
-        imageUrl = '$imageUrl&t=${DateTime.now().millisecondsSinceEpoch}';
-      }
-
-      return Image.network(
-        imageUrl,
-        width: 100,
-        height: 100,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Center(
-            child: CircularProgressIndicator(
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded /
-                      loadingProgress.expectedTotalBytes!
-                  : null,
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          print('⚠️ Error loading profile picture: $error');
-          return _buildFallbackAvatar();
-        },
-      );
-    } else {
-      return _buildFallbackAvatar();
-    }
-  }
 
 // ✅ NEW: Fallback avatar when no image
   Widget _buildFallbackAvatar() {
