@@ -11,6 +11,7 @@ import '../screens/worker_chats_screen.dart';
 import '../services/rating_service.dart';
 import 'worker_notifications_screen.dart';
 import 'customer_dashboard.dart'; // NEW: Import customer dashboard
+import '../screens/welcome_screen.dart';
 
 class WorkerDashboardScreen extends StatefulWidget {
   @override
@@ -341,6 +342,13 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         backgroundColor: Color(0xFFFF9800),
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.logout),
+            onPressed: _handleSignOut,
+            tooltip: 'Sign Out',
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _loadWorkerData,
@@ -363,6 +371,47 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleSignOut() async {
+    bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Sign Out'),
+        content: Text('Are you sure you want to sign out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: Text('Sign Out', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await FirebaseAuth.instance.signOut();
+
+        // Navigate to Welcome Screen and remove all previous routes
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => WelcomeScreen()),
+          (route) => false,
+        );
+
+        _showSuccessSnackBar('Signed out successfully');
+      } catch (e) {
+        print('❌ Error signing out: $e');
+        _showErrorSnackBar('Failed to sign out: ${e.toString()}');
+      }
+    }
   }
 
   // lib/screens/worker_dashboard_screen.dart
