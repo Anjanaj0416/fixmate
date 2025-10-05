@@ -14,6 +14,8 @@ import 'customer_notifications_screen.dart';
 import 'worker_registration_flow.dart'; // NEW: Import worker registration
 import 'worker_dashboard_screen.dart'; // NEW: Import worker dashboard
 import 'dart:async';
+import '../screens/welcome_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class CustomerDashboard extends StatefulWidget {
   @override
@@ -143,6 +145,59 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         setState(() {
           _userLocation = 'Location unavailable';
         });
+      }
+    }
+  }
+
+  Future<void> _handleSignOut() async {
+    bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Sign Out'),
+        content: Text('Are you sure you want to sign out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: Text('Sign Out', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await FirebaseAuth.instance.signOut();
+
+        // Navigate to Welcome Screen and remove all previous routes
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => WelcomeScreen()),
+          (route) => false,
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Signed out successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } catch (e) {
+        print('❌ Error signing out: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to sign out: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
@@ -381,6 +436,15 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             backgroundColor: Colors.white,
             elevation: 0,
             expandedHeight: 120,
+            automaticallyImplyLeading: false, // ✅ REMOVE BACK BUTTON
+            actions: [
+              // ✅ ADD SIGN OUT BUTTON
+              IconButton(
+                icon: Icon(Icons.logout, color: Colors.black87),
+                onPressed: _handleSignOut,
+                tooltip: 'Sign Out',
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 padding: EdgeInsets.fromLTRB(16, 50, 16, 16),

@@ -1,5 +1,5 @@
 // lib/screens/worker_dashboard_screen.dart
-// ENHANCED VERSION - Added Customer Account Switch + Chat/Messages navigation
+// MODIFIED VERSION - Removed back button, kept sign out option
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,7 +10,7 @@ import '../screens/worker_reviews_screen.dart';
 import '../screens/worker_chats_screen.dart';
 import '../services/rating_service.dart';
 import 'worker_notifications_screen.dart';
-import 'customer_dashboard.dart'; // NEW: Import customer dashboard
+import 'customer_dashboard.dart';
 import '../screens/welcome_screen.dart';
 
 class WorkerDashboardScreen extends StatefulWidget {
@@ -99,16 +99,15 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
           .collection('workers')
           .doc(user.uid)
           .update({
-        'availability.available_today': newAvailability,
-        'last_active': FieldValue.serverTimestamp(),
+        'availability.availableToday': newAvailability,
       });
 
-      setState(() {
-        _isAvailable = newAvailability;
-      });
+      setState(() => _isAvailable = newAvailability);
 
       _showSuccessSnackBar(
-        newAvailability ? 'You are now available' : 'You are now unavailable',
+        newAvailability
+            ? 'You are now available for bookings'
+            : 'You are now unavailable',
       );
     } catch (e) {
       print('❌ Error toggling availability: $e');
@@ -116,57 +115,37 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
     }
   }
 
-  // NEW METHOD: Check if user has a customer account, create if needed, then switch
-  Future<void> _handleCustomerAccountSwitch() async {
+  Future<void> _switchToCustomerAccount() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: CircularProgressIndicator(color: Color(0xFF2196F3)),
+      ),
+    );
+
     try {
       User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        Navigator.pop(context);
+        throw Exception('No user logged in');
+      }
 
-      // Show loading dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-
-      // Check if customer account exists
       DocumentSnapshot customerDoc = await FirebaseFirestore.instance
           .collection('customers')
           .doc(user.uid)
           .get();
 
-      if (customerDoc.exists) {
-        // Customer account exists - switch to it
-        Navigator.pop(context); // Close loading dialog
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Switching to your customer account...'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 1),
-          ),
-        );
-
-        await Future.delayed(Duration(seconds: 1));
-
-        // Navigate to customer dashboard
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CustomerDashboard(),
-          ),
-        );
-      } else {
-        // No customer account exists - create it now
+      if (!customerDoc.exists) {
         await _createCustomerAccount(user);
+      }
 
-        Navigator.pop(context); // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Customer account created! Switching...'),
+            content: Text('Switching...'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 1),
           ),
@@ -174,7 +153,6 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
 
         await Future.delayed(Duration(seconds: 1));
 
-        // Navigate to customer dashboard
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -183,7 +161,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         );
       }
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog if still open
+      Navigator.pop(context);
       print('❌ Error switching to customer account: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -194,10 +172,8 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
     }
   }
 
-  // NEW METHOD: Create customer account for the worker
   Future<void> _createCustomerAccount(User user) async {
     try {
-      // Get user data from users collection
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -205,11 +181,9 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
 
       Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
 
-      // Generate customer ID
       String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
       String customerId = 'CUST_${timestamp}_${_generateRandomSuffix()}';
 
-      // Get worker's name and contact info
       String customerName =
           _worker?.workerName ?? userData?['name'] ?? 'Customer';
       String firstName =
@@ -220,50 +194,41 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
       String email = _worker?.contact.email ?? user.email ?? '';
       String phone = _worker?.contact.phoneNumber ?? userData?['phone'] ?? '';
 
-      // Create customer document
       await FirebaseFirestore.instance
           .collection('customers')
           .doc(user.uid)
           .set({
         'customer_id': customerId,
-        'customer_name': customerName,
-        'first_name': firstName,
-        'last_name': lastName,
+        'name': customerName,
+        'firstName': firstName,
+        'lastName': lastName,
         'email': email,
-        'phone_number': phone,
-        'location': null,
-        'preferred_services': [],
+        'phone': phone,
+        'location': _worker?.location ?? '',
+        'profilePicture': _worker?.profilePictureUrl ?? '',
+        'createdAt': FieldValue.serverTimestamp(),
         'preferences': {
-          'notifications_enabled': true,
-          'email_notifications': true,
-          'sms_notifications': false,
+          'notifications': true,
+          'emailUpdates': true,
         },
-        'verified': false,
-        'created_at': FieldValue.serverTimestamp(),
-        'updated_at': FieldValue.serverTimestamp(),
       });
 
-      // Update user document - Keep accountType as 'worker' since worker was primary
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .update({
-        'accountType': 'both', // User has both accounts now
-        'customerId': customerId,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'accountType': 'both',
       });
 
-      print('✅ Customer account created: $customerId');
+      print('✅ Customer account created for worker');
     } catch (e) {
-      print('❌ Error creating customer account: $e');
-      throw Exception('Failed to create customer account: $e');
+      throw Exception('Failed to create customer account: ${e.toString()}');
     }
   }
 
-  // Helper method to generate random suffix for customer ID
   String _generateRandomSuffix() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final random = DateTime.now().millisecondsSinceEpoch;
+    int random = DateTime.now().microsecondsSinceEpoch;
     return chars[(random % chars.length)];
   }
 
@@ -303,6 +268,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
           title: Text('Worker Dashboard'),
           backgroundColor: Color(0xFFFF9800),
           foregroundColor: Colors.white,
+          automaticallyImplyLeading: false, // ✅ REMOVED BACK BUTTON
         ),
         body: Center(
           child: Column(
@@ -342,10 +308,11 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         backgroundColor: Color(0xFFFF9800),
         foregroundColor: Colors.white,
         elevation: 0,
+        automaticallyImplyLeading: false, // ✅ REMOVED BACK BUTTON
         actions: [
           IconButton(
             icon: Icon(Icons.logout),
-            onPressed: _handleSignOut,
+            onPressed: _handleSignOut, // ✅ SIGN OUT BUTTON
             tooltip: 'Sign Out',
           ),
         ],
@@ -399,7 +366,6 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
       try {
         await FirebaseAuth.instance.signOut();
 
-        // Navigate to Welcome Screen and remove all previous routes
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => WelcomeScreen()),
@@ -414,14 +380,9 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
     }
   }
 
-  // lib/screens/worker_dashboard_screen.dart
-// REPLACE the _buildProfileHeader() method with this updated version
-// This ensures profile pictures display correctly with proper error handling
-
   Widget _buildProfileHeader() {
     String? profileUrl = _worker!.profilePictureUrl;
 
-    // Add cache-busting to prevent stale images
     if (profileUrl != null && profileUrl.isNotEmpty) {
       if (!profileUrl.contains('&t=')) {
         profileUrl = '$profileUrl&t=${DateTime.now().millisecondsSinceEpoch}';
@@ -435,17 +396,14 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         padding: EdgeInsets.all(16),
         child: Row(
           children: [
-            // ✅ Profile picture with error handling
             GestureDetector(
               onTap: () {
-                // Navigate to edit profile
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => WorkerProfileScreen(worker: _worker!),
                   ),
                 ).then((updated) {
-                  // ✅ Reload data when returning from profile screen
                   if (updated == true) {
                     _loadWorkerData();
                   }
@@ -459,18 +417,9 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                     backgroundImage: profileUrl != null && profileUrl.isNotEmpty
                         ? NetworkImage(profileUrl) as ImageProvider
                         : null,
-                    onBackgroundImageError:
-                        profileUrl != null && profileUrl.isNotEmpty
-                            ? (exception, stackTrace) {
-                                print(
-                                    '⚠️ Error loading profile picture: $exception');
-                              }
-                            : null,
                     child: profileUrl == null || profileUrl.isEmpty
                         ? Text(
-                            _worker!.workerName.isNotEmpty
-                                ? _worker!.workerName[0].toUpperCase()
-                                : 'W',
+                            _worker!.workerName[0].toUpperCase(),
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
@@ -479,7 +428,6 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                           )
                         : null,
                   ),
-                  // Small camera icon to indicate it's tappable
                   Positioned(
                     bottom: 0,
                     right: 0,
@@ -488,11 +436,16 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Color(0xFFFF9800), width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 4,
+                          ),
+                        ],
                       ),
                       child: Icon(
-                        Icons.camera_alt,
-                        size: 12,
+                        Icons.edit,
+                        size: 16,
                         color: Color(0xFFFF9800),
                       ),
                     ),
@@ -510,25 +463,27 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
                   ),
+                  SizedBox(height: 4),
                   Text(
-                    _worker!.serviceType,
+                    _worker!.serviceCategory,
                     style: TextStyle(
-                      color: Colors.grey[600],
                       fontSize: 14,
+                      color: Colors.grey[600],
                     ),
                   ),
                   SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.star, color: Colors.amber, size: 16),
+                      Icon(Icons.star, size: 16, color: Colors.amber),
                       SizedBox(width: 4),
                       Text(
-                        '${_worker!.rating.toStringAsFixed(1)} (${_worker!.jobsCompleted} jobs)',
+                        '${_ratingStats['averageRating']?.toStringAsFixed(1) ?? '0.0'} (${_ratingStats['totalReviews'] ?? 0} reviews)',
                         style: TextStyle(
-                          color: Colors.grey[700],
                           fontSize: 12,
+                          color: Colors.grey[600],
                         ),
                       ),
                     ],
@@ -537,7 +492,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
               ),
             ),
             IconButton(
-              icon: Icon(Icons.edit, color: Color(0xFFFF9800)),
+              icon: Icon(Icons.arrow_forward_ios, size: 16),
               onPressed: () {
                 Navigator.push(
                   context,
@@ -545,7 +500,6 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                     builder: (context) => WorkerProfileScreen(worker: _worker!),
                   ),
                 ).then((updated) {
-                  // ✅ Reload data when returning from profile screen
                   if (updated == true) {
                     _loadWorkerData();
                   }
@@ -620,8 +574,9 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
             Text(
               'Performance Stats',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
+                color: Colors.black87,
               ),
             ),
             SizedBox(height: 16),
@@ -629,22 +584,22 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildStatItem(
-                  'Jobs',
-                  _worker!.jobsCompleted.toString(),
-                  Icons.work,
-                  Color(0xFFFF9800),
-                ),
-                _buildStatItem(
                   'Rating',
-                  _worker!.rating.toStringAsFixed(1),
+                  '${_ratingStats['averageRating']?.toStringAsFixed(1) ?? '0.0'}',
                   Icons.star,
                   Colors.amber,
                 ),
                 _buildStatItem(
                   'Reviews',
-                  (_ratingStats['totalRatings'] ?? 0).toString(),
+                  '${_ratingStats['totalReviews'] ?? 0}',
                   Icons.rate_review,
                   Colors.blue,
+                ),
+                _buildStatItem(
+                  'Jobs',
+                  '${_ratingStats['completedJobs'] ?? 0}',
+                  Icons.work,
+                  Colors.green,
                 ),
               ],
             ),
@@ -665,6 +620,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
+            color: Colors.black87,
           ),
         ),
         Text(
@@ -685,8 +641,9 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         Text(
           'Quick Actions',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.bold,
+            color: Colors.black87,
           ),
         ),
         SizedBox(height: 12),
@@ -700,13 +657,42 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
           children: [
             _buildActionCard(
               'My Bookings',
-              Icons.calendar_today,
-              Colors.blue,
+              Icons.book_online,
+              Color(0xFF2196F3),
               () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => WorkerBookingsScreen(),
+                  ),
+                );
+              },
+            ),
+            _buildActionCard(
+              'My Reviews',
+              Icons.star,
+              Colors.amber,
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WorkerReviewsScreen(
+                      workerId: _worker!.workerId!,
+                      workerName: _worker!.workerName,
+                    ),
+                  ),
+                );
+              },
+            ),
+            _buildActionCard(
+              'Messages',
+              Icons.message,
+              Colors.green,
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WorkerChatsScreen(),
                   ),
                 );
               },
@@ -724,56 +710,21 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                 );
               },
             ),
-            _buildActionCard(
-              'Reviews',
-              Icons.star,
-              Colors.amber,
-              () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => WorkerReviewsScreen(
-                      workerId: _worker!.workerId!,
-                      workerName: _worker!.workerName,
-                    ),
-                  ),
-                );
-              },
-            ),
-            _buildActionCard(
-              'Chats',
-              Icons.chat_bubble,
-              Colors.green,
-              () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => WorkerChatsScreen(),
-                  ),
-                );
-              },
-            ),
-            _buildActionCard(
-              'Profile',
-              Icons.person,
-              Colors.purple,
-              () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => WorkerProfileScreen(worker: _worker!),
-                  ),
-                );
-              },
-            ),
-            // NEW: Customer Account button
-            _buildActionCard(
-              'Customer Account',
-              Icons.shopping_bag,
-              Colors.teal,
-              _handleCustomerAccountSwitch,
-            ),
           ],
+        ),
+        SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _switchToCustomerAccount,
+            icon: Icon(Icons.swap_horiz),
+            label: Text('Switch to Customer Account'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Color(0xFF2196F3),
+              side: BorderSide(color: Color(0xFF2196F3)),
+              padding: EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
         ),
       ],
     );
@@ -781,20 +732,13 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
 
   Widget _buildActionCard(
       String title, IconData icon, Color color, VoidCallback onTap) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
       child: Card(
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
+        child: Padding(
+          padding: EdgeInsets.all(16),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -802,12 +746,12 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
               SizedBox(height: 8),
               Text(
                 title,
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
                 ),
-                textAlign: TextAlign.center,
               ),
             ],
           ),
