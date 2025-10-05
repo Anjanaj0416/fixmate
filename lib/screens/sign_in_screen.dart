@@ -1,6 +1,6 @@
 // lib/screens/sign_in_screen.dart
-// FIXED VERSION - Corrected accountType check for workers
-// Changed 'worker' to 'service_provider' to match what WorkerService saves
+// FIXED VERSION - Properly handles 'both' account type
+// Now correctly navigates workers to Worker Dashboard
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -101,10 +101,12 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   /// FIXED: Navigate based on PRIMARY account (first created account)
-  /// Priority: Admin > Primary Account (Customer/Worker) > Secondary Account > Account Selection
-  /// CRITICAL FIX: Changed 'worker' to 'service_provider' to match WorkerService.saveWorker()
+  /// Priority: Admin > Primary Account (Customer/Worker/Both) > Secondary Account > Account Selection
+  /// CRITICAL FIX: Properly handles 'both' account type by checking timestamps
   Future<void> _navigateBasedOnRole(User user) async {
     try {
+      print('🔍 Starting navigation for user: ${user.uid}');
+
       // Get user document
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -112,7 +114,8 @@ class _SignInScreenState extends State<SignInScreen> {
           .get();
 
       if (!userDoc.exists) {
-        // User document doesn't exist - redirect to account type selection
+        print(
+            '❌ User document does not exist - redirecting to account type selection');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => AccountTypeScreen()),
@@ -122,9 +125,13 @@ class _SignInScreenState extends State<SignInScreen> {
 
       Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
       String? role = userData['role'];
+      String? accountType = userData['accountType'];
+
+      print('📋 User data: role=$role, accountType=$accountType');
 
       // Priority 1: Check if user is admin
       if (role == 'admin') {
+        print('✅ Admin role detected - navigating to Admin Dashboard');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => AdminDashboardScreen()),
@@ -132,25 +139,90 @@ class _SignInScreenState extends State<SignInScreen> {
         return;
       }
 
-      // Priority 2: Check PRIMARY account (accountType field)
-      String? accountType = userData['accountType'];
-      if (accountType != null) {
-        if (accountType == 'customer') {
-          print(
-              '✅ Primary account is Customer - navigating to Customer Dashboard');
+      // Priority 2: Handle single account types (customer or service_provider)
+      if (accountType == 'customer') {
+        print(
+            '✅ Primary account is Customer - navigating to Customer Dashboard');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => CustomerDashboard()),
+        );
+        return;
+      } else if (accountType == 'service_provider') {
+        print('✅ Primary account is Worker - navigating to Worker Dashboard');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => WorkerDashboardScreen()),
+        );
+        return;
+      }
+
+      // Priority 3: Handle 'both' account type - check which was created first
+      if (accountType == 'both') {
+        print(
+            '⚠️  User has BOTH accounts - checking timestamps to find primary account');
+
+        // Check both customer and worker documents
+        DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+            .collection('customers')
+            .doc(user.uid)
+            .get();
+        DocumentSnapshot workerDoc = await FirebaseFirestore.instance
+            .collection('workers')
+            .doc(user.uid)
+            .get();
+
+        if (customerDoc.exists && workerDoc.exists) {
+          Map<String, dynamic>? customerData =
+              customerDoc.data() as Map<String, dynamic>?;
+          Map<String, dynamic>? workerData =
+              workerDoc.data() as Map<String, dynamic>?;
+
+          if (customerData != null && workerData != null) {
+            Timestamp? customerCreated = customerData['created_at'];
+            Timestamp? workerCreated = workerData['created_at'];
+
+            if (customerCreated != null && workerCreated != null) {
+              // Navigate to the account that was created first (primary account)
+              if (customerCreated.compareTo(workerCreated) < 0) {
+                print(
+                    '✅ Customer was created first - navigating to Customer Dashboard');
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => CustomerDashboard()),
+                );
+              } else {
+                print(
+                    '✅ Worker was created first - navigating to Worker Dashboard');
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => WorkerDashboardScreen()),
+                );
+              }
+              return;
+            }
+          }
+        }
+
+        // Fallback for 'both' case: navigate to customer if exists, otherwise worker
+        print(
+            '⚠️  Could not determine primary account from timestamps - using fallback');
+        if (customerDoc.exists) {
+          print('📍 Fallback: Navigating to Customer Dashboard');
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => CustomerDashboard()),
           );
-        } else if (accountType == 'service_provider') {
-          // ✅ FIXED: Changed from 'worker' to 'service_provider'
-          print('✅ Primary account is Worker - navigating to Worker Dashboard');
+        } else if (workerDoc.exists) {
+          print('📍 Fallback: Navigating to Worker Dashboard');
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => WorkerDashboardScreen()),
           );
         } else {
-          // Unknown account type - redirect to selection
+          print(
+              '❌ No customer or worker account found - redirecting to account type selection');
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => AccountTypeScreen()),
@@ -159,7 +231,10 @@ class _SignInScreenState extends State<SignInScreen> {
         return;
       }
 
-      // Check if user has both customer and worker accounts
+      // Priority 4: If accountType is null or unknown, check which collection has documents
+      print(
+          '⚠️  AccountType is null or unknown - checking customer and worker collections');
+
       DocumentSnapshot customerDoc = await FirebaseFirestore.instance
           .collection('customers')
           .doc(user.uid)
@@ -172,9 +247,12 @@ class _SignInScreenState extends State<SignInScreen> {
       bool hasCustomer = customerDoc.exists;
       bool hasWorker = workerDoc.exists;
 
-      // Priority 3: If user has BOTH accounts, check created_at timestamps
+      print(
+          '📋 Collection check: hasCustomer=$hasCustomer, hasWorker=$hasWorker');
+
       if (hasCustomer && hasWorker) {
-        print('⚠️ User has BOTH customer and worker accounts');
+        print(
+            '⚠️  Both collections exist but accountType not set - checking timestamps');
 
         Map<String, dynamic>? customerData =
             customerDoc.data() as Map<String, dynamic>?;
@@ -207,24 +285,17 @@ class _SignInScreenState extends State<SignInScreen> {
           }
         }
 
-        // Fallback: if timestamps not available, navigate to customer
-        if (hasCustomer) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => CustomerDashboard()),
-          );
-        } else if (hasWorker) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => WorkerDashboardScreen()),
-          );
-        }
+        // Fallback: navigate to customer if exists
+        print('📍 Fallback: Navigating to Customer Dashboard');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => CustomerDashboard()),
+        );
         return;
       }
 
-      // Fallback: Check which account exists (for old users without accountType)
       if (hasCustomer) {
-        print('✅ Customer account found - navigating to customer dashboard');
+        print('✅ Customer account found - navigating to Customer Dashboard');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => CustomerDashboard()),
@@ -233,7 +304,7 @@ class _SignInScreenState extends State<SignInScreen> {
       }
 
       if (hasWorker) {
-        print('✅ Worker account found - navigating to worker dashboard');
+        print('✅ Worker account found - navigating to Worker Dashboard');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => WorkerDashboardScreen()),
@@ -241,9 +312,9 @@ class _SignInScreenState extends State<SignInScreen> {
         return;
       }
 
-      // Priority 3: No account exists - redirect to account type selection
+      // Priority 5: No account exists - redirect to account type selection
       print(
-          '⚠️ No customer or worker account found - redirecting to account type selection');
+          '❌ No customer or worker account found - redirecting to account type selection');
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => AccountTypeScreen()),
@@ -311,20 +382,18 @@ class _SignInScreenState extends State<SignInScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Padding(
-                  padding: EdgeInsets.all(24),
+                  padding: EdgeInsets.all(32),
                   child: Form(
                     key: _formKey,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // App Logo/Title
                         Icon(
-                          Icons.construction,
+                          Icons.build,
                           size: 64,
                           color: Color(0xFF2196F3),
                         ),
-                        SizedBox(height: 16),
+                        SizedBox(height: 24),
                         Text(
                           'Welcome Back',
                           style: TextStyle(
@@ -332,23 +401,18 @@ class _SignInScreenState extends State<SignInScreen> {
                             fontWeight: FontWeight.bold,
                             color: Colors.grey[800],
                           ),
-                          textAlign: TextAlign.center,
                         ),
                         SizedBox(height: 8),
                         Text(
                           'Sign in to continue',
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 16,
                             color: Colors.grey[600],
                           ),
-                          textAlign: TextAlign.center,
                         ),
                         SizedBox(height: 32),
-
-                        // Email Field
                         TextFormField(
                           controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
                           decoration: InputDecoration(
                             labelText: 'Email',
                             prefixIcon: Icon(Icons.email),
@@ -356,6 +420,7 @@ class _SignInScreenState extends State<SignInScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
+                          keyboardType: TextInputType.emailAddress,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your email';
@@ -367,11 +432,8 @@ class _SignInScreenState extends State<SignInScreen> {
                           },
                         ),
                         SizedBox(height: 16),
-
-                        // Password Field
                         TextFormField(
                           controller: _passwordController,
-                          obscureText: _obscurePassword,
                           decoration: InputDecoration(
                             labelText: 'Password',
                             prefixIcon: Icon(Icons.lock),
@@ -391,6 +453,7 @@ class _SignInScreenState extends State<SignInScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
+                          obscureText: _obscurePassword,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your password';
@@ -398,109 +461,92 @@ class _SignInScreenState extends State<SignInScreen> {
                             return null;
                           },
                         ),
-                        SizedBox(height: 8),
-
-                        // Remember Me & Forgot Password Row
+                        SizedBox(height: 16),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                Checkbox(
-                                  value: _rememberMe,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _rememberMe = value ?? false;
-                                    });
-                                  },
-                                ),
-                                Text('Remember me'),
-                              ],
+                            Checkbox(
+                              value: _rememberMe,
+                              onChanged: (value) {
+                                setState(() {
+                                  _rememberMe = value ?? false;
+                                });
+                              },
                             ),
+                            Text('Remember me'),
+                            Spacer(),
                             TextButton(
                               onPressed: _resetPassword,
                               child: Text('Forgot Password?'),
                             ),
                           ],
                         ),
-                        SizedBox(height: 16),
-
-                        // Sign In Button
-                        ElevatedButton(
-                          onPressed: _isLoading ? null : _signIn,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Color(0xFF2196F3),
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                        SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _signIn,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xFF2196F3),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
+                            child: _isLoading
+                                ? CircularProgressIndicator(color: Colors.white)
+                                : Text(
+                                    'Sign In',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                           ),
-                          child: _isLoading
-                              ? SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Text(
-                                  'Sign In',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
                         ),
                         SizedBox(height: 16),
-
-                        // Divider
                         Row(
                           children: [
                             Expanded(child: Divider()),
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                'OR',
-                                style: TextStyle(color: Colors.grey),
-                              ),
+                              child: Text('OR'),
                             ),
                             Expanded(child: Divider()),
                           ],
                         ),
                         SizedBox(height: 16),
-
-                        // Google Sign In Button
-                        OutlinedButton.icon(
-                          onPressed: _isLoading ? null : _signInWithGoogle,
-                          icon: Image.network(
-                            'https://www.google.com/favicon.ico',
-                            height: 24,
-                            width: 24,
-                          ),
-                          label: Text('Continue with Google'),
-                          style: OutlinedButton.styleFrom(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: OutlinedButton.icon(
+                            onPressed: _isLoading ? null : _signInWithGoogle,
+                            icon: Image.asset(
+                              'assets/google_logo.png',
+                              height: 24,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Icon(Icons.g_mobiledata, size: 24);
+                              },
+                            ),
+                            label: Text('Continue with Google'),
+                            style: OutlinedButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
                           ),
                         ),
                         SizedBox(height: 24),
-
-                        // Sign Up Link
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text("Don't have an account?"),
                             TextButton(
                               onPressed: () {
-                                Navigator.pushReplacement(
+                                Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                      builder: (context) =>
-                                          CreateAccountScreen()),
+                                    builder: (context) => CreateAccountScreen(),
+                                  ),
                                 );
                               },
                               child: Text('Sign Up'),
