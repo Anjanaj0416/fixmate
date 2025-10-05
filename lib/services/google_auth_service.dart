@@ -1,5 +1,5 @@
 // lib/services/google_auth_service.dart
-// FIXED VERSION - Works on both Android and Web
+// FIXED VERSION - Works without People API on both Android and Web
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -10,17 +10,23 @@ class GoogleAuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Lazy initialization
+  // Configure GoogleSignIn to work without People API
   GoogleSignIn? _googleSignIn;
 
   GoogleSignIn _getGoogleSignIn() {
     if (_googleSignIn == null) {
-      _googleSignIn = GoogleSignIn();
+      // Remove scopes that require People API
+      _googleSignIn = GoogleSignIn(
+        scopes: [
+          'email',
+          // Removed 'profile' scope which requires People API
+        ],
+      );
     }
     return _googleSignIn!;
   }
 
-  /// Sign in with Google OAuth
+  /// Sign in with Google OAuth (without People API)
   Future<UserCredential?> signInWithGoogle() async {
     try {
       print('🔵 Starting Google Sign-In process...');
@@ -30,7 +36,7 @@ class GoogleAuthService {
 
       if (googleUser == null) {
         print('❌ Google Sign-In cancelled by user');
-        return null; // User cancelled the sign-in
+        return null;
       }
 
       print('✅ Google account selected: ${googleUser.email}');
@@ -55,27 +61,28 @@ class GoogleAuthService {
 
       print('✅ Signed in to Firebase: ${userCredential.user?.email}');
 
-      // Check if user document exists, create if not
+      // Get user info from Firebase Auth instead of People API
       await _ensureUserDocument(userCredential.user!);
 
       return userCredential;
     } catch (e) {
       print('❌ Error during Google Sign-In: $e');
-      rethrow; // Re-throw to handle in UI
+      rethrow;
     }
   }
 
   /// Ensure user document exists in Firestore
+  /// Uses Firebase Auth data instead of People API
   Future<void> _ensureUserDocument(User user) async {
     try {
       DocumentSnapshot userDoc =
           await _firestore.collection('users').doc(user.uid).get();
 
       if (!userDoc.exists) {
-        // Create new user document
+        // Create new user document using Firebase Auth data
         await _firestore.collection('users').doc(user.uid).set({
           'email': user.email,
-          'displayName': user.displayName,
+          'displayName': user.displayName ?? user.email?.split('@')[0],
           'photoURL': user.photoURL,
           'createdAt': FieldValue.serverTimestamp(),
           'lastLogin': FieldValue.serverTimestamp(),
