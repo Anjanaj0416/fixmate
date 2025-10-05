@@ -121,9 +121,21 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
       print('✅ Upload complete, URL: $downloadUrl');
 
-      // ✅ Add cache-busting parameter to force image refresh
-      String urlWithCacheBuster =
-          '$downloadUrl&t=${DateTime.now().millisecondsSinceEpoch}';
+      // ✅ Update Firestore with new URL FIRST
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('workers')
+            .doc(user.uid)
+            .update({
+          'profile_picture_url': downloadUrl,
+          'last_active': FieldValue.serverTimestamp(),
+        });
+        print('✅ Firestore updated with new profile picture URL');
+
+        // ✅ CRITICAL: Wait a moment for Firestore to propagate
+        await Future.delayed(Duration(milliseconds: 300));
+      }
 
       // ✅ Update the worker model with new URL
       setState(() {
@@ -148,34 +160,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
           verified: _worker.verified,
           createdAt: _worker.createdAt,
           lastActive: _worker.lastActive,
-          profilePictureUrl:
-              downloadUrl, // Store clean URL without cache-buster
+          profilePictureUrl: downloadUrl,
         );
-      });
-
-      // ✅ Update Firestore with new URL
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await FirebaseFirestore.instance
-            .collection('workers')
-            .doc(user.uid)
-            .update({
-          'profile_picture_url': downloadUrl,
-          'last_active': FieldValue.serverTimestamp(),
-        });
-        print('✅ Firestore updated with new profile picture URL');
-      }
-
-      setState(() {
         _isUploadingImage = false;
       });
 
       _showSuccessSnackBar('Profile picture updated successfully!');
 
-      // ✅ Force widget rebuild to show new image
-      if (mounted) {
-        setState(() {});
-      }
+      print('✅ Profile picture update complete!');
     } catch (e) {
       print('❌ Error uploading profile picture: $e');
       setState(() {

@@ -17,6 +17,7 @@ import 'screens/admin_dashboard_screen.dart'; // NEW: Admin dashboard
 import 'services/openai_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'screens/email_verification_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -120,6 +121,16 @@ class FixMateApp extends StatelessWidget {
             return MaterialPageRoute(
               builder: (context) => AdminDashboardScreen(),
             );
+          case '/email_verification':
+            final args = settings.arguments as Map<String, dynamic>?;
+            if (args != null) {
+              return MaterialPageRoute(
+                builder: (context) => EmailVerificationScreen(
+                  email: args['email'] as String,
+                  userData: args['userData'] as Map<String, dynamic>,
+                ),
+              );
+            }
           default:
             return null;
         }

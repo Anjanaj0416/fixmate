@@ -1,3 +1,7 @@
+// lib/services/auth_service.dart
+// UPDATED VERSION - Enhanced email verification methods
+// Added better email verification tracking and management
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -216,18 +220,69 @@ class AuthService {
     }
   }
 
-  // Check if email is verified
+  // ⭐ ENHANCED: Check if email is verified
   bool get isEmailVerified => _auth.currentUser?.emailVerified ?? false;
 
-  // Send email verification
+  // ⭐ ENHANCED: Send email verification with error handling
   Future<void> sendEmailVerification() async {
     try {
       User? user = _auth.currentUser;
       if (user != null && !user.emailVerified) {
         await user.sendEmailVerification();
+        print('✅ Verification email sent to ${user.email}');
+      } else if (user != null && user.emailVerified) {
+        print('ℹ️ Email already verified');
       }
     } catch (e) {
+      print('❌ Error sending verification email: $e');
       throw e;
+    }
+  }
+
+  // ⭐ NEW: Reload user and check verification status
+  Future<bool> reloadAndCheckEmailVerified() async {
+    try {
+      User? user = _auth.currentUser;
+      if (user != null) {
+        await user.reload();
+        user = _auth.currentUser;
+        return user?.emailVerified ?? false;
+      }
+      return false;
+    } catch (e) {
+      print('❌ Error reloading user: $e');
+      throw e;
+    }
+  }
+
+  // ⭐ NEW: Update email verification status in Firestore
+  Future<void> updateEmailVerificationStatus(String uid, bool verified) async {
+    try {
+      await _firestore.collection('users').doc(uid).update({
+        'emailVerified': verified,
+        'emailVerifiedAt': verified ? FieldValue.serverTimestamp() : null,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      print('✅ Email verification status updated in Firestore');
+    } catch (e) {
+      print('❌ Error updating verification status: $e');
+      throw e;
+    }
+  }
+
+  // ⭐ NEW: Get email verification status from Firestore
+  Future<bool> getEmailVerificationStatus(String uid) async {
+    try {
+      DocumentSnapshot userDoc =
+          await _firestore.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+        return userData['emailVerified'] ?? false;
+      }
+      return false;
+    } catch (e) {
+      print('❌ Error getting verification status: $e');
+      return false;
     }
   }
 

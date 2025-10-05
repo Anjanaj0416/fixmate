@@ -373,7 +373,20 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
 // MODIFICATION: Update _buildProfileHeader() method only
 // Replace the existing _buildProfileHeader() method with this updated version
 
+  // lib/screens/worker_dashboard_screen.dart
+// REPLACE the _buildProfileHeader() method with this updated version
+// This ensures profile pictures display correctly with proper error handling
+
   Widget _buildProfileHeader() {
+    String? profileUrl = _worker!.profilePictureUrl;
+
+    // Add cache-busting to prevent stale images
+    if (profileUrl != null && profileUrl.isNotEmpty) {
+      if (!profileUrl.contains('&t=')) {
+        profileUrl = '$profileUrl&t=${DateTime.now().millisecondsSinceEpoch}';
+      }
+    }
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -381,25 +394,70 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         padding: EdgeInsets.all(16),
         child: Row(
           children: [
-            // ✅ MODIFIED: Show profile picture if available
-            CircleAvatar(
-              radius: 30,
-              backgroundColor: Color(0xFFFF9800),
-              backgroundImage: _worker!.profilePictureUrl != null &&
-                      _worker!.profilePictureUrl!.isNotEmpty
-                  ? NetworkImage(_worker!.profilePictureUrl!)
-                  : null,
-              child: _worker!.profilePictureUrl == null ||
-                      _worker!.profilePictureUrl!.isEmpty
-                  ? Text(
-                      _worker!.firstName[0].toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
+            // ✅ Profile picture with error handling
+            GestureDetector(
+              onTap: () {
+                // Navigate to edit profile
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WorkerProfileScreen(worker: _worker!),
+                  ),
+                ).then((updated) {
+                  // ✅ Reload data when returning from profile screen
+                  if (updated == true) {
+                    _loadWorkerData();
+                  }
+                });
+              },
+              child: Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Color(0xFFFF9800),
+                    backgroundImage: profileUrl != null && profileUrl.isNotEmpty
+                        ? NetworkImage(profileUrl) as ImageProvider
+                        : null,
+                    onBackgroundImageError:
+                        profileUrl != null && profileUrl.isNotEmpty
+                            ? (exception, stackTrace) {
+                                print(
+                                    '⚠️ Error loading profile picture: $exception');
+                              }
+                            : null,
+                    child: profileUrl == null || profileUrl.isEmpty
+                        ? Text(
+                            _worker!.workerName.isNotEmpty
+                                ? _worker!.workerName[0].toUpperCase()
+                                : 'W',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          )
+                        : null,
+                  ),
+                  // Small camera icon to indicate it's tappable
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      padding: EdgeInsets.all(4),
+                      decoration: BoxDecoration(
                         color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Color(0xFFFF9800), width: 2),
                       ),
-                    )
-                  : null,
+                      child: Icon(
+                        Icons.camera_alt,
+                        size: 12,
+                        color: Color(0xFFFF9800),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             SizedBox(width: 16),
             Expanded(
@@ -409,16 +467,15 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                   Text(
                     _worker!.workerName,
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  SizedBox(height: 4),
                   Text(
                     _worker!.serviceType,
                     style: TextStyle(
-                      fontSize: 14,
                       color: Colors.grey[600],
+                      fontSize: 14,
                     ),
                   ),
                   SizedBox(height: 4),
@@ -428,7 +485,10 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                       SizedBox(width: 4),
                       Text(
                         '${_worker!.rating.toStringAsFixed(1)} (${_worker!.jobsCompleted} jobs)',
-                        style: TextStyle(fontSize: 12),
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -443,7 +503,12 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                   MaterialPageRoute(
                     builder: (context) => WorkerProfileScreen(worker: _worker!),
                   ),
-                ).then((_) => _loadWorkerData());
+                ).then((updated) {
+                  // ✅ Reload data when returning from profile screen
+                  if (updated == true) {
+                    _loadWorkerData();
+                  }
+                });
               },
             ),
           ],
