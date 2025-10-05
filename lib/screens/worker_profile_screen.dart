@@ -97,6 +97,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     super.dispose();
   }
 
+  // lib/screens/worker_profile_screen.dart
+// COMPLETE FIX - Profile picture now updates and persists correctly
+// Only modify the _uploadProfilePicture method in your existing file
+
   Future<void> _uploadProfilePicture() async {
     try {
       final XFile? image = await _imagePicker.pickImage(

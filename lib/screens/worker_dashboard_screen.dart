@@ -366,14 +366,6 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
   }
 
   // lib/screens/worker_dashboard_screen.dart
-// MODIFICATION: Update _buildProfileHeader() method only
-// Replace the existing _buildProfileHeader() method with this updated version
-
-  // lib/screens/worker_dashboard_screen.dart
-// MODIFICATION: Update _buildProfileHeader() method only
-// Replace the existing _buildProfileHeader() method with this updated version
-
-  // lib/screens/worker_dashboard_screen.dart
 // REPLACE the _buildProfileHeader() method with this updated version
 // This ensures profile pictures display correctly with proper error handling
 
