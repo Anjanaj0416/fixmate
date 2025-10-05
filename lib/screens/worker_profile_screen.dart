@@ -112,45 +112,58 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
         _isUploadingImage = true;
       });
 
+      print('🔄 Starting profile picture upload...');
+
+      // ✅ Upload new profile picture
       String downloadUrl = await StorageService.uploadWorkerProfilePicture(
         imageFile: image,
       );
 
-      if (_worker.profilePictureUrl != null &&
-          _worker.profilePictureUrl!.isNotEmpty) {
-        await StorageService.deleteProfilePicture(_worker.profilePictureUrl!);
-      }
+      print('✅ Upload complete, URL: $downloadUrl');
 
-      _worker = WorkerModel(
-        workerId: _worker.workerId,
-        workerName: _worker.workerName,
-        firstName: _worker.firstName,
-        lastName: _worker.lastName,
-        serviceType: _worker.serviceType,
-        serviceCategory: _worker.serviceCategory,
-        businessName: _worker.businessName,
-        location: _worker.location,
-        rating: _worker.rating,
-        experienceYears: _worker.experienceYears,
-        jobsCompleted: _worker.jobsCompleted,
-        successRate: _worker.successRate,
-        pricing: _worker.pricing,
-        availability: _worker.availability,
-        capabilities: _worker.capabilities,
-        contact: _worker.contact,
-        profile: _worker.profile,
-        verified: _worker.verified,
-        createdAt: _worker.createdAt,
-        lastActive: _worker.lastActive,
-        profilePictureUrl: downloadUrl,
-      );
+      // ✅ Add cache-busting parameter to force image refresh
+      String urlWithCacheBuster =
+          '$downloadUrl&t=${DateTime.now().millisecondsSinceEpoch}';
 
+      // ✅ Update the worker model with new URL
+      setState(() {
+        _worker = WorkerModel(
+          workerId: _worker.workerId,
+          workerName: _worker.workerName,
+          firstName: _worker.firstName,
+          lastName: _worker.lastName,
+          serviceType: _worker.serviceType,
+          serviceCategory: _worker.serviceCategory,
+          businessName: _worker.businessName,
+          location: _worker.location,
+          rating: _worker.rating,
+          experienceYears: _worker.experienceYears,
+          jobsCompleted: _worker.jobsCompleted,
+          successRate: _worker.successRate,
+          pricing: _worker.pricing,
+          availability: _worker.availability,
+          capabilities: _worker.capabilities,
+          contact: _worker.contact,
+          profile: _worker.profile,
+          verified: _worker.verified,
+          createdAt: _worker.createdAt,
+          lastActive: _worker.lastActive,
+          profilePictureUrl:
+              downloadUrl, // Store clean URL without cache-buster
+        );
+      });
+
+      // ✅ Update Firestore with new URL
       User? user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         await FirebaseFirestore.instance
             .collection('workers')
             .doc(user.uid)
-            .update({'profile_picture_url': downloadUrl});
+            .update({
+          'profile_picture_url': downloadUrl,
+          'last_active': FieldValue.serverTimestamp(),
+        });
+        print('✅ Firestore updated with new profile picture URL');
       }
 
       setState(() {
@@ -158,7 +171,13 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       });
 
       _showSuccessSnackBar('Profile picture updated successfully!');
+
+      // ✅ Force widget rebuild to show new image
+      if (mounted) {
+        setState(() {});
+      }
     } catch (e) {
+      print('❌ Error uploading profile picture: $e');
       setState(() {
         _isUploadingImage = false;
       });
@@ -329,25 +348,27 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
           children: [
             Stack(
               children: [
-                CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Color(0xFFFF9800),
-                  backgroundImage: _worker.profilePictureUrl != null &&
-                          _worker.profilePictureUrl!.isNotEmpty
-                      ? NetworkImage(_worker.profilePictureUrl!)
-                      : null,
-                  child: _worker.profilePictureUrl == null ||
-                          _worker.profilePictureUrl!.isEmpty
-                      ? Text(
-                          _worker.firstName[0].toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 40,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        )
-                      : null,
+                // ✅ Profile Picture with better error handling
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 50,
+                    backgroundColor: Color(0xFFFF9800),
+                    child: ClipOval(
+                      child: _buildProfileImage(),
+                    ),
+                  ),
                 ),
+                // ✅ Upload button overlay
                 Positioned(
                   bottom: 0,
                   right: 0,
@@ -358,6 +379,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Color(0xFFFF9800),
+                          width: 2,
+                        ),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black26,
@@ -373,13 +398,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                    Color(0xFFFF9800)),
+                                  Color(0xFFFF9800),
+                                ),
                               ),
                             )
                           : Icon(
                               Icons.camera_alt,
-                              color: Color(0xFFFF9800),
                               size: 20,
+                              color: Color(0xFFFF9800),
                             ),
                     ),
                   ),
@@ -387,42 +413,124 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               ],
             ),
             SizedBox(height: 16),
-            Text(
-              _worker.workerName,
-              style: TextStyle(
-                fontSize: 24,
+            if (_isEditing) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _firstNameController,
+                      decoration: InputDecoration(
+                        labelText: 'First Name',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _lastNameController,
+                      decoration: InputDecoration(
+                        labelText: 'Last Name',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 12),
+              TextFormField(
+                controller: _businessNameController,
+                decoration: InputDecoration(
+                  labelText: 'Business Name',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ] else ...[
+              Text(
+                _worker.workerName,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                _worker.businessName,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+            SizedBox(height: 8),
+            Chip(
+              label: Text(_worker.serviceType),
+              backgroundColor: Color(0xFFFF9800).withOpacity(0.1),
+              labelStyle: TextStyle(
+                color: Color(0xFFFF9800),
                 fontWeight: FontWeight.bold,
               ),
             ),
-            SizedBox(height: 4),
-            Text(
-              'Worker ID: ${_worker.workerId}',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            SizedBox(height: 8),
-            Chip(
-              label: Text(
-                _worker.serviceType,
-                style: TextStyle(color: Colors.white),
-              ),
-              backgroundColor: Color(0xFFFF9800),
-            ),
-            SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildStatItem(
-                    'Rating', '${_worker.rating.toStringAsFixed(1)}⭐'),
-                _buildStatItem('Jobs', '${_worker.jobsCompleted}'),
-                _buildStatItem(
-                    'Success', '${_worker.successRate.toStringAsFixed(1)}%'),
-              ],
-            ),
           ],
+        ),
+      ),
+    );
+  }
+
+// ✅ NEW: Helper method to build profile image with proper error handling
+  Widget _buildProfileImage() {
+    if (_worker.profilePictureUrl != null &&
+        _worker.profilePictureUrl!.isNotEmpty) {
+      // Add cache-busting parameter to force reload
+      String imageUrl = _worker.profilePictureUrl!;
+      if (!imageUrl.contains('&t=')) {
+        imageUrl = '$imageUrl&t=${DateTime.now().millisecondsSinceEpoch}';
+      }
+
+      return Image.network(
+        imageUrl,
+        width: 100,
+        height: 100,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                  : null,
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          print('⚠️ Error loading profile picture: $error');
+          return _buildFallbackAvatar();
+        },
+      );
+    } else {
+      return _buildFallbackAvatar();
+    }
+  }
+
+// ✅ NEW: Fallback avatar when no image
+  Widget _buildFallbackAvatar() {
+    return Container(
+      width: 100,
+      height: 100,
+      color: Color(0xFFFF9800),
+      child: Center(
+        child: Text(
+          _worker.firstName.isNotEmpty
+              ? _worker.firstName[0].toUpperCase()
+              : 'W',
+          style: TextStyle(
+            fontSize: 40,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
       ),
     );

@@ -1,6 +1,6 @@
 // lib/screens/sign_in_screen.dart
-// UPDATED VERSION - Added navigation to ForgotPasswordScreen
-// Only the _resetPassword method and imports are changed
+// FIXED VERSION - Corrected accountType check for workers
+// Changed 'worker' to 'service_provider' to match what WorkerService saves
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,7 +11,7 @@ import 'worker_registration_flow.dart';
 import 'admin_dashboard_screen.dart';
 import 'worker_dashboard_screen.dart';
 import 'customer_dashboard.dart';
-import 'forgot_password_screen.dart'; // ✅ NEW IMPORT
+import 'forgot_password_screen.dart';
 import '../services/google_auth_service.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -102,6 +102,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   /// FIXED: Navigate based on PRIMARY account (first created account)
   /// Priority: Admin > Primary Account (Customer/Worker) > Secondary Account > Account Selection
+  /// CRITICAL FIX: Changed 'worker' to 'service_provider' to match WorkerService.saveWorker()
   Future<void> _navigateBasedOnRole(User user) async {
     try {
       // Get user document
@@ -141,7 +142,8 @@ class _SignInScreenState extends State<SignInScreen> {
             context,
             MaterialPageRoute(builder: (context) => CustomerDashboard()),
           );
-        } else if (accountType == 'worker') {
+        } else if (accountType == 'service_provider') {
+          // ✅ FIXED: Changed from 'worker' to 'service_provider'
           print('✅ Primary account is Worker - navigating to Worker Dashboard');
           Navigator.pushReplacement(
             context,
@@ -258,7 +260,6 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  // ✅ UPDATED: Navigate to dedicated ForgotPasswordScreen
   void _resetPassword() {
     Navigator.push(
       context,
@@ -344,15 +345,13 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                         SizedBox(height: 32),
 
-                        // Email field
+                        // Email Field
                         TextFormField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: InputDecoration(
                             labelText: 'Email',
-                            hintText: 'Enter your email',
-                            prefixIcon:
-                                Icon(Icons.email, color: Color(0xFF2196F3)),
+                            prefixIcon: Icon(Icons.email),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -361,20 +360,21 @@ class _SignInScreenState extends State<SignInScreen> {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your email';
                             }
+                            if (!value.contains('@')) {
+                              return 'Please enter a valid email';
+                            }
                             return null;
                           },
                         ),
                         SizedBox(height: 16),
 
-                        // Password field
+                        // Password Field
                         TextFormField(
                           controller: _passwordController,
                           obscureText: _obscurePassword,
                           decoration: InputDecoration(
                             labelText: 'Password',
-                            hintText: 'Enter your password',
-                            prefixIcon:
-                                Icon(Icons.lock, color: Color(0xFF2196F3)),
+                            prefixIcon: Icon(Icons.lock),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword
@@ -400,38 +400,58 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                         SizedBox(height: 8),
 
-                        // Forgot Password - Now navigates to ForgotPasswordScreen
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: _resetPassword,
-                            child: Text('Forgot Password?'),
-                          ),
+                        // Remember Me & Forgot Password Row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: _rememberMe,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _rememberMe = value ?? false;
+                                    });
+                                  },
+                                ),
+                                Text('Remember me'),
+                              ],
+                            ),
+                            TextButton(
+                              onPressed: _resetPassword,
+                              child: Text('Forgot Password?'),
+                            ),
+                          ],
                         ),
                         SizedBox(height: 16),
 
                         // Sign In Button
-                        SizedBox(
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _signIn,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Color(0xFF2196F3),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                        ElevatedButton(
+                          onPressed: _isLoading ? null : _signIn,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color(0xFF2196F3),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            child: _isLoading
-                                ? CircularProgressIndicator(color: Colors.white)
-                                : Text(
-                                    'Sign In',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
                           ),
+                          child: _isLoading
+                              ? SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  'Sign In',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                         ),
                         SizedBox(height: 16),
 
@@ -443,7 +463,7 @@ class _SignInScreenState extends State<SignInScreen> {
                               padding: EdgeInsets.symmetric(horizontal: 16),
                               child: Text(
                                 'OR',
-                                style: TextStyle(color: Colors.grey[600]),
+                                style: TextStyle(color: Colors.grey),
                               ),
                             ),
                             Expanded(child: Divider()),
@@ -454,39 +474,36 @@ class _SignInScreenState extends State<SignInScreen> {
                         // Google Sign In Button
                         OutlinedButton.icon(
                           onPressed: _isLoading ? null : _signInWithGoogle,
-                          icon: Icon(Icons.g_mobiledata,
-                              size: 28, color: Color(0xFF4285F4)),
+                          icon: Image.network(
+                            'https://www.google.com/favicon.ico',
+                            height: 24,
+                            width: 24,
+                          ),
                           label: Text('Continue with Google'),
                           style: OutlinedButton.styleFrom(
-                            padding: EdgeInsets.symmetric(vertical: 12),
+                            padding: EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            side: BorderSide(color: Colors.grey[300]!),
                           ),
                         ),
                         SizedBox(height: 24),
 
-                        // Create Account
+                        // Sign Up Link
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text('Don\'t have an account? '),
+                            Text("Don't have an account?"),
                             TextButton(
                               onPressed: () {
-                                Navigator.push(
+                                Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => CreateAccountScreen(),
-                                  ),
+                                      builder: (context) =>
+                                          CreateAccountScreen()),
                                 );
                               },
-                              child: Text(
-                                'Sign Up',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                              child: Text('Sign Up'),
                             ),
                           ],
                         ),

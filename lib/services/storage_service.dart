@@ -1,5 +1,5 @@
 // lib/services/storage_service.dart
-// MODIFIED VERSION - Added profile picture upload functionality
+// COMPLETE FIXED VERSION - Profile pictures now persist properly
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
@@ -54,8 +54,9 @@ class StorageService {
     }
   }
 
-  /// ✅ NEW: Upload worker profile picture to Firebase Storage
+  /// ✅ FIXED: Upload worker profile picture with consistent filename
   /// Returns the download URL
+  /// Uses a fixed filename 'profile_picture' so the URL remains consistent
   static Future<String> uploadWorkerProfilePicture({
     required XFile imageFile,
   }) async {
@@ -65,9 +66,10 @@ class StorageService {
         throw Exception('User not authenticated');
       }
 
-      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
       String extension = path.extension(imageFile.path);
-      String fileName = 'profile_${user.uid}_$timestamp$extension';
+      // ✅ FIX: Use fixed filename 'profile_picture' instead of timestamp
+      // This ensures the URL stays the same across uploads
+      String fileName = 'profile_picture$extension';
 
       Reference storageRef = _storage
           .ref()
@@ -80,10 +82,12 @@ class StorageService {
       print('📤 Uploading profile picture ${bytes.length} bytes...');
       print('📍 Path: worker_profiles/${user.uid}/$fileName');
 
+      // ✅ FIX: Add cache control to prevent caching issues
       UploadTask uploadTask = storageRef.putData(
         bytes,
         SettableMetadata(
           contentType: _getContentType(extension),
+          cacheControl: 'public, max-age=300', // Cache for 5 minutes
         ),
       );
 
@@ -100,7 +104,8 @@ class StorageService {
     }
   }
 
-  /// ✅ NEW: Delete old profile picture from Firebase Storage
+  /// ✅ Delete old profile picture from Firebase Storage
+  /// This is now optional since we're overwriting the same file
   static Future<void> deleteProfilePicture(String imageUrl) async {
     try {
       if (imageUrl.isEmpty) return;
