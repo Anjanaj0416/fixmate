@@ -1,5 +1,6 @@
 // lib/screens/admin_support_chat_screen.dart
-// FIXED VERSION - Proper message reading and real-time updates
+// MODIFIED VERSION - Updated colors for customer and admin chat bubbles
+// Added soft light-green and white gradient background
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -188,10 +189,22 @@ class _AdminSupportChatScreenState extends State<AdminSupportChatScreen> {
       return Scaffold(
         appBar: AppBar(
           title: Text('Admin Support'),
-          backgroundColor: Colors.orange,
+          backgroundColor: Colors.green,
           foregroundColor: Colors.white,
         ),
-        body: Center(child: CircularProgressIndicator()),
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white,
+                Color(0xFFE8F5E9), // Light green
+              ],
+            ),
+          ),
+          child: Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
@@ -207,175 +220,207 @@ class _AdminSupportChatScreenState extends State<AdminSupportChatScreen> {
             ),
           ],
         ),
-        backgroundColor: Colors.orange,
+        backgroundColor: Colors.green,
         foregroundColor: Colors.white,
       ),
-      body: Column(
-        children: [
-          // Messages list
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('support_chats')
-                  .doc(_supportChatId)
-                  .collection('messages')
-                  .orderBy('timestamp', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline, size: 64, color: Colors.red),
-                        SizedBox(height: 16),
-                        Text('Error loading messages: ${snapshot.error}'),
-                      ],
-                    ),
-                  );
-                }
-
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No messages yet.\nStart the conversation!',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  reverse: true,
-                  padding: EdgeInsets.all(16),
-                  itemCount: snapshot.data!.docs.length,
-                  itemBuilder: (context, index) {
-                    DocumentSnapshot doc = snapshot.data!.docs[index];
-                    Map<String, dynamic> data =
-                        doc.data() as Map<String, dynamic>;
-
-                    bool isAdmin = data['is_admin'] ?? false;
-                    String message = data['message'] ?? '';
-                    String senderName = data['sender_name'] ?? 'Unknown';
-                    Timestamp? timestamp = data['timestamp'] as Timestamp?;
-
-                    return _buildMessageBubble(
-                      message: message,
-                      isAdmin: isAdmin,
-                      senderName: senderName,
-                      timestamp: timestamp?.toDate(),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-
-          // Input field
-          Container(
-            padding: EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: Offset(0, -2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: 'Type your message...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    ),
-                    maxLines: null,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _handleSendMessage(),
-                  ),
-                ),
-                SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: Colors.orange,
-                  child: IconButton(
-                    icon: Icon(Icons.send, color: Colors.white),
-                    onPressed: _handleSendMessage,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageBubble({
-    required String message,
-    required bool isAdmin,
-    required String senderName,
-    DateTime? timestamp,
-  }) {
-    bool isCurrentUser = !isAdmin;
-
-    return Align(
-      alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: EdgeInsets.only(
-          bottom: 8,
-          left: isCurrentUser ? 50 : 0,
-          right: isCurrentUser ? 0 : 50,
-        ),
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      body: Container(
         decoration: BoxDecoration(
-          color: isCurrentUser ? Colors.blue : Colors.grey[200],
-          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              Color(0xFFE8F5E9), // Light green at bottom
+            ],
+          ),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              senderName,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isCurrentUser ? Colors.white70 : Colors.grey[700],
+            // Messages list
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('support_chats')
+                    .doc(_supportChatId)
+                    .collection('messages')
+                    .orderBy('timestamp', descending: true)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator());
+                  }
+
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline,
+                              size: 64, color: Colors.red),
+                          SizedBox(height: 16),
+                          Text('Error loading messages: ${snapshot.error}'),
+                        ],
+                      ),
+                    );
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Center(
+                      child: Text(
+                        'No messages yet.\nStart the conversation!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    controller: _scrollController,
+                    reverse: true,
+                    padding: EdgeInsets.all(16),
+                    itemCount: snapshot.data!.docs.length,
+                    itemBuilder: (context, index) {
+                      DocumentSnapshot doc = snapshot.data!.docs[index];
+                      Map<String, dynamic> data =
+                          doc.data() as Map<String, dynamic>;
+
+                      bool isAdmin = data['is_admin'] ?? false;
+                      String message = data['message'] ?? '';
+                      String senderName = data['sender_name'] ?? 'Unknown';
+                      Timestamp? timestamp = data['timestamp'] as Timestamp?;
+
+                      // MODIFIED: Customer = Green, Admin = Light Green
+                      Color bubbleColor = isAdmin
+                          ? Color(0xFFC8E6C9) // Light green for admin
+                          : Color(0xFF66BB6A); // Green for customer
+
+                      Color textColor = isAdmin ? Colors.black87 : Colors.white;
+
+                      return Align(
+                        alignment: isAdmin
+                            ? Alignment.centerLeft
+                            : Alignment.centerRight,
+                        child: Container(
+                          margin: EdgeInsets.only(
+                            bottom: 12,
+                            left: isAdmin ? 0 : 60,
+                            right: isAdmin ? 60 : 0,
+                          ),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: bubbleColor,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: isAdmin
+                                ? CrossAxisAlignment.start
+                                : CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                senderName,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor.withOpacity(0.8),
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                message,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: textColor,
+                                ),
+                              ),
+                              if (timestamp != null) ...[
+                                SizedBox(height: 4),
+                                Text(
+                                  _formatTime(timestamp.toDate()),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: textColor.withOpacity(0.7),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
             ),
-            SizedBox(height: 4),
-            Text(
-              message,
-              style: TextStyle(
-                fontSize: 15,
-                color: isCurrentUser ? Colors.white : Colors.black87,
+
+            // Message input
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      decoration: InputDecoration(
+                        hintText: 'Type your message...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                      ),
+                      maxLines: null,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _handleSendMessage(),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  CircleAvatar(
+                    backgroundColor: Colors.green,
+                    child: IconButton(
+                      icon: Icon(Icons.send, color: Colors.white),
+                      onPressed: _handleSendMessage,
+                    ),
+                  ),
+                ],
               ),
             ),
-            if (timestamp != null) ...[
-              SizedBox(height: 4),
-              Text(
-                '${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isCurrentUser ? Colors.white60 : Colors.grey[600],
-                ),
-              ),
-            ],
           ],
         ),
       ),
     );
+  }
+
+  String _formatTime(DateTime dateTime) {
+    String hour = dateTime.hour.toString().padLeft(2, '0');
+    String minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 }
