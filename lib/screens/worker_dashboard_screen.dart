@@ -103,7 +103,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
       QuerySnapshot completedBookings = await FirebaseFirestore.instance
           .collection('bookings')
           .where('worker_id', isEqualTo: _worker!.workerId)
-          .where('status', isEqualTo: 'BookingStatus.completed')
+          .where('status', isEqualTo: 'completed')
           .get();
 
       setState(() {
