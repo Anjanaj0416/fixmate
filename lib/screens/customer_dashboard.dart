@@ -15,6 +15,7 @@ import 'worker_registration_flow.dart';
 import 'worker_dashboard_screen.dart';
 import 'dart:async';
 import 'customer_favorites_screen.dart';
+import 'admin_support_chat_screen.dart';
 
 class CustomerDashboard extends StatefulWidget {
   @override
@@ -725,7 +726,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     );
   }
 
-  Widget _buildQuickActionsSection() {
+  /*Widget _buildQuickActionsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -870,7 +871,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         ),
       ],
     );
-  }
+  }*/
 
 // Helper method for building quick action cards
 // (This should already exist in your file, but including for completeness)
@@ -963,15 +964,15 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           },
         ),
         SizedBox(height: 12),
-        // Support Card
+        // Support Card - MODIFIED TO NAVIGATE TO ADMIN SUPPORT
         _buildQuickActionBanner(
           title: 'Support',
           subtitle: 'Get help with any issues or questions',
           icon: Icons.help_outline,
           gradientColors: [Color(0xFF4CAF50), Color(0xFF388E3C)],
           onTap: () {
-            // Navigate to support
-            _showComingSoonDialog('Support');
+            // Navigate to Admin Support Chat
+            _navigateToAdminSupport();
           },
         ),
         SizedBox(height: 12),
@@ -984,6 +985,53 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           onTap: _handleWorkerAccountSwitch,
         ),
       ],
+    );
+  }
+
+  // ADD THIS NEW METHOD to handle navigation to Admin Support:
+  void _navigateToAdminSupport() async {
+    // Get current user
+    User? currentUser = FirebaseAuth.instance.currentUser;
+
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please log in to contact support'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Get customer name from Firestore
+    String customerName = 'Customer';
+    try {
+      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(currentUser.uid)
+          .get();
+
+      if (customerDoc.exists) {
+        Map<String, dynamic> data = customerDoc.data() as Map<String, dynamic>;
+        customerName = data['full_name'] ??
+            data['name'] ??
+            data['customer_name'] ??
+            'Customer';
+      }
+    } catch (e) {
+      print('Error getting customer name: $e');
+    }
+
+    // Navigate to Admin Support Chat
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AdminSupportChatScreen(
+          userId: currentUser.uid,
+          userName: customerName,
+          userType: 'customer',
+        ),
+      ),
     );
   }
 
