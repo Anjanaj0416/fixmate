@@ -1,5 +1,6 @@
 // lib/screens/customer_chats_screen.dart
 // FIXED VERSION - Properly loads customer ID and displays chats
+// Modified: Added soft light-blue and white gradient background
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -105,7 +106,19 @@ class _CustomerChatsScreenState extends State<CustomerChatsScreen> {
           foregroundColor: Colors.white,
           automaticallyImplyLeading: false,
         ),
-        body: Center(child: CircularProgressIndicator()),
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white,
+                Color(0xFFE3F2FD), // Light blue
+              ],
+            ),
+          ),
+          child: Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
@@ -117,17 +130,29 @@ class _CustomerChatsScreenState extends State<CustomerChatsScreen> {
           foregroundColor: Colors.white,
           automaticallyImplyLeading: false,
         ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 64, color: Colors.grey),
-              SizedBox(height: 16),
-              Text(
-                'Could not load customer profile',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-              ),
-            ],
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white,
+                Color(0xFFE3F2FD), // Light blue
+              ],
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'Could not load customer profile',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -147,220 +172,238 @@ class _CustomerChatsScreenState extends State<CustomerChatsScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Support Button Banner
-          Container(
-            width: double.infinity,
-            color: Colors.orange[50],
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Icon(Icons.help_outline, color: Colors.orange[700]),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Need help? Contact Admin Support',
-                    style: TextStyle(
-                      color: Colors.orange[700],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: _openAdminSupport,
-                  child: Text('Support'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.orange[700],
-                  ),
-                ),
-              ],
-            ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              Color(0xFFE3F2FD), // Light blue
+            ],
           ),
-          // Chat List
-          Expanded(
-            child: StreamBuilder<List<ChatRoom>>(
-              stream: ChatService.getCustomerChatsStream(_customerId!),
-              builder: (context, snapshot) {
-                print('🔄 Stream state: ${snapshot.connectionState}');
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  print('❌ Stream error: ${snapshot.error}');
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline, size: 64, color: Colors.red),
-                        SizedBox(height: 16),
-                        Text(
-                          'Error loading chats',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          '${snapshot.error}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+        ),
+        child: Column(
+          children: [
+            // Support Button Banner
+            Container(
+              width: double.infinity,
+              color: Colors.green[50],
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.help_outline, color: Colors.green[700]),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Need help? Contact Admin Support',
+                      style: TextStyle(
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  );
-                }
-
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  print('📭 No chats found for customer: $_customerId');
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 80,
-                          color: Colors.grey[400],
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'No chats yet',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Start chatting with workers\nthrough your bookings',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
+                  ),
+                  TextButton(
+                    onPressed: _openAdminSupport,
+                    child: Text('Support'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.green[700],
                     ),
-                  );
-                }
+                  ),
+                ],
+              ),
+            ),
+            // Chat List
+            Expanded(
+              child: StreamBuilder<List<ChatRoom>>(
+                stream: ChatService.getCustomerChatsStream(_customerId!),
+                builder: (context, snapshot) {
+                  print('🔄 Stream state: ${snapshot.connectionState}');
 
-                List<ChatRoom> chats = snapshot.data!;
-                print('✅ Loaded ${chats.length} chats for customer');
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator());
+                  }
 
-                return ListView.builder(
-                  itemCount: chats.length,
-                  itemBuilder: (context, index) {
-                    ChatRoom chatRoom = chats[index];
-                    bool hasUnread = chatRoom.unreadCountCustomer > 0;
+                  if (snapshot.hasError) {
+                    print('❌ Stream error: ${snapshot.error}');
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline,
+                              size: 64, color: Colors.red),
+                          SizedBox(height: 16),
+                          Text(
+                            'Error loading chats',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            '${snapshot.error}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    );
+                  }
 
-                    return Card(
-                      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      elevation: hasUnread ? 3 : 1,
-                      child: ListTile(
-                        leading: Stack(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: Colors.orange,
-                              child:
-                                  Icon(Icons.engineering, color: Colors.white),
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    print('📭 No chats found for customer: $_customerId');
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline,
+                            size: 80,
+                            color: Colors.grey[400],
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'No chats yet',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[700],
                             ),
-                            if (hasUnread)
-                              Positioned(
-                                right: 0,
-                                top: 0,
-                                child: Container(
-                                  padding: EdgeInsets.all(4),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Start chatting with workers\nthrough your bookings',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  List<ChatRoom> chats = snapshot.data!;
+                  print('✅ Displaying ${chats.length} chats');
+
+                  return ListView.builder(
+                    itemCount: chats.length,
+                    itemBuilder: (context, index) {
+                      ChatRoom chat = chats[index];
+                      bool hasUnread = chat.unreadCountCustomer > 0;
+
+                      return Card(
+                        margin:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        elevation: hasUnread ? 4 : 1,
+                        color: hasUnread ? Colors.blue[50] : Colors.white,
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.blue[700],
+                            child: Icon(Icons.person, color: Colors.white),
+                          ),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  chat.workerName,
+                                  style: TextStyle(
+                                    fontWeight: hasUnread
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                              if (hasUnread)
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
+                                    color: Colors.blue,
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
-                                    '${chatRoom.unreadCountCustomer}',
+                                    '${chat.unreadCountCustomer}',
                                     style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 10,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ),
-                              ),
-                          ],
-                        ),
-                        title: Text(
-                          chatRoom.workerName,
-                          style: TextStyle(
-                            fontWeight:
-                                hasUnread ? FontWeight.bold : FontWeight.normal,
+                            ],
                           ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Booking: ${chatRoom.bookingId.substring(0, 8)}...',
-                              style:
-                                  TextStyle(fontSize: 11, color: Colors.grey),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              chatRoom.lastMessage,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: hasUnread
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                chat.lastMessage,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: hasUnread
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        trailing: Text(
-                          _formatTime(chatRoom.lastMessageTime),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: hasUnread ? Colors.blue : Colors.grey,
-                            fontWeight:
-                                hasUnread ? FontWeight.bold : FontWeight.normal,
+                              SizedBox(height: 4),
+                              Text(
+                                'Booking #${chat.bookingId.substring(0, 8)}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ChatScreen(
-                                chatId: chatRoom.chatId,
-                                bookingId: chatRoom.bookingId,
-                                otherUserName: chatRoom.workerName,
-                                currentUserType: 'customer',
-                              ),
+                          trailing: Text(
+                            _formatTimestamp(chat.lastMessageTime),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
                             ),
-                          );
-                        },
-                      ),
-                    );
-                  },
-                );
-              },
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ChatScreen(
+                                  chatId: chat.chatId,
+                                  bookingId: chat.bookingId,
+                                  otherUserName: chat.workerName,
+                                  currentUserType: 'customer',
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  String _formatTime(DateTime time) {
+  String _formatTimestamp(DateTime timestamp) {
     final now = DateTime.now();
-    final difference = now.difference(time);
+    final difference = now.difference(timestamp);
 
-    if (difference.inDays == 0) {
-      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-    } else if (difference.inDays == 1) {
-      return 'Yesterday';
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}h ago';
     } else if (difference.inDays < 7) {
       return '${difference.inDays}d ago';
     } else {
-      return '${time.day}/${time.month}/${time.year}';
+      return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
     }
   }
 }
