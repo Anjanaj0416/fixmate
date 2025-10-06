@@ -1,5 +1,5 @@
 // lib/screens/customer_notifications_screen.dart
-// FIXED VERSION - Removed orderBy to avoid composite index requirement
+// BEAUTIFIED VERSION - Blue theme with gradient background
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -63,14 +63,12 @@ class _CustomerNotificationsScreenState
     try {
       if (_customerId == null) return;
 
-      // Query for notifications where recipient_type is 'customer' and read is false
       QuerySnapshot unreadNotifications = await _firestore
           .collection('notifications')
           .where('recipient_type', isEqualTo: 'customer')
           .where('read', isEqualTo: false)
           .get();
 
-      // Filter for this specific customer
       List<DocumentSnapshot> customerNotifications =
           unreadNotifications.docs.where((doc) {
         var data = doc.data() as Map<String, dynamic>;
@@ -83,7 +81,11 @@ class _CustomerNotificationsScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('No unread notifications'),
-            backgroundColor: Colors.orange,
+            backgroundColor: Colors.blue[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
         return;
@@ -98,7 +100,11 @@ class _CustomerNotificationsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('All notifications marked as read'),
-          backgroundColor: Colors.green,
+          backgroundColor: Colors.blue[600],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
     } catch (e) {
@@ -106,7 +112,11 @@ class _CustomerNotificationsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error marking notifications as read'),
-          backgroundColor: Colors.red,
+          backgroundColor: Colors.red[400],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
     }
@@ -119,7 +129,11 @@ class _CustomerNotificationsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Notification deleted'),
-          backgroundColor: Colors.green,
+          backgroundColor: Colors.blue[600],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
     } catch (e) {
@@ -127,7 +141,11 @@ class _CustomerNotificationsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error deleting notification'),
-          backgroundColor: Colors.red,
+          backgroundColor: Colors.red[400],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
     }
@@ -137,31 +155,63 @@ class _CustomerNotificationsScreenState
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text('Notifications'),
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white,
+                Colors.blue.shade50.withOpacity(0.3),
+              ],
+            ),
+          ),
+          child: AppBar(
+            title: Text('Notifications'),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            foregroundColor: Colors.blue[800],
+          ),
         ),
-        body: Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_customerId == null) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text('Notifications'),
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
-        ),
-        body: Center(
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white,
+                Colors.blue.shade50.withOpacity(0.3),
+              ],
+            ),
+          ),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, size: 64, color: Colors.grey),
-              SizedBox(height: 16),
-              Text(
-                'Could not load notifications',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              AppBar(
+                title: Text('Notifications'),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                foregroundColor: Colors.blue[800],
+              ),
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline,
+                          size: 64, color: Colors.blue[300]),
+                      SizedBox(height: 16),
+                      Text(
+                        'Could not load notifications',
+                        style: TextStyle(fontSize: 16, color: Colors.blue[700]),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -170,321 +220,428 @@ class _CustomerNotificationsScreenState
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Notifications'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.done_all),
-            tooltip: 'Mark all as read',
-            onPressed: _markAllAsRead,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              Colors.blue.shade50.withOpacity(0.3),
+            ],
           ),
-        ],
-      ),
-      body: StreamBuilder<QuerySnapshot>(
-        // FIXED: Removed orderBy to avoid composite index requirement
-        // We'll sort the data locally after filtering
-        stream: _firestore
-            .collection('notifications')
-            .where('recipient_type', isEqualTo: 'customer')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  SizedBox(height: 16),
-                  Text(
-                    'Error loading notifications',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    snapshot.error.toString(),
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            );
-          }
-
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.notifications_none,
-                      size: 80, color: Colors.grey[300]),
-                  SizedBox(height: 16),
-                  Text(
-                    'No notifications yet',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'You\'ll see notifications here when you have updates',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            );
-          }
-
-          // Filter notifications for this customer
-          List<DocumentSnapshot> allNotifications = snapshot.data!.docs;
-          List<DocumentSnapshot> notifications = allNotifications.where((doc) {
-            var data = doc.data() as Map<String, dynamic>;
-            // Check both customer_id and recipient_id fields
-            String? customerId = data['customer_id'];
-            String? recipientId = data['recipient_id'];
-            return customerId == _customerId || recipientId == _customerId;
-          }).toList();
-
-          // FIXED: Sort locally by created_at timestamp (newest first)
-          notifications.sort((a, b) {
-            var dataA = a.data() as Map<String, dynamic>;
-            var dataB = b.data() as Map<String, dynamic>;
-
-            Timestamp? timestampA = dataA['created_at'] as Timestamp?;
-            Timestamp? timestampB = dataB['created_at'] as Timestamp?;
-
-            // Handle null timestamps (put them at the end)
-            if (timestampA == null && timestampB == null) return 0;
-            if (timestampA == null) return 1;
-            if (timestampB == null) return -1;
-
-            // Sort descending (newest first)
-            return timestampB.compareTo(timestampA);
-          });
-
-          if (notifications.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.notifications_none,
-                      size: 80, color: Colors.grey[300]),
-                  SizedBox(height: 16),
-                  Text(
-                    'No notifications yet',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'You\'ll see notifications here when you have updates',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: EdgeInsets.all(8),
-            itemCount: notifications.length,
-            itemBuilder: (context, index) {
-              var notification =
-                  notifications[index].data() as Map<String, dynamic>;
-              String notificationId = notifications[index].id;
-              bool isRead = notification['read'] ?? false;
-              String type = notification['type'] ?? 'general';
-              String title = notification['title'] ?? 'Notification';
-              String message = notification['message'] ?? '';
-              Timestamp? createdAt = notification['created_at'] as Timestamp?;
-
-              // Format timestamp
-              String timeAgo = 'Just now';
-              if (createdAt != null) {
-                DateTime dateTime = createdAt.toDate();
-                Duration difference = DateTime.now().difference(dateTime);
-
-                if (difference.inDays > 7) {
-                  timeAgo = DateFormat('MMM d, yyyy').format(dateTime);
-                } else if (difference.inDays > 0) {
-                  timeAgo = '${difference.inDays}d ago';
-                } else if (difference.inHours > 0) {
-                  timeAgo = '${difference.inHours}h ago';
-                } else if (difference.inMinutes > 0) {
-                  timeAgo = '${difference.inMinutes}m ago';
-                }
-              }
-
-              // Get icon and color based on notification type
-              IconData icon;
-              Color iconColor;
-
-              switch (type) {
-                case 'new_booking':
-                  icon = Icons.calendar_today;
-                  iconColor = Colors.blue;
-                  break;
-                case 'booking_status_update':
-                  icon = Icons.update;
-                  iconColor = Colors.orange;
-                  break;
-                case 'booking_accepted':
-                  icon = Icons.check_circle;
-                  iconColor = Colors.green;
-                  break;
-                case 'booking_declined':
-                  icon = Icons.cancel;
-                  iconColor = Colors.red;
-                  break;
-                case 'booking_cancelled':
-                  icon = Icons.cancel_outlined;
-                  iconColor = Colors.red;
-                  break;
-                case 'message':
-                  icon = Icons.message;
-                  iconColor = Colors.purple;
-                  break;
-                default:
-                  icon = Icons.notifications;
-                  iconColor = Colors.grey;
-              }
-
-              return Dismissible(
-                key: Key(notificationId),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  color: Colors.red,
-                  alignment: Alignment.centerRight,
-                  padding: EdgeInsets.symmetric(horizontal: 20),
-                  child: Icon(Icons.delete, color: Colors.white),
+        ),
+        child: Column(
+          children: [
+            AppBar(
+              title: Text(
+                'Notifications',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue[900],
                 ),
-                confirmDismiss: (direction) async {
-                  return await showDialog(
-                    context: context,
-                    builder: (BuildContext context) {
-                      return AlertDialog(
-                        title: Text('Delete Notification'),
-                        content: Text(
-                            'Are you sure you want to delete this notification?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            child: Text('Cancel'),
+              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              foregroundColor: Colors.blue[800],
+              actions: [
+                Container(
+                  margin: EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: IconButton(
+                    icon: Icon(Icons.done_all, color: Colors.blue[700]),
+                    tooltip: 'Mark all as read',
+                    onPressed: _markAllAsRead,
+                  ),
+                ),
+              ],
+            ),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: _firestore
+                    .collection('notifications')
+                    .where('recipient_type', isEqualTo: 'customer')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                      ),
+                    );
+                  }
+
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline,
+                              size: 64, color: Colors.blue[300]),
+                          SizedBox(height: 16),
+                          Text(
+                            'Error loading notifications',
+                            style: TextStyle(
+                                fontSize: 16, color: Colors.blue[700]),
                           ),
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            child: Text('Delete',
-                                style: TextStyle(color: Colors.red)),
+                          SizedBox(height: 8),
+                          Text(
+                            snapshot.error.toString(),
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.blue[400]),
+                            textAlign: TextAlign.center,
                           ),
                         ],
-                      );
-                    },
-                  );
-                },
-                onDismissed: (direction) {
-                  _deleteNotification(notificationId);
-                },
-                child: Card(
-                  elevation: isRead ? 0 : 2,
-                  color: isRead ? Colors.grey[100] : Colors.white,
-                  margin: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                  child: InkWell(
-                    onTap: () {
-                      if (!isRead) {
-                        _markAsRead(notificationId);
-                      }
-                      // TODO: Navigate to relevant screen based on notification type
-                    },
-                    child: Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      ),
+                    );
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Icon
                           Container(
-                            padding: EdgeInsets.all(8),
+                            padding: EdgeInsets.all(24),
                             decoration: BoxDecoration(
-                              color: iconColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
+                              color: Colors.blue[50],
+                              shape: BoxShape.circle,
                             ),
-                            child: Icon(icon, color: iconColor, size: 24),
+                            child: Icon(
+                              Icons.notifications_none,
+                              size: 80,
+                              color: Colors.blue[300],
+                            ),
                           ),
-                          SizedBox(width: 12),
-                          // Content
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        title,
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: isRead
-                                              ? FontWeight.normal
-                                              : FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    if (!isRead)
-                                      Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: BoxDecoration(
-                                          color: Colors.blue,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  message,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[700],
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  timeAgo,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[500],
-                                  ),
-                                ),
-                              ],
+                          SizedBox(height: 24),
+                          Text(
+                            'No notifications yet',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blue[800],
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 40),
+                            child: Text(
+                              'You\'ll see notifications here when you have updates',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.blue[600],
+                              ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        },
+                    );
+                  }
+
+                  List<DocumentSnapshot> allNotifications = snapshot.data!.docs;
+                  List<DocumentSnapshot> notifications =
+                      allNotifications.where((doc) {
+                    var data = doc.data() as Map<String, dynamic>;
+                    String? customerId = data['customer_id'];
+                    String? recipientId = data['recipient_id'];
+                    return customerId == _customerId ||
+                        recipientId == _customerId;
+                  }).toList();
+
+                  notifications.sort((a, b) {
+                    var dataA = a.data() as Map<String, dynamic>;
+                    var dataB = b.data() as Map<String, dynamic>;
+                    Timestamp? timestampA = dataA['created_at'] as Timestamp?;
+                    Timestamp? timestampB = dataB['created_at'] as Timestamp?;
+                    if (timestampA == null && timestampB == null) return 0;
+                    if (timestampA == null) return 1;
+                    if (timestampB == null) return -1;
+                    return timestampB.compareTo(timestampA);
+                  });
+
+                  if (notifications.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: Colors.blue[50],
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.notifications_none,
+                              size: 80,
+                              color: Colors.blue[300],
+                            ),
+                          ),
+                          SizedBox(height: 24),
+                          Text(
+                            'No notifications yet',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blue[800],
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 40),
+                            child: Text(
+                              'You\'ll see notifications here when you have updates',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.blue[600],
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: EdgeInsets.all(12),
+                    itemCount: notifications.length,
+                    itemBuilder: (context, index) {
+                      var notification =
+                          notifications[index].data() as Map<String, dynamic>;
+                      String notificationId = notifications[index].id;
+                      bool isRead = notification['read'] ?? false;
+                      String type = notification['type'] ?? 'general';
+                      String title = notification['title'] ?? 'Notification';
+                      String message = notification['message'] ?? '';
+                      Timestamp? createdAt =
+                          notification['created_at'] as Timestamp?;
+
+                      IconData icon;
+                      Color iconColor;
+
+                      switch (type) {
+                        case 'booking_confirmed':
+                          icon = Icons.check_circle;
+                          iconColor = Colors.blue[600]!;
+                          break;
+                        case 'booking_cancelled':
+                          icon = Icons.cancel;
+                          iconColor = Colors.blue[400]!;
+                          break;
+                        case 'worker_assigned':
+                          icon = Icons.person_add;
+                          iconColor = Colors.blue[700]!;
+                          break;
+                        case 'payment_received':
+                          icon = Icons.payment;
+                          iconColor = Colors.blue[600]!;
+                          break;
+                        case 'review_request':
+                          icon = Icons.star;
+                          iconColor = Colors.blue[500]!;
+                          break;
+                        default:
+                          icon = Icons.notifications;
+                          iconColor = Colors.blue[600]!;
+                      }
+
+                      return Dismissible(
+                        key: Key(notificationId),
+                        background: Container(
+                          margin: EdgeInsets.symmetric(vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.red[400]!, Colors.red[600]!],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          alignment: Alignment.centerRight,
+                          padding: EdgeInsets.only(right: 20),
+                          child:
+                              Icon(Icons.delete, color: Colors.white, size: 28),
+                        ),
+                        direction: DismissDirection.endToStart,
+                        confirmDismiss: (direction) async {
+                          return await showDialog(
+                            context: context,
+                            builder: (context) {
+                              return AlertDialog(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                title: Text(
+                                  'Delete Notification',
+                                  style: TextStyle(color: Colors.blue[900]),
+                                ),
+                                content: Text(
+                                  'Are you sure you want to delete this notification?',
+                                  style: TextStyle(color: Colors.blue[700]),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(false),
+                                    child: Text(
+                                      'Cancel',
+                                      style: TextStyle(color: Colors.blue[600]),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(true),
+                                    child: Text(
+                                      'Delete',
+                                      style: TextStyle(color: Colors.red[600]),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                        onDismissed: (direction) {
+                          _deleteNotification(notificationId);
+                        },
+                        child: Container(
+                          margin: EdgeInsets.symmetric(vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: isRead
+                                ? LinearGradient(
+                                    colors: [
+                                      Colors.grey[50]!,
+                                      Colors.grey[100]!,
+                                    ],
+                                  )
+                                : LinearGradient(
+                                    colors: [
+                                      Colors.white,
+                                      Colors.blue[50]!.withOpacity(0.5),
+                                    ],
+                                  ),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: isRead
+                                    ? Colors.grey.withOpacity(0.1)
+                                    : Colors.blue.withOpacity(0.15),
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                            border: Border.all(
+                              color: isRead
+                                  ? Colors.grey[200]!
+                                  : Colors.blue[100]!,
+                              width: 1,
+                            ),
+                          ),
+                          child: InkWell(
+                            onTap: () {
+                              if (!isRead) {
+                                _markAsRead(notificationId);
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          iconColor.withOpacity(0.2),
+                                          iconColor.withOpacity(0.1),
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child:
+                                        Icon(icon, color: iconColor, size: 24),
+                                  ),
+                                  SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                title,
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: isRead
+                                                      ? FontWeight.w500
+                                                      : FontWeight.w700,
+                                                  color: isRead
+                                                      ? Colors.blue[700]
+                                                      : Colors.blue[900],
+                                                ),
+                                              ),
+                                            ),
+                                            if (!isRead)
+                                              Container(
+                                                width: 10,
+                                                height: 10,
+                                                decoration: BoxDecoration(
+                                                  gradient: LinearGradient(
+                                                    colors: [
+                                                      Colors.blue[600]!,
+                                                      Colors.blue[400]!,
+                                                    ],
+                                                  ),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        SizedBox(height: 6),
+                                        Text(
+                                          message,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: isRead
+                                                ? Colors.grey[600]
+                                                : Colors.blue[800],
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                        if (createdAt != null) ...[
+                                          SizedBox(height: 8),
+                                          Text(
+                                            DateFormat('MMM dd, yyyy • hh:mm a')
+                                                .format(createdAt.toDate()),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.blue[400],
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
