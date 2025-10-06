@@ -1,5 +1,5 @@
 // lib/screens/worker_chats_screen.dart
-// FIXED VERSION - Now checks both worker_id and UID when loading chats
+// FIXED VERSION with built-in diagnostic
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -17,6 +17,7 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
   String? _workerId;
   String? _workerUid;
   bool _isLoading = true;
+  String _diagnosticInfo = '';
 
   @override
   void initState() {
@@ -45,6 +46,9 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
             _isLoading = false;
           });
           print('✅ Worker loaded: $_workerId (UID: $_workerUid)');
+
+          // Run diagnostic
+          await _runQuickDiagnostic();
           return;
         }
 
@@ -62,6 +66,7 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
             _isLoading = false;
           });
           print('✅ Worker loaded by email: $_workerId (UID: $_workerUid)');
+          await _runQuickDiagnostic();
         } else {
           print('❌ Worker not found');
           setState(() => _isLoading = false);
@@ -71,6 +76,120 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _runQuickDiagnostic() async {
+    if (_workerId == null) return;
+
+    try {
+      // Check all chat rooms
+      QuerySnapshot allChats =
+          await FirebaseFirestore.instance.collection('chat_rooms').get();
+
+      // Check for matches
+      int matchCount = 0;
+      List<String> sampleWorkerIds = [];
+
+      for (var doc in allChats.docs) {
+        var data = doc.data() as Map<String, dynamic>;
+        String chatWorkerId = data['worker_id'] ?? '';
+
+        if (sampleWorkerIds.length < 5) {
+          sampleWorkerIds.add(chatWorkerId);
+        }
+
+        if (chatWorkerId == _workerId) {
+          matchCount++;
+        }
+      }
+
+      String diagnostic = '''
+📊 Quick Diagnostic:
+   Total chats in DB: ${allChats.docs.length}
+   Your worker_id: $_workerId
+   Matching chats: $matchCount
+   
+   Sample worker_ids in DB:
+${sampleWorkerIds.map((id) => '   - "$id"').join('\n')}
+''';
+
+      setState(() {
+        _diagnosticInfo = diagnostic;
+      });
+
+      print(diagnostic);
+    } catch (e) {
+      print('❌ Diagnostic error: $e');
+    }
+  }
+
+  void _showDiagnosticDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.bug_report, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Chat Diagnostic'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _diagnosticInfo.isEmpty
+                    ? 'Loading diagnostic info...'
+                    : _diagnosticInfo,
+                style: TextStyle(fontFamily: 'monospace', fontSize: 12),
+              ),
+              SizedBox(height: 16),
+              if (_diagnosticInfo.contains('Matching chats: 0'))
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '❌ PROBLEM FOUND',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red[900],
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Your worker_id doesn\'t match any chats in the database. The chats were created with a different worker_id.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _runQuickDiagnostic();
+            },
+            child: Text('Refresh'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _openAdminSupport() {
@@ -146,6 +265,11 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
             tooltip: 'Contact Admin Support',
             onPressed: _openAdminSupport,
           ),
+          IconButton(
+            icon: Icon(Icons.bug_report),
+            tooltip: 'Show Diagnostic',
+            onPressed: _showDiagnosticDialog,
+          ),
         ],
       ),
       body: Column(
@@ -178,10 +302,34 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
               ],
             ),
           ),
+
+          // Debug Info Banner (only show if no matches)
+          if (_diagnosticInfo.isNotEmpty &&
+              _diagnosticInfo.contains('Matching chats: 0'))
+            Container(
+              width: double.infinity,
+              color: Colors.red[50],
+              padding: EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.red[700], size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Debug: No matching chats found. Tap bug icon for details.',
+                      style: TextStyle(
+                        color: Colors.red[900],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // Chat List
           Expanded(
             child: StreamBuilder<List<ChatRoom>>(
-              // FIXED: Now passes both worker_id and UID
               stream: ChatService.getWorkerChatsStreamWithBothIds(
                 _workerId!,
                 _workerUid!,
@@ -210,6 +358,13 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
                           '${snapshot.error}',
                           style: TextStyle(fontSize: 12, color: Colors.grey),
                           textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {});
+                          },
+                          child: Text('Retry'),
                         ),
                       ],
                     ),
@@ -245,12 +400,22 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
                             color: Colors.grey[600],
                           ),
                         ),
+                        SizedBox(height: 24),
+                        OutlinedButton.icon(
+                          onPressed: _showDiagnosticDialog,
+                          icon: Icon(Icons.bug_report),
+                          label: Text('Show Diagnostic Info'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.orange,
+                          ),
+                        ),
                       ],
                     ),
                   );
                 }
 
                 List<ChatRoom> chats = snapshot.data!;
+                print('✅ Displaying ${chats.length} chats');
 
                 return ListView.builder(
                   itemCount: chats.length,
@@ -262,10 +427,10 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
                     return Card(
                       margin: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       elevation: hasUnread ? 3 : 1,
-                      color: hasUnread ? Colors.blue[50] : Colors.white,
+                      color: hasUnread ? Colors.orange[50] : Colors.white,
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: Colors.blue,
+                          backgroundColor: Colors.orange,
                           child: Text(
                             chat.customerName.isNotEmpty
                                 ? chat.customerName[0].toUpperCase()
@@ -283,8 +448,8 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
                                 chat.customerName,
                                 style: TextStyle(
                                   fontWeight: hasUnread
-                                      ? FontWeight.bold
-                                      : FontWeight.w500,
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
                                 ),
                               ),
                             ),
@@ -292,10 +457,10 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
                               Container(
                                 padding: EdgeInsets.symmetric(
                                   horizontal: 8,
-                                  vertical: 4,
+                                  vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue,
+                                  color: Colors.orange,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
@@ -312,13 +477,14 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            SizedBox(height: 4),
                             Text(
                               chat.lastMessage,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontWeight: hasUnread
-                                    ? FontWeight.w600
+                                    ? FontWeight.w500
                                     : FontWeight.normal,
                               ),
                             ),
@@ -340,6 +506,10 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
                           ),
                         ),
                         onTap: () {
+                          print('🎯 Opening chat: ${chat.chatId}');
+                          print('   Customer: ${chat.customerName}');
+                          print('   Booking: ${chat.bookingId}');
+
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -368,7 +538,9 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
     DateTime now = DateTime.now();
     Duration diff = now.difference(time);
 
-    if (diff.inMinutes < 60) {
+    if (diff.inMinutes < 1) {
+      return 'Just now';
+    } else if (diff.inMinutes < 60) {
       return '${diff.inMinutes}m ago';
     } else if (diff.inHours < 24) {
       return '${diff.inHours}h ago';

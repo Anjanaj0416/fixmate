@@ -1,4 +1,5 @@
 // lib/screens/chat_screen.dart
+// FIXED VERSION - Enhanced logging and better message display
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/chat_service.dart';
@@ -25,11 +26,20 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   User? _currentUser;
+  String? _currentUserName;
 
   @override
   void initState() {
     super.initState();
     _currentUser = FirebaseAuth.instance.currentUser;
+    _loadUserName();
+
+    // Debug logging
+    print('💬 ChatScreen initialized');
+    print('   Chat ID: ${widget.chatId}');
+    print('   Booking ID: ${widget.bookingId}');
+    print('   Other User: ${widget.otherUserName}');
+    print('   Current User Type: ${widget.currentUserType}');
 
     // Mark messages as read when opening chat
     ChatService.markMessagesAsRead(
@@ -38,21 +48,34 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Future<void> _loadUserName() async {
+    // This would load the user's display name from Firestore if needed
+    setState(() {
+      _currentUserName = _currentUser?.displayName ??
+          (widget.currentUserType == 'customer' ? 'Customer' : 'Worker');
+    });
+  }
+
   Future<void> _sendMessage() async {
     String message = _messageController.text.trim();
     if (message.isEmpty) return;
 
     try {
+      print('📤 Sending message...');
+      print('   Chat ID: ${widget.chatId}');
+      print(
+          '   Message: ${message.substring(0, message.length > 50 ? 50 : message.length)}...');
+
       await ChatService.sendMessage(
         chatId: widget.chatId,
         senderId: _currentUser!.uid,
-        senderName:
-            widget.currentUserType == 'customer' ? 'Customer' : 'Worker',
+        senderName: _currentUserName ?? widget.currentUserType,
         senderType: widget.currentUserType,
         message: message,
       );
 
       _messageController.clear();
+      print('✅ Message sent successfully');
 
       // Scroll to bottom
       if (_scrollController.hasClients) {
@@ -63,12 +86,27 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     } catch (e) {
+      print('❌ Error sending message: $e');
       _showErrorSnackBar('Failed to send message: $e');
     }
   }
 
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Set app bar color based on user type
+    Color appBarColor =
+        widget.currentUserType == 'customer' ? Colors.blue : Colors.orange;
+
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -81,7 +119,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
-        backgroundColor: Colors.blue,
+        backgroundColor: appBarColor,
         foregroundColor: Colors.white,
       ),
       body: Column(
@@ -91,15 +129,70 @@ class _ChatScreenState extends State<ChatScreen> {
             child: StreamBuilder<List<ChatMessage>>(
               stream: ChatService.getMessagesStream(widget.chatId),
               builder: (context, snapshot) {
+                print('📊 StreamBuilder update:');
+                print('   Connection State: ${snapshot.connectionState}');
+                print('   Has Data: ${snapshot.hasData}');
+                print('   Has Error: ${snapshot.hasError}');
+
+                if (snapshot.hasError) {
+                  print('   Error: ${snapshot.error}');
+                }
+
+                if (snapshot.hasData) {
+                  print('   Message Count: ${snapshot.data!.length}');
+                  // Log each message
+                  for (var i = 0; i < snapshot.data!.length; i++) {
+                    var msg = snapshot.data![i];
+                    print(
+                        '   Message $i: ${msg.senderName} (${msg.senderType}): ${msg.message.substring(0, msg.message.length > 30 ? 30 : msg.message.length)}...');
+                  }
+                }
+
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Loading messages...'),
+                      ],
+                    ),
+                  );
                 }
 
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error loading messages'));
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 64, color: Colors.red),
+                        SizedBox(height: 16),
+                        Text(
+                          'Error loading messages',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          '${snapshot.error}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {}); // Trigger rebuild
+                          },
+                          child: Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  );
                 }
 
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  print('⚠️ No messages to display');
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -124,6 +217,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 }
 
                 List<ChatMessage> messages = snapshot.data!;
+                print('✅ Rendering ${messages.length} messages');
 
                 return ListView.builder(
                   controller: _scrollController,
@@ -173,11 +267,14 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       maxLines: null,
                       textCapitalization: TextCapitalization.sentences,
+                      onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
                   SizedBox(width: 8),
                   CircleAvatar(
-                    backgroundColor: Colors.blue,
+                    backgroundColor: widget.currentUserType == 'customer'
+                        ? Colors.blue
+                        : Colors.orange,
                     child: IconButton(
                       icon: Icon(Icons.send, color: Colors.white),
                       onPressed: _sendMessage,
@@ -196,35 +293,62 @@ class _ChatScreenState extends State<ChatScreen> {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: EdgeInsets.only(bottom: 8),
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        decoration: BoxDecoration(
-          color: isMe ? Colors.blue : Colors.grey[200],
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-            bottomLeft: isMe ? Radius.circular(16) : Radius.circular(4),
-            bottomRight: isMe ? Radius.circular(4) : Radius.circular(16),
-          ),
-        ),
+        margin: EdgeInsets.only(bottom: 12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            Text(
-              message.message,
-              style: TextStyle(
-                color: isMe ? Colors.white : Colors.black87,
-                fontSize: 15,
+            // Sender name (only show for messages from other person)
+            if (!isMe)
+              Padding(
+                padding: EdgeInsets.only(left: 12, bottom: 4),
+                child: Text(
+                  message.senderName,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              _formatTime(message.timestamp),
-              style: TextStyle(
-                color: isMe ? Colors.white70 : Colors.grey[600],
-                fontSize: 11,
+            // Message bubble
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.75,
+              ),
+              decoration: BoxDecoration(
+                color: isMe
+                    ? (widget.currentUserType == 'customer'
+                        ? Colors.blue
+                        : Colors.orange)
+                    : Colors.grey[200],
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                  bottomLeft: Radius.circular(isMe ? 16 : 4),
+                  bottomRight: Radius.circular(isMe ? 4 : 16),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message.message,
+                    style: TextStyle(
+                      color: isMe ? Colors.white : Colors.black87,
+                      fontSize: 15,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    _formatTime(message.timestamp),
+                    style: TextStyle(
+                      color: isMe ? Colors.white70 : Colors.grey[600],
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -234,24 +358,16 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final difference = now.difference(time);
+    int hour = time.hour;
+    int minute = time.minute;
+    String period = hour >= 12 ? 'PM' : 'AM';
 
-    if (difference.inDays > 0) {
-      return '${time.day}/${time.month}/${time.year} ${time.hour}:${time.minute.toString().padLeft(2, '0')}';
-    } else {
-      return '${time.hour}:${time.minute.toString().padLeft(2, '0')}';
-    }
-  }
+    if (hour > 12) hour -= 12;
+    if (hour == 0) hour = 12;
 
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    String minuteStr = minute.toString().padLeft(2, '0');
+
+    return '$hour:$minuteStr $period';
   }
 
   @override

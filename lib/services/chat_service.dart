@@ -1,5 +1,5 @@
 // lib/services/chat_service.dart
-// ENHANCED VERSION - Added extensive debugging and proper error handling
+// FIXED VERSION - Better message query handling with null timestamp support
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../utils/string_utils.dart';
 
@@ -28,14 +28,30 @@ class ChatMessage {
 
   factory ChatMessage.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+    // Handle null timestamp (happens with FieldValue.serverTimestamp())
+    DateTime messageTime;
+    try {
+      if (data['timestamp'] != null) {
+        messageTime = (data['timestamp'] as Timestamp).toDate();
+      } else {
+        // If timestamp is null, use current time
+        messageTime = DateTime.now();
+        print('⚠️ Message ${doc.id} has null timestamp, using current time');
+      }
+    } catch (e) {
+      print('❌ Error parsing timestamp for message ${doc.id}: $e');
+      messageTime = DateTime.now();
+    }
+
     return ChatMessage(
       messageId: doc.id,
       chatId: data['chat_id'] ?? '',
       senderId: data['sender_id'] ?? '',
-      senderName: data['sender_name'] ?? '',
+      senderName: data['sender_name'] ?? 'Unknown',
       senderType: data['sender_type'] ?? '',
       message: data['message'] ?? '',
-      timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      timestamp: messageTime,
       isRead: data['is_read'] ?? false,
       imageUrl: data['image_url'],
     );
@@ -118,32 +134,13 @@ class ChatService {
 
       if (snapshot.docs.isEmpty) {
         print('⚠️ No chat rooms found for customer: $customerId');
-        // Let's check if there are any chats at all
-        _firestore.collection('chat_rooms').get().then((allChats) {
-          print('📝 Total chat rooms in database: ${allChats.docs.length}');
-          if (allChats.docs.isNotEmpty) {
-            print('📝 Sample chat room customer_ids:');
-            for (var doc in allChats.docs.take(5)) {
-              var data = doc.data() as Map<String, dynamic>;
-              print(
-                  '   - Chat ${doc.id}: customer_id = ${data['customer_id']}');
-            }
-          }
-        });
       } else {
         print('✅ Found ${snapshot.docs.length} chats for customer');
-        for (var doc in snapshot.docs) {
-          var data = doc.data() as Map<String, dynamic>;
-          print(
-              '   📨 Chat: ${doc.id}, Worker: ${data['worker_name']}, Last: ${data['last_message']}');
-        }
       }
 
-      // Get all chats
       List<ChatRoom> chats =
           snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList();
 
-      // Sort in memory by last_message_time (descending)
       chats.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
 
       return chats;
@@ -164,14 +161,49 @@ class ChatService {
 
       if (snapshot.docs.isEmpty) {
         print('⚠️ No chat rooms found for worker: $workerId');
-        // Let's check if there are any chats at all
-        _firestore.collection('chat_rooms').get().then((allChats) {
-          print('📝 Total chat rooms in database: ${allChats.docs.length}');
+      } else {
+        print('✅ Found ${snapshot.docs.length} chats for worker');
+      }
+
+      List<ChatRoom> chats =
+          snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList();
+
+      chats.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+
+      return chats;
+    });
+  }
+
+  // FIXED: Get worker chats checking worker_id field only (HM_XXXX format)
+  static Stream<List<ChatRoom>> getWorkerChatsStreamWithBothIds(
+    String workerId,
+    String workerUid,
+  ) {
+    print('🔍 Getting worker chats for:');
+    print('   Worker ID (HM_XXXX format): $workerId');
+    print('   Worker UID (Firebase): $workerUid');
+
+    // Query directly by worker_id field which contains HM_XXXX
+    return _firestore
+        .collection('chat_rooms')
+        .where('worker_id', isEqualTo: workerId)
+        .snapshots()
+        .map((snapshot) {
+      print(
+          '📊 Chat rooms snapshot received: ${snapshot.docs.length} documents');
+
+      if (snapshot.docs.isEmpty) {
+        print('⚠️ No chats found for worker_id: $workerId');
+        print('   Trying to fetch all chats to debug...');
+
+        // Debug: Show what worker_ids exist
+        _firestore.collection('chat_rooms').limit(5).get().then((allChats) {
           if (allChats.docs.isNotEmpty) {
-            print('📝 Sample chat room worker_ids:');
-            for (var doc in allChats.docs.take(5)) {
+            print('   Sample worker_ids in database:');
+            for (var doc in allChats.docs) {
               var data = doc.data() as Map<String, dynamic>;
-              print('   - Chat ${doc.id}: worker_id = ${data['worker_id']}');
+              print(
+                  '      - Chat ${doc.id}: worker_id = "${data['worker_id']}"');
             }
           }
         });
@@ -179,73 +211,19 @@ class ChatService {
         print('✅ Found ${snapshot.docs.length} chats for worker');
         for (var doc in snapshot.docs) {
           var data = doc.data() as Map<String, dynamic>;
-          print(
-              '   📨 Chat: ${doc.id}, Customer: ${data['customer_name']}, Last: ${data['last_message']}');
+          print('   📨 Chat ${doc.id}:');
+          print('      Customer: ${data['customer_name']}');
+          print('      Last Message: ${data['last_message']}');
         }
       }
 
-      // Get all chats
       List<ChatRoom> chats =
           snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList();
 
-      // Sort in memory by last_message_time (descending)
+      // Sort by last message time (descending)
       chats.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
 
       return chats;
-    });
-  }
-
-  // lib/services/chat_service.dart
-// UPDATED - Add this new method to your existing chat_service.dart file
-// Find the getWorkerChatsStream method and add this NEW method right after it
-
-  // NEW METHOD: Get worker chats checking BOTH worker_id and UID
-  static Stream<List<ChatRoom>> getWorkerChatsStreamWithBothIds(
-    String workerId,
-    String workerUid,
-  ) {
-    print('🔍 Getting worker chats for:');
-    print('   Worker ID (formatted): $workerId');
-    print('   Worker UID (Firebase): $workerUid');
-
-    return _firestore
-        .collection('chat_rooms')
-        .snapshots()
-        .asyncMap((snapshot) async {
-      print('📊 Total chat rooms in database: ${snapshot.docs.length}');
-
-      List<ChatRoom> matchingChats = [];
-
-      for (var doc in snapshot.docs) {
-        var data = doc.data() as Map<String, dynamic>;
-        String chatWorkerId = data['worker_id'] ?? '';
-
-        // Check if this chat belongs to the worker (by either ID or UID)
-        if (chatWorkerId == workerId || chatWorkerId == workerUid) {
-          matchingChats.add(ChatRoom.fromFirestore(doc));
-          print('✅ Match found: Chat ${doc.id}');
-          print('   Chat worker_id: $chatWorkerId');
-          print('   Customer: ${data['customer_name']}');
-          print('   Last message: ${data['last_message']}');
-        }
-      }
-
-      if (matchingChats.isEmpty) {
-        print('⚠️ No matching chats found');
-        print('📝 Checking all chat room worker_ids:');
-        for (var doc in snapshot.docs.take(5)) {
-          var data = doc.data() as Map<String, dynamic>;
-          print('   - Chat ${doc.id}: worker_id = ${data['worker_id']}');
-        }
-      } else {
-        print('✅ Found ${matchingChats.length} matching chats');
-      }
-
-      // Sort by last message time (descending)
-      matchingChats
-          .sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
-
-      return matchingChats;
     });
   }
 
@@ -311,7 +289,8 @@ class ChatService {
       print(
           '   Message: ${message.substring(0, message.length > 50 ? 50 : message.length)}...');
 
-      await _firestore
+      // Add message to subcollection
+      DocumentReference messageRef = await _firestore
           .collection('chat_rooms')
           .doc(chatId)
           .collection('messages')
@@ -326,38 +305,65 @@ class ChatService {
         if (imageUrl != null) 'image_url': imageUrl,
       });
 
+      print('✅ Message document created: ${messageRef.id}');
+
+      // Update unread count
       String unreadField = senderType == 'worker'
           ? 'unread_count_customer'
           : 'unread_count_worker';
 
+      // Update chat room with last message
       await _firestore.collection('chat_rooms').doc(chatId).update({
         'last_message': StringUtils.truncate(message, 50),
         'last_message_time': FieldValue.serverTimestamp(),
         unreadField: FieldValue.increment(1),
       });
 
-      print('✅ Message sent successfully');
+      print('✅ Message sent and chat room updated successfully');
     } catch (e) {
       print('❌ Error sending message: $e');
       throw Exception('Failed to send message: $e');
     }
   }
 
-  // Get messages stream for a chat
+  // FIXED: Get messages stream - now handles null timestamps better
   static Stream<List<ChatMessage>> getMessagesStream(String chatId) {
     print('🔍 Getting messages stream for chat: $chatId');
 
+    // First, try with orderBy timestamp
     return _firestore
         .collection('chat_rooms')
         .doc(chatId)
         .collection('messages')
-        .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) {
-      print('📊 Messages snapshot: ${snapshot.docs.length} messages');
-      return snapshot.docs
-          .map((doc) => ChatMessage.fromFirestore(doc))
-          .toList();
+      print('📊 Messages snapshot received for chat $chatId');
+      print('   Total documents: ${snapshot.docs.length}');
+
+      if (snapshot.docs.isEmpty) {
+        print('⚠️ No messages found in chat: $chatId');
+        return [];
+      }
+
+      // Convert all documents to ChatMessage objects
+      List<ChatMessage> messages = [];
+
+      for (var doc in snapshot.docs) {
+        try {
+          var message = ChatMessage.fromFirestore(doc);
+          messages.add(message);
+          print(
+              '✅ Loaded message ${doc.id}: "${message.message.substring(0, message.message.length > 30 ? 30 : message.message.length)}..." from ${message.senderName}');
+        } catch (e) {
+          print('❌ Error parsing message ${doc.id}: $e');
+        }
+      }
+
+      // Sort by timestamp (descending - newest first)
+      messages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+      print('✅ Returning ${messages.length} messages for display');
+      return messages;
     });
   }
 
@@ -410,7 +416,7 @@ class ChatService {
     try {
       print('📖 Marking messages as read for chat: $chatId (user: $userType)');
 
-      // Get all unread messages without filtering by sender
+      // Get all unread messages
       QuerySnapshot unreadMessages = await _firestore
           .collection('chat_rooms')
           .doc(chatId)
@@ -420,10 +426,10 @@ class ChatService {
 
       print('   Found ${unreadMessages.docs.length} unread messages');
 
-      // Filter in memory to avoid complex Firestore query
+      // Filter messages from other user
       List<DocumentSnapshot> messagesToMark = unreadMessages.docs.where((doc) {
         String senderType = doc.get('sender_type') ?? '';
-        return senderType != userType; // Only mark messages from the other user
+        return senderType != userType;
       }).toList();
 
       if (messagesToMark.isEmpty) {
