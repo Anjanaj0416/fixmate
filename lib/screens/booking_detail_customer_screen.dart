@@ -1,6 +1,8 @@
 // lib/screens/booking_detail_customer_screen.dart
-// FIXED VERSION - Added Rate & Review button for completed bookings
+// UPDATED VERSION - Added favorite button for completed bookings
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/booking_model.dart';
 import '../services/chat_service.dart';
 import '../widgets/rating_dialog.dart';
@@ -22,16 +24,84 @@ class BookingDetailCustomerScreen extends StatefulWidget {
 
 class _BookingDetailCustomerScreenState
     extends State<BookingDetailCustomerScreen> {
+  bool _isFavorite = false;
+  bool _isLoadingFavorite = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfFavorite();
+  }
+
+  Future<void> _checkIfFavorite() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .get();
+
+      if (customerDoc.exists) {
+        Map<String, dynamic> data = customerDoc.data() as Map<String, dynamic>;
+        List<String> favoriteWorkers =
+            List<String>.from(data['favorite_workers'] ?? []);
+
+        setState(() {
+          _isFavorite = favoriteWorkers.contains(widget.booking.workerId);
+        });
+      }
+    } catch (e) {
+      print('Error checking favorite status: $e');
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    setState(() => _isLoadingFavorite = true);
+
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('User not logged in');
+
+      if (_isFavorite) {
+        // Remove from favorites
+        await FirebaseFirestore.instance
+            .collection('customers')
+            .doc(user.uid)
+            .update({
+          'favorite_workers': FieldValue.arrayRemove([widget.booking.workerId])
+        });
+
+        setState(() => _isFavorite = false);
+        _showSuccessSnackBar('Removed from favorites');
+      } else {
+        // Add to favorites
+        await FirebaseFirestore.instance
+            .collection('customers')
+            .doc(user.uid)
+            .update({
+          'favorite_workers': FieldValue.arrayUnion([widget.booking.workerId])
+        });
+
+        setState(() => _isFavorite = true);
+        _showSuccessSnackBar('Added to favorites! ❤️');
+      }
+    } catch (e) {
+      _showErrorSnackBar('Failed to update favorites: ${e.toString()}');
+    } finally {
+      setState(() => _isLoadingFavorite = false);
+    }
+  }
+
   Future<void> _openChat(BuildContext context) async {
     try {
-      // Show loading
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => Center(child: CircularProgressIndicator()),
       );
 
-      // Create or get chat room
       String chatId = await ChatService.createOrGetChatRoom(
         bookingId: widget.booking.bookingId,
         customerId: widget.booking.customerId,
@@ -40,10 +110,8 @@ class _BookingDetailCustomerScreenState
         workerName: widget.booking.workerName,
       );
 
-      // Close loading
       Navigator.pop(context);
 
-      // Open chat screen
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -56,10 +124,7 @@ class _BookingDetailCustomerScreenState
         ),
       );
     } catch (e) {
-      // Close loading
       Navigator.pop(context);
-
-      // Show error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to open chat: $e'),
@@ -69,7 +134,6 @@ class _BookingDetailCustomerScreenState
     }
   }
 
-  // NEW METHOD: View issue photos
   void _viewIssuePhotos(BuildContext context) {
     if (widget.booking.problemImageUrls.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -93,7 +157,6 @@ class _BookingDetailCustomerScreenState
     );
   }
 
-  // CRITICAL FIX: Add this method to open rating dialog
   Future<void> _openRatingDialog() async {
     final result = await showDialog<bool>(
       context: context,
@@ -101,14 +164,27 @@ class _BookingDetailCustomerScreenState
     );
 
     if (result == true) {
-      // Rating submitted successfully, refresh the screen
-      setState(() {
-        // This will rebuild the widget and reflect the updated rating status
-      });
-
-      // Optionally navigate back to refresh the bookings list
+      setState(() {});
       Navigator.pop(context);
     }
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 
   @override
@@ -142,22 +218,62 @@ class _BookingDetailCustomerScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Status',
+                            'Booking Status',
                             style: TextStyle(
-                              color: Colors.white70,
+                              color: Colors.white.withOpacity(0.9),
                               fontSize: 14,
                             ),
                           ),
+                          SizedBox(height: 4),
                           Text(
-                            widget.booking.status.displayName,
+                            _getStatusText(widget.booking.status),
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 20,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ],
                       ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: 16),
+
+            // Booking ID & Date Card
+            Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Booking Information',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    _buildInfoRow(
+                      Icons.confirmation_number,
+                      'Booking ID',
+                      widget.booking.bookingId.length > 12
+                          ? '...${widget.booking.bookingId.substring(widget.booking.bookingId.length - 12)}'
+                          : widget.booking.bookingId,
+                    ),
+                    _buildInfoRow(
+                      Icons.calendar_today,
+                      'Created',
+                      _formatDate(widget.booking.createdAt),
+                    ),
+                    _buildInfoRow(
+                      Icons.schedule,
+                      'Scheduled',
+                      '${_formatDate(widget.booking.scheduledDate)} at ${widget.booking.scheduledTime}',
                     ),
                   ],
                 ),
@@ -173,22 +289,66 @@ class _BookingDetailCustomerScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Worker Information',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Worker Information',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        // FAVORITE BUTTON - Show only for completed bookings
+                        if (widget.booking.status == BookingStatus.completed)
+                          _isLoadingFavorite
+                              ? SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.red,
+                                  ),
+                                )
+                              : IconButton(
+                                  icon: Icon(
+                                    _isFavorite
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    color: Colors.red,
+                                  ),
+                                  onPressed: _toggleFavorite,
+                                  tooltip: _isFavorite
+                                      ? 'Remove from favorites'
+                                      : 'Add to favorites',
+                                ),
+                      ],
+                    ),
+                    SizedBox(height: 12),
+                    _buildInfoRow(
+                      Icons.person,
+                      'Name',
+                      widget.booking.workerName,
+                    ),
+                    _buildInfoRow(
+                      Icons.phone,
+                      'Phone',
+                      widget.booking.workerPhone,
+                    ),
+                    SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _openChat(context),
+                        icon: Icon(Icons.chat, size: 18),
+                        label: Text('Chat with Worker'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                        ),
                       ),
                     ),
-                    Divider(),
-                    _detailRow('Name', widget.booking.workerName),
-                    _detailRow('Phone', widget.booking.workerPhone),
-                    _detailRow('Service',
-                        widget.booking.serviceType.replaceAll('_', ' ')),
-                    if (widget.booking.workerRating != null &&
-                        widget.booking.workerRating! > 0)
-                      _detailRow('Rating',
-                          '${widget.booking.workerRating!.toStringAsFixed(1)} ⭐'),
                   ],
                 ),
               ),
@@ -196,7 +356,7 @@ class _BookingDetailCustomerScreenState
 
             SizedBox(height: 16),
 
-            // Booking Information Card
+            // Service Details Card
             Card(
               child: Padding(
                 padding: EdgeInsets.all(16),
@@ -204,52 +364,64 @@ class _BookingDetailCustomerScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Booking Information',
+                      'Service Details',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Divider(),
-                    _detailRow('Booking ID',
-                        StringUtils.formatBookingId(widget.booking.bookingId)),
-                    _detailRow('Location', widget.booking.location),
-                    _detailRow('Address', widget.booking.address),
-                    _detailRow(
-                        'Date', _formatDate(widget.booking.scheduledDate)),
-                    _detailRow('Time', widget.booking.scheduledTime),
-                    _detailRow('Budget', widget.booking.budgetRange),
-                    _detailRow('Urgency', widget.booking.urgency),
-                  ],
-                ),
-              ),
-            ),
-
-            SizedBox(height: 16),
-
-            // Problem Description Card
-            Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                    SizedBox(height: 12),
+                    _buildInfoRow(
+                      Icons.build,
+                      'Service Type',
+                      widget.booking.serviceType.replaceAll('_', ' '),
+                    ),
+                    _buildInfoRow(
+                      Icons.category,
+                      'Sub Service',
+                      widget.booking.subService,
+                    ),
+                    _buildInfoRow(
+                      Icons.priority_high,
+                      'Issue Type',
+                      widget.booking.issueType,
+                    ),
+                    _buildInfoRow(
+                      Icons.location_on,
+                      'Location',
+                      widget.booking.location,
+                    ),
+                    _buildInfoRow(
+                      Icons.home,
+                      'Address',
+                      widget.booking.address,
+                    ),
+                    _buildInfoRow(
+                      Icons.warning_amber,
+                      'Urgency',
+                      widget.booking.urgency,
+                    ),
+                    _buildInfoRow(
+                      Icons.attach_money,
+                      'Budget',
+                      widget.booking.budgetRange,
+                    ),
+                    SizedBox(height: 12),
                     Text(
-                      'Problem Description',
+                      'Problem Description:',
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[700],
                       ),
                     ),
-                    Divider(),
+                    SizedBox(height: 8),
                     Text(
-                      widget.booking.problemDescription.isEmpty
-                          ? 'No description provided'
-                          : widget.booking.problemDescription,
-                      style: TextStyle(fontSize: 15),
+                      widget.booking.problemDescription,
+                      style: TextStyle(fontSize: 14),
                     ),
                     if (widget.booking.problemImageUrls.isNotEmpty) ...[
-                      SizedBox(height: 16),
+                      SizedBox(height: 12),
                       Container(
                         padding: EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -290,7 +462,7 @@ class _BookingDetailCustomerScreenState
 
             SizedBox(height: 24),
 
-            // CRITICAL FIX: Add Rate & Review button for completed bookings
+            // Action Buttons
             if (widget.booking.status == BookingStatus.completed &&
                 widget.booking.customerRating == null)
               SizedBox(
@@ -324,14 +496,14 @@ class _BookingDetailCustomerScreenState
                   border: Border.all(color: Colors.green[200]!),
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.check_circle, color: Colors.green),
                         SizedBox(width: 8),
                         Text(
-                          'Your Rating: ${widget.booking.customerRating!.toStringAsFixed(1)} ⭐',
+                          'You rated this service',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -340,75 +512,68 @@ class _BookingDetailCustomerScreenState
                         ),
                       ],
                     ),
+                    SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (index) {
+                        return Icon(
+                          index < (widget.booking.customerRating ?? 0)
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: Colors.amber,
+                          size: 24,
+                        );
+                      }),
+                    ),
                     if (widget.booking.customerReview != null &&
                         widget.booking.customerReview!.isNotEmpty) ...[
                       SizedBox(height: 8),
                       Text(
-                        'Your Review:',
+                        '"${widget.booking.customerReview}"',
                         style: TextStyle(
-                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
                           color: Colors.grey[700],
+                          fontStyle: FontStyle.italic,
                         ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        widget.booking.customerReview!,
-                        style: TextStyle(color: Colors.grey[800]),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ],
                 ),
               ),
-
-            // Add some spacing if rate button exists
-            if (widget.booking.status == BookingStatus.completed)
-              SizedBox(height: 16),
-
-            // Chat Button
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: () => _openChat(context),
-                icon: Icon(Icons.chat_bubble_outline, color: Colors.white),
-                label: Text(
-                  'Chat with ${widget.booking.workerName}',
-                  style: TextStyle(fontSize: 16, color: Colors.white),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _detailRow(String label, String value) {
+  Widget _buildInfoRow(IconData icon, String label, String value) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 6),
+      padding: EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[700],
-              ),
-            ),
-          ),
+          Icon(icon, size: 20, color: Colors.grey[600]),
+          SizedBox(width: 8),
           Expanded(
-            child: Text(
-              value.isEmpty ? 'N/A' : value,
-              style: TextStyle(fontSize: 15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -416,23 +581,20 @@ class _BookingDetailCustomerScreenState
     );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
-  }
-
   Color _getStatusColor(BookingStatus status) {
     switch (status) {
       case BookingStatus.requested:
         return Colors.orange;
       case BookingStatus.accepted:
-        return Colors.green;
-      case BookingStatus.inProgress:
         return Colors.blue;
+      case BookingStatus.inProgress:
+        return Colors.purple;
       case BookingStatus.completed:
-        return Colors.teal;
+        return Colors.green;
       case BookingStatus.cancelled:
-      case BookingStatus.declined:
         return Colors.red;
+      case BookingStatus.declined:
+        return Colors.grey;
       default:
         return Colors.grey;
     }
@@ -449,16 +611,40 @@ class _BookingDetailCustomerScreenState
       case BookingStatus.completed:
         return Icons.done_all;
       case BookingStatus.cancelled:
-      case BookingStatus.declined:
         return Icons.cancel;
+      case BookingStatus.declined:
+        return Icons.close;
       default:
         return Icons.info;
     }
   }
+
+  String _getStatusText(BookingStatus status) {
+    switch (status) {
+      case BookingStatus.requested:
+        return 'Waiting for Worker';
+      case BookingStatus.accepted:
+        return 'Accepted';
+      case BookingStatus.inProgress:
+        return 'Work in Progress';
+      case BookingStatus.completed:
+        return 'Completed';
+      case BookingStatus.cancelled:
+        return 'Cancelled';
+      case BookingStatus.declined:
+        return 'Declined';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
 }
 
-// Photo viewer screen
-class IssuePhotoViewerScreenCustomer extends StatefulWidget {
+// Issue Photo Viewer Screen
+class IssuePhotoViewerScreenCustomer extends StatelessWidget {
   final List<String> imageUrls;
   final String problemDescription;
   final String workerName;
@@ -471,157 +657,128 @@ class IssuePhotoViewerScreenCustomer extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<IssuePhotoViewerScreenCustomer> createState() =>
-      _IssuePhotoViewerScreenCustomerState();
-}
-
-class _IssuePhotoViewerScreenCustomerState
-    extends State<IssuePhotoViewerScreenCustomer> {
-  late PageController _pageController;
-  int _currentImageIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController();
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
       appBar: AppBar(
         title: Text('Issue Photos'),
-        backgroundColor: Colors.black87,
-        elevation: 0,
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
-          // Image viewer with page view
+          // Problem description header
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(16),
+            color: Colors.grey[100],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Problem Description:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  problemDescription,
+                  style: TextStyle(fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+
+          // Photo grid
           Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: widget.imageUrls.length,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentImageIndex = index;
-                });
-              },
+            child: GridView.builder(
+              padding: EdgeInsets.all(16),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              ),
+              itemCount: imageUrls.length,
               itemBuilder: (context, index) {
-                return Center(
-                  child: InteractiveViewer(
-                    minScale: 0.5,
-                    maxScale: 4.0,
-                    child: Image.network(
-                      widget.imageUrls[index],
-                      fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                            color: Colors.orange,
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.error_outline,
-                                  color: Colors.white, size: 48),
-                              SizedBox(height: 8),
-                              Text(
-                                'Failed to load image',
-                                style: TextStyle(color: Colors.white),
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => FullScreenImage(
+                          imageUrl: imageUrls[index],
+                          imageIndex: index + 1,
+                          totalImages: imageUrls.length,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Hero(
+                    tag: 'photo_$index',
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          imageUrls[index],
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Center(
+                              child: Icon(
+                                Icons.broken_image,
+                                size: 50,
+                                color: Colors.grey,
                               ),
-                            ],
-                          ),
-                        );
-                      },
+                            );
+                          },
+                        ),
+                      ),
                     ),
                   ),
                 );
               },
             ),
           ),
-
-          // Problem description at bottom
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.black87,
-              border: Border(
-                top: BorderSide(color: Colors.grey[800]!),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Problem Description:',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  widget.problemDescription,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Worker: ${widget.workerName}',
-                  style: TextStyle(
-                    color: Colors.blue[300],
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Image navigation dots (if multiple images)
-          if (widget.imageUrls.length > 1)
-            Container(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              color: Colors.black87,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  widget.imageUrls.length,
-                  (index) => Container(
-                    margin: EdgeInsets.symmetric(horizontal: 4),
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _currentImageIndex == index
-                          ? Colors.orange
-                          : Colors.grey[600],
-                    ),
-                  ),
-                ),
-              ),
-            ),
         ],
+      ),
+    );
+  }
+}
+
+// Full screen image viewer
+class FullScreenImage extends StatelessWidget {
+  final String imageUrl;
+  final int imageIndex;
+  final int totalImages;
+
+  const FullScreenImage({
+    Key? key,
+    required this.imageUrl,
+    required this.imageIndex,
+    required this.totalImages,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: Text('Photo $imageIndex of $totalImages'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+          ),
+        ),
       ),
     );
   }

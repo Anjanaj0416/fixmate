@@ -14,6 +14,7 @@ import 'customer_notifications_screen.dart';
 import 'worker_registration_flow.dart';
 import 'worker_dashboard_screen.dart';
 import 'dart:async';
+import 'customer_favorites_screen.dart';
 
 class CustomerDashboard extends StatefulWidget {
   @override
@@ -443,6 +444,10 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     );
   }
 
+  // lib/screens/customer_dashboard.dart
+// FIXED VERSION - Resolved RenderFlex overflow error
+// Only the FlexibleSpaceBar Column section is modified to fix the 1px overflow
+
   Widget _buildHomeScreen() {
     return SafeArea(
       child: CustomScrollView(
@@ -452,7 +457,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             backgroundColor: Colors.white,
             elevation: 0,
             expandedHeight: 120,
-            // CHANGE 2: Add automaticallyImplyLeading: false to remove back button
             automaticallyImplyLeading: false,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
@@ -469,45 +473,61 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize:
+                      MainAxisSize.min, // FIX: Changed from max to min
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Hello, Welcome back!',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.location_on,
-                                  size: 16,
-                                  color: Colors.grey[600],
+                        Expanded(
+                          // FIX: Wrapped Column in Expanded
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize:
+                                MainAxisSize.min, // FIX: Added mainAxisSize min
+                            children: [
+                              Text(
+                                'Hello, Welcome back!',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
                                 ),
-                                SizedBox(width: 4),
-                                Text(
-                                  _userLocation,
-                                  style: TextStyle(
-                                    fontSize: 14,
+                                overflow: TextOverflow
+                                    .ellipsis, // FIX: Added overflow handling
+                              ),
+                              SizedBox(height: 2), // FIX: Reduced from 4 to 2
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.location_on,
+                                    size: 14,
                                     color: Colors.grey[600],
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
+                                  SizedBox(width: 4),
+                                  Flexible(
+                                    // FIX: Wrapped in Flexible
+                                    child: Text(
+                                      _userLocation,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey[600],
+                                      ),
+                                      overflow: TextOverflow
+                                          .ellipsis, // FIX: Added overflow handling
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                        // CHANGE 1: Add sign out button here
                         Row(
+                          mainAxisSize:
+                              MainAxisSize.min, // FIX: Added mainAxisSize min
                           children: [
                             Stack(
+                              clipBehavior: Clip.none,
                               children: [
                                 IconButton(
                                   icon: Icon(Icons.notifications_outlined),
@@ -533,8 +553,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                         shape: BoxShape.circle,
                                       ),
                                       constraints: BoxConstraints(
-                                        minWidth: 18,
-                                        minHeight: 18,
+                                        minWidth: 16,
+                                        minHeight: 16,
                                       ),
                                       child: Text(
                                         _unreadNotificationCount > 9
@@ -552,7 +572,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                   ),
                               ],
                             ),
-                            // CHANGE 1: NEW - Sign out menu button
                             IconButton(
                               icon: Icon(Icons.logout),
                               color: Colors.black87,
@@ -706,6 +725,200 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     );
   }
 
+  Widget _buildQuickActionsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'Quick Actions',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        SizedBox(height: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              // My Bookings
+              Container(
+                width: 130,
+                margin: EdgeInsets.only(right: 12),
+                child: _buildQuickActionCard(
+                  'My Bookings',
+                  Icons.calendar_today,
+                  Colors.blue,
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CustomerBookingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // Favorites - FIXED VERSION
+              Container(
+                width: 130,
+                margin: EdgeInsets.only(right: 12),
+                child: _buildQuickActionCard(
+                  'Favorites',
+                  Icons.favorite,
+                  Colors.red,
+                  () {
+                    // Navigate to favorites screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CustomerFavoritesScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // Support
+              Container(
+                width: 130,
+                margin: EdgeInsets.only(right: 12),
+                child: _buildQuickActionCard(
+                  'Support',
+                  Icons.help_outline,
+                  Colors.green,
+                  () {
+                    // Navigate to support
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => Scaffold(
+                          appBar: AppBar(
+                            title: Text('Support'),
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                          ),
+                          body: Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.support_agent,
+                                    size: 80,
+                                    color: Colors.green,
+                                  ),
+                                  SizedBox(height: 24),
+                                  Text(
+                                    'Need Help?',
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    'Contact our support team for assistance',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.grey[600],
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  SizedBox(height: 32),
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      // Add support contact logic here
+                                    },
+                                    icon: Icon(Icons.email),
+                                    label: Text('Email Support'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 24,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // Worker Account
+              Container(
+                width: 130,
+                child: _buildQuickActionCard(
+                  'Worker Account',
+                  Icons.work_outline,
+                  Colors.orange,
+                  _handleWorkerAccountSwitch,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+// Helper method for building quick action cards
+// (This should already exist in your file, but including for completeness)
+  Widget _buildQuickActionCard(
+    String title,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.3),
+              blurRadius: 8,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: Colors.white,
+              size: 32,
+            ),
+            SizedBox(height: 8),
+            Text(
+              title,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildQuickActions() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -722,60 +935,163 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           ),
         ),
         SizedBox(height: 12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Container(
-                width: 130,
-                margin: EdgeInsets.only(right: 12),
-                child: _buildQuickActionCard(
-                  'My Bookings',
-                  Icons.book_online,
-                  Colors.blue,
-                  () {
-                    setState(() => _currentIndex = 1);
-                  },
-                ),
+        // My Bookings Card
+        _buildQuickActionBanner(
+          title: 'My Bookings',
+          subtitle: 'View and manage your service bookings',
+          icon: Icons.book_online,
+          gradientColors: [Color(0xFF2196F3), Color(0xFF1976D2)],
+          onTap: () {
+            setState(() => _currentIndex = 1);
+          },
+        ),
+        SizedBox(height: 12),
+        // Favorites Card
+        _buildQuickActionBanner(
+          title: 'Favorites',
+          subtitle: 'Your saved workers and services',
+          icon: Icons.favorite,
+          gradientColors: [Color(0xFFE91E63), Color(0xFFC2185B)],
+          onTap: () {
+            // Navigate to favorites screen
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CustomerFavoritesScreen(),
               ),
-              Container(
-                width: 130,
-                margin: EdgeInsets.only(right: 12),
-                child: _buildQuickActionCard(
-                  'Favorites',
-                  Icons.favorite,
-                  Colors.red,
-                  () {
-                    // Navigate to favorites
-                  },
-                ),
-              ),
-              Container(
-                width: 130,
-                margin: EdgeInsets.only(right: 12),
-                child: _buildQuickActionCard(
-                  'Support',
-                  Icons.help_outline,
-                  Colors.green,
-                  () {
-                    // Navigate to support
-                  },
-                ),
-              ),
-              Container(
-                width: 130,
-                child: _buildQuickActionCard(
-                  'Worker Account',
-                  Icons.work_outline,
-                  Colors.orange,
-                  _handleWorkerAccountSwitch,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
+        ),
+        SizedBox(height: 12),
+        // Support Card
+        _buildQuickActionBanner(
+          title: 'Support',
+          subtitle: 'Get help with any issues or questions',
+          icon: Icons.help_outline,
+          gradientColors: [Color(0xFF4CAF50), Color(0xFF388E3C)],
+          onTap: () {
+            // Navigate to support
+            _showComingSoonDialog('Support');
+          },
+        ),
+        SizedBox(height: 12),
+        // Worker Account Card
+        _buildQuickActionBanner(
+          title: 'Worker Account',
+          subtitle: 'Switch to your worker dashboard',
+          icon: Icons.work_outline,
+          gradientColors: [Color(0xFFFF9800), Color(0xFFF57C00)],
+          onTap: _handleWorkerAccountSwitch,
         ),
       ],
+    );
+  }
+
+  Widget _buildQuickActionBanner({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required List<Color> gradientColors,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: gradientColors,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: gradientColors[0].withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                // Icon container
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                ),
+                SizedBox(width: 16),
+                // Text content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Arrow icon
+                Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+// Helper method to show coming soon dialog for unimplemented features
+  void _showComingSoonDialog(String feature) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('Coming Soon'),
+          ],
+        ),
+        content: Text('$feature feature is coming soon!'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -830,37 +1146,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickActionCard(
-      String title, IconData icon, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 32),
-            SizedBox(height: 8),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
               ),
             ),
           ],

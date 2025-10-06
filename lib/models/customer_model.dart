@@ -10,6 +10,7 @@ class CustomerModel {
   final String phoneNumber;
   final CustomerLocation? location;
   final List<String> preferredServices;
+  final List<String> favoriteWorkers; // NEW FIELD - Add this line
   final CustomerPreferences preferences;
   final bool verified;
   final DateTime? createdAt;
@@ -24,12 +25,14 @@ class CustomerModel {
     required this.phoneNumber,
     this.location,
     this.preferredServices = const [],
+    this.favoriteWorkers = const [], // NEW FIELD - Add this line
     required this.preferences,
     this.verified = false,
     this.createdAt,
     this.lastActive,
   });
 
+  // Update fromFirestore method (around line 36):
   factory CustomerModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
@@ -44,6 +47,8 @@ class CustomerModel {
           ? CustomerLocation.fromMap(data['location'])
           : null,
       preferredServices: List<String>.from(data['preferred_services'] ?? []),
+      favoriteWorkers:
+          List<String>.from(data['favorite_workers'] ?? []), // NEW LINE
       preferences: CustomerPreferences.fromMap(data['preferences'] ?? {}),
       verified: data['verified'] ?? false,
       createdAt: (data['created_at'] as Timestamp?)?.toDate(),
@@ -51,6 +56,7 @@ class CustomerModel {
     );
   }
 
+  // Update toFirestore method (around line 53):
   Map<String, dynamic> toFirestore() {
     return {
       'customer_id': customerId,
@@ -61,6 +67,7 @@ class CustomerModel {
       'phone_number': phoneNumber,
       'location': location?.toMap(),
       'preferred_services': preferredServices,
+      'favorite_workers': favoriteWorkers, // NEW LINE
       'preferences': preferences.toMap(),
       'verified': verified,
       'created_at': createdAt != null
@@ -70,6 +77,7 @@ class CustomerModel {
     };
   }
 
+  // Update copyWith method (around line 72):
   CustomerModel copyWith({
     String? customerId,
     String? customerName,
@@ -79,6 +87,7 @@ class CustomerModel {
     String? phoneNumber,
     CustomerLocation? location,
     List<String>? preferredServices,
+    List<String>? favoriteWorkers, // NEW PARAMETER
     CustomerPreferences? preferences,
     bool? verified,
     DateTime? createdAt,
@@ -93,6 +102,7 @@ class CustomerModel {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       location: location ?? this.location,
       preferredServices: preferredServices ?? this.preferredServices,
+      favoriteWorkers: favoriteWorkers ?? this.favoriteWorkers, // NEW LINE
       preferences: preferences ?? this.preferences,
       verified: verified ?? this.verified,
       createdAt: createdAt ?? this.createdAt,
