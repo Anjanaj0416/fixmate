@@ -195,6 +195,60 @@ class ChatService {
     });
   }
 
+  // lib/services/chat_service.dart
+// UPDATED - Add this new method to your existing chat_service.dart file
+// Find the getWorkerChatsStream method and add this NEW method right after it
+
+  // NEW METHOD: Get worker chats checking BOTH worker_id and UID
+  static Stream<List<ChatRoom>> getWorkerChatsStreamWithBothIds(
+    String workerId,
+    String workerUid,
+  ) {
+    print('🔍 Getting worker chats for:');
+    print('   Worker ID (formatted): $workerId');
+    print('   Worker UID (Firebase): $workerUid');
+
+    return _firestore
+        .collection('chat_rooms')
+        .snapshots()
+        .asyncMap((snapshot) async {
+      print('📊 Total chat rooms in database: ${snapshot.docs.length}');
+
+      List<ChatRoom> matchingChats = [];
+
+      for (var doc in snapshot.docs) {
+        var data = doc.data() as Map<String, dynamic>;
+        String chatWorkerId = data['worker_id'] ?? '';
+
+        // Check if this chat belongs to the worker (by either ID or UID)
+        if (chatWorkerId == workerId || chatWorkerId == workerUid) {
+          matchingChats.add(ChatRoom.fromFirestore(doc));
+          print('✅ Match found: Chat ${doc.id}');
+          print('   Chat worker_id: $chatWorkerId');
+          print('   Customer: ${data['customer_name']}');
+          print('   Last message: ${data['last_message']}');
+        }
+      }
+
+      if (matchingChats.isEmpty) {
+        print('⚠️ No matching chats found');
+        print('📝 Checking all chat room worker_ids:');
+        for (var doc in snapshot.docs.take(5)) {
+          var data = doc.data() as Map<String, dynamic>;
+          print('   - Chat ${doc.id}: worker_id = ${data['worker_id']}');
+        }
+      } else {
+        print('✅ Found ${matchingChats.length} matching chats');
+      }
+
+      // Sort by last message time (descending)
+      matchingChats
+          .sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+
+      return matchingChats;
+    });
+  }
+
   // Create or get existing chat room
   static Future<String> createOrGetChatRoom({
     required String bookingId,

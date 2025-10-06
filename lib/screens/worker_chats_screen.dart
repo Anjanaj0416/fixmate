@@ -1,5 +1,5 @@
 // lib/screens/worker_chats_screen.dart
-// FIXED VERSION - Properly loads worker ID and displays chats
+// FIXED VERSION - Now checks both worker_id and UID when loading chats
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,6 +15,7 @@ class WorkerChatsScreen extends StatefulWidget {
 class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
   User? _currentUser;
   String? _workerId;
+  String? _workerUid;
   bool _isLoading = true;
 
   @override
@@ -29,6 +30,8 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
     _currentUser = FirebaseAuth.instance.currentUser;
     if (_currentUser != null) {
       try {
+        _workerUid = _currentUser!.uid;
+
         // Try to get worker by UID first
         DocumentSnapshot workerDoc = await FirebaseFirestore.instance
             .collection('workers')
@@ -36,13 +39,12 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
             .get();
 
         if (workerDoc.exists) {
+          var data = workerDoc.data() as Map<String, dynamic>;
           setState(() {
-            _workerId =
-                (workerDoc.data() as Map<String, dynamic>)['worker_id'] ??
-                    _currentUser!.uid;
+            _workerId = data['worker_id'] ?? _currentUser!.uid;
             _isLoading = false;
           });
-          print('✅ Worker loaded: $_workerId');
+          print('✅ Worker loaded: $_workerId (UID: $_workerUid)');
           return;
         }
 
@@ -54,13 +56,12 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
             .get();
 
         if (workerQuery.docs.isNotEmpty) {
+          var data = workerQuery.docs.first.data() as Map<String, dynamic>;
           setState(() {
-            _workerId = (workerQuery.docs.first.data()
-                    as Map<String, dynamic>)['worker_id'] ??
-                workerQuery.docs.first.id;
+            _workerId = data['worker_id'] ?? workerQuery.docs.first.id;
             _isLoading = false;
           });
-          print('✅ Worker loaded by email: $_workerId');
+          print('✅ Worker loaded by email: $_workerId (UID: $_workerUid)');
         } else {
           print('❌ Worker not found');
           setState(() => _isLoading = false);
@@ -180,7 +181,11 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
           // Chat List
           Expanded(
             child: StreamBuilder<List<ChatRoom>>(
-              stream: ChatService.getWorkerChatsStream(_workerId!),
+              // FIXED: Now passes both worker_id and UID
+              stream: ChatService.getWorkerChatsStreamWithBothIds(
+                _workerId!,
+                _workerUid!,
+              ),
               builder: (context, snapshot) {
                 print('🔄 Stream state: ${snapshot.connectionState}');
 
@@ -246,64 +251,69 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
                 }
 
                 List<ChatRoom> chats = snapshot.data!;
-                print('✅ Loaded ${chats.length} chats for worker');
 
                 return ListView.builder(
                   itemCount: chats.length,
+                  padding: EdgeInsets.symmetric(vertical: 8),
                   itemBuilder: (context, index) {
-                    ChatRoom chatRoom = chats[index];
-                    bool hasUnread = chatRoom.unreadCountWorker > 0;
+                    ChatRoom chat = chats[index];
+                    bool hasUnread = chat.unreadCountWorker > 0;
 
                     return Card(
-                      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      margin: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       elevation: hasUnread ? 3 : 1,
+                      color: hasUnread ? Colors.blue[50] : Colors.white,
                       child: ListTile(
-                        leading: Stack(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.blue,
+                          child: Text(
+                            chat.customerName.isNotEmpty
+                                ? chat.customerName[0].toUpperCase()
+                                : 'C',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        title: Row(
                           children: [
-                            CircleAvatar(
-                              backgroundColor: Colors.blue,
-                              child: Icon(Icons.person, color: Colors.white),
+                            Expanded(
+                              child: Text(
+                                chat.customerName,
+                                style: TextStyle(
+                                  fontWeight: hasUnread
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
+                                ),
+                              ),
                             ),
                             if (hasUnread)
-                              Positioned(
-                                right: 0,
-                                top: 0,
-                                child: Container(
-                                  padding: EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Text(
-                                    '${chatRoom.unreadCountWorker}',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${chat.unreadCountWorker}',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
                           ],
                         ),
-                        title: Text(
-                          chatRoom.customerName,
-                          style: TextStyle(
-                            fontWeight:
-                                hasUnread ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Booking: ${chatRoom.bookingId.substring(0, 8)}...',
-                              style:
-                                  TextStyle(fontSize: 11, color: Colors.grey),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              chatRoom.lastMessage,
+                              chat.lastMessage,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -312,15 +322,21 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
                                     : FontWeight.normal,
                               ),
                             ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Booking: ${chat.bookingId.substring(0, 8)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
                           ],
                         ),
                         trailing: Text(
-                          _formatTime(chatRoom.lastMessageTime),
+                          _formatTime(chat.lastMessageTime),
                           style: TextStyle(
-                            fontSize: 11,
-                            color: hasUnread ? Colors.orange : Colors.grey,
-                            fontWeight:
-                                hasUnread ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                            color: Colors.grey[600],
                           ),
                         ),
                         onTap: () {
@@ -328,9 +344,9 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (context) => ChatScreen(
-                                chatId: chatRoom.chatId,
-                                bookingId: chatRoom.bookingId,
-                                otherUserName: chatRoom.customerName,
+                                chatId: chat.chatId,
+                                bookingId: chat.bookingId,
+                                otherUserName: chat.customerName,
                                 currentUserType: 'worker',
                               ),
                             ),
@@ -349,17 +365,17 @@ class _WorkerChatsScreenState extends State<WorkerChatsScreen> {
   }
 
   String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final difference = now.difference(time);
+    DateTime now = DateTime.now();
+    Duration diff = now.difference(time);
 
-    if (difference.inDays == 0) {
-      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-    } else if (difference.inDays == 1) {
-      return 'Yesterday';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays}d ago';
     } else {
-      return '${time.day}/${time.month}/${time.year}';
+      return '${time.day}/${time.month}';
     }
   }
 }
