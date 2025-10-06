@@ -12,6 +12,7 @@ class StorageService {
 
   /// Upload issue photo to Firebase Storage
   /// Returns the download URL
+  /// Works on Web, Mobile, and Desktop platforms
   static Future<String> uploadIssuePhoto({
     required XFile imageFile,
   }) async {
@@ -55,7 +56,7 @@ class StorageService {
 
   /// ✅ FIXED: Upload worker profile picture with consistent filename
   /// Returns the download URL
-  /// Uses a fixed filename so the URL remains consistent across uploads
+  /// Uses a fixed filename 'profile_picture' so the URL remains consistent
   static Future<String> uploadWorkerProfilePicture({
     required XFile imageFile,
   }) async {
@@ -81,26 +82,17 @@ class StorageService {
       print('📤 Uploading profile picture ${bytes.length} bytes...');
       print('📍 Path: worker_profiles/${user.uid}/$fileName');
 
-      // ✅ Add metadata with cache control
+      // ✅ FIX: Add cache control to prevent caching issues
       UploadTask uploadTask = storageRef.putData(
         bytes,
         SettableMetadata(
           contentType: _getContentType(extension),
           cacheControl: 'public, max-age=300', // Cache for 5 minutes
-          customMetadata: {
-            'uploadedAt': DateTime.now().toIso8601String(),
-            'userId': user.uid,
-          },
         ),
       );
 
       TaskSnapshot snapshot = await uploadTask;
-
-      // ✅ Wait for upload to complete fully
-      await Future.delayed(Duration(milliseconds: 1000));
-
-      // ✅ Get fresh download URL with new token
-      String downloadUrl = await storageRef.getDownloadURL();
+      String downloadUrl = await snapshot.ref.getDownloadURL();
 
       print('✅ Profile picture uploaded successfully!');
       print('🔗 Download URL: $downloadUrl');
@@ -112,7 +104,8 @@ class StorageService {
     }
   }
 
-  /// Delete old profile picture from Firebase Storage (optional)
+  /// ✅ Delete old profile picture from Firebase Storage
+  /// This is now optional since we're overwriting the same file
   static Future<void> deleteProfilePicture(String imageUrl) async {
     try {
       if (imageUrl.isEmpty) return;
