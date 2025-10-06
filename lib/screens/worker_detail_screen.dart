@@ -31,6 +31,7 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
   bool _isBooking = false;
 
   // ==================== FIXED BOOKING METHOD ====================
+// ==================== FIXED BOOKING METHOD ====================
   Future<void> _handleBooking() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -46,8 +47,7 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
     try {
       print('\n========== BOOKING CREATION START ==========');
 
-      // Step 1: Check if worker exists or create new one
-      // CRITICAL FIX: This now returns worker_id (HM_XXXX), not Firebase UID
+      // CRITICAL FIX: Get the ACTUAL worker_id from database
       String? existingWorkerId = await WorkerStorageService.getExistingWorkerId(
         email: widget.worker.email,
         phoneNumber: widget.worker.phoneNumber,
@@ -80,6 +80,7 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
       }
 
       print('✅ Worker ID verified: $workerId');
+      print('   (NOT using ML dataset ID: ${widget.worker.workerId})');
 
       // Step 2: Get customer data
       DocumentSnapshot customerDoc = await FirebaseFirestore.instance
@@ -101,22 +102,15 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
           customerData['phone'] ?? customerData['phone_number'] ?? '';
       String customerEmail = customerData['email'] ?? user.email ?? '';
 
-      print('📋 Customer details:');
-      print('   ID: $customerId');
-      print('   Name: $customerName');
+      print('📋 Customer: $customerName ($customerId)');
 
-      // Step 3: Create booking with worker_id (HM_XXXX format)
-      print('📝 Creating booking with worker_id: $workerId');
-
-      // CRITICAL FIX: Pass worker_id (HM_XXXX), not Firebase UID
-      String bookingId = await BookingService.createBooking(
+      // Step 3: Create booking with DATABASE worker_id
+      String bookingId = await BookingService.createBookingWithValidation(
         customerId: customerId,
         customerName: customerName,
         customerPhone: customerPhone,
         customerEmail: customerEmail,
-        workerId: workerId, // ✅ This is HM_XXXX format now
-        workerName: widget.worker.workerName,
-        workerPhone: widget.worker.phoneNumber,
+        workerId: workerId, // ✅ Use database worker_id, not ML dataset ID
         serviceType: widget.worker.serviceType,
         subService: widget.worker.serviceType,
         issueType: 'general',
@@ -125,23 +119,196 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
         location: widget.worker.city,
         address: widget.worker.city,
         urgency: 'normal',
-        budgetRange: 'LKR ${widget.worker.dailyWageLkr}',
+        budgetRange: 'LKR ${widget.worker.dailyWageLkr} per day',
         scheduledDate: DateTime.now().add(Duration(days: 1)),
         scheduledTime: '09:00 AM',
       );
 
-      print('✅ Booking created successfully!');
-      print('   Booking ID: $bookingId');
-      print('   Worker ID: $workerId');
+      print('✅ Booking created: $bookingId');
       print('========== BOOKING CREATION END ==========\n');
 
       setState(() => _isBooking = false);
-      _showSuccessDialog(bookingId);
+
+      // Show success dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Booking Successful!'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Your booking has been created.'),
+              SizedBox(height: 8),
+              Text('Booking ID: $bookingId',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+              SizedBox(height: 8),
+              Text('Worker ID: $workerId',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                Navigator.pop(context); // Go back to previous screen
+              },
+              child: Text('OK'),
+            ),
+          ],
+        ),
+      );
     } catch (e) {
-      print('❌ Error creating booking: $e');
-      print('========== BOOKING CREATION END ==========\n');
+      print('❌ Error in booking: $e');
       setState(() => _isBooking = false);
-      _showErrorDialog('Booking failed: $e');
+      _showErrorDialog('Failed to create booking: $e');
+    }
+  }
+
+  // ==================== FIXED: CHAT WITH WORKER ====================
+  // This method is called when customer clicks "Chat with Worker" button
+  Future<void> _openChat(BuildContext context) async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        _showErrorDialog('Please login to chat');
+        return;
+      }
+
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()),
+      );
+
+      print('\n========== CHAT OPENING START ==========');
+      print('📧 ML Worker Email: ${widget.worker.email}');
+      print('📱 ML Worker Phone: ${widget.worker.phoneNumber}');
+      print('🆔 ML Dataset Worker ID: ${widget.worker.workerId}');
+
+      // CRITICAL FIX: Get the ACTUAL worker_id from database
+      // Don't use widget.worker.workerId (ML dataset ID)
+      String? databaseWorkerId = await WorkerStorageService.getExistingWorkerId(
+        email: widget.worker.email,
+        phoneNumber: widget.worker.phoneNumber,
+      );
+
+      if (databaseWorkerId == null) {
+        Navigator.pop(context); // Close loading
+        _showErrorDialog(
+          'Worker not found in database. Please book the worker first.',
+        );
+        return;
+      }
+
+      print('✅ Found database worker_id: $databaseWorkerId');
+      print('   (NOT using ML dataset ID: ${widget.worker.workerId})');
+
+      // Get customer data
+      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .get();
+
+      if (!customerDoc.exists) {
+        Navigator.pop(context);
+        _showErrorDialog('Customer profile not found');
+        return;
+      }
+
+      Map<String, dynamic> customerData =
+          customerDoc.data() as Map<String, dynamic>;
+
+      String customerId = customerData['customer_id'] ?? user.uid;
+      String customerName = customerData['customer_name'] ??
+          '${customerData['first_name']} ${customerData['last_name']}';
+
+      // Check if there's a booking first
+      QuerySnapshot bookingQuery = await FirebaseFirestore.instance
+          .collection('bookings')
+          .where('customer_id', isEqualTo: customerId)
+          .where('worker_id', isEqualTo: databaseWorkerId)
+          .orderBy('created_at', descending: true)
+          .limit(1)
+          .get();
+
+      String bookingId;
+      if (bookingQuery.docs.isEmpty) {
+        // No booking exists - suggest booking first
+        Navigator.pop(context);
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('No Booking Found'),
+            content: Text(
+              'You need to book this worker before chatting. Would you like to create a booking?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _handleBooking(); // Go to booking
+                },
+                child: Text('Book Worker'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      bookingId = (bookingQuery.docs.first.data()
+          as Map<String, dynamic>)['booking_id'];
+
+      print('📋 Using booking: $bookingId');
+
+      // Create or get chat room with DATABASE worker_id
+      String chatId = await ChatService.createOrGetChatRoom(
+        bookingId: bookingId,
+        customerId: customerId,
+        customerName: customerName,
+        workerId:
+            databaseWorkerId, // ✅ Use database worker_id, not ML dataset ID
+        workerName: widget.worker.workerName,
+      );
+
+      print('✅ Chat room ready: $chatId');
+      print('   Using worker_id: $databaseWorkerId');
+      print('========== CHAT OPENING END ==========\n');
+
+      // Close loading
+      Navigator.pop(context);
+
+      // Open chat screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(
+            chatId: chatId,
+            bookingId: bookingId,
+            otherUserName: widget.worker.workerName,
+            currentUserType: 'customer',
+          ),
+        ),
+      );
+    } catch (e) {
+      print('❌ Error opening chat: $e');
+      // Close loading if still open
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      _showErrorDialog('Failed to open chat: $e');
     }
   }
 
@@ -186,7 +353,7 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
         false;
   }
 
-  void _showSuccessDialog(String bookingId) {
+  /*void _showSuccessDialog(String bookingId) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -239,7 +406,7 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
         ],
       ),
     );
-  }
+  }*/
 
 // ADD this new method to your worker_detail_screen.dart file:
   Future<void> _openChatWithWorker(String bookingId) async {

@@ -1,5 +1,5 @@
 // lib/services/worker_storage_service.dart
-// CORRECTED VERSION - Matches your actual MLWorker class properties
+// COMPLETE FIXED VERSION - This prevents duplicate worker creation
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,6 +11,7 @@ class WorkerStorageService {
 
   /// Check if worker exists by phone OR email
   /// Returns the worker_id (HM_XXXX format) if found
+  /// CRITICAL FIX: Now also checks workers collection by phone AND email
   static Future<String?> getExistingWorkerId({
     required String email,
     required String phoneNumber,
@@ -29,6 +30,9 @@ class WorkerStorageService {
 
       if (userQuery.docs.isNotEmpty) {
         String uid = userQuery.docs.first.id;
+        print('   Found user account with UID: $uid');
+
+        // Check if this user has a worker profile
         DocumentSnapshot workerDoc =
             await _firestore.collection('workers').doc(uid).get();
 
@@ -37,20 +41,38 @@ class WorkerStorageService {
               (workerDoc.data() as Map<String, dynamic>)['worker_id'];
           print('✅ Found existing worker by email: $workerId');
           return workerId;
+        } else {
+          print('   User exists but no worker profile');
         }
       }
 
-      // Method 2: Check by phone number
-      QuerySnapshot workerQuery = await _firestore
+      // Method 2: Check by phone number in workers collection
+      QuerySnapshot workerQueryByPhone = await _firestore
           .collection('workers')
           .where('phone_number', isEqualTo: phoneNumber)
           .limit(1)
           .get();
 
-      if (workerQuery.docs.isNotEmpty) {
-        String workerId = (workerQuery.docs.first.data()
+      if (workerQueryByPhone.docs.isNotEmpty) {
+        String workerId = (workerQueryByPhone.docs.first.data()
             as Map<String, dynamic>)['worker_id'];
         print('✅ Found existing worker by phone: $workerId');
+        return workerId;
+      }
+
+      // Method 3: CRITICAL FIX - Check by email in workers collection
+      // This catches cases where email exists in workers but not in users
+      QuerySnapshot workerQueryByEmail = await _firestore
+          .collection('workers')
+          .where('email', isEqualTo: email.toLowerCase().trim())
+          .limit(1)
+          .get();
+
+      if (workerQueryByEmail.docs.isNotEmpty) {
+        String workerId = (workerQueryByEmail.docs.first.data()
+            as Map<String, dynamic>)['worker_id'];
+        print(
+            '✅ Found existing worker by email in workers collection: $workerId');
         return workerId;
       }
 
@@ -127,6 +149,7 @@ class WorkerStorageService {
 
   /// Store worker from ML dataset to Firebase
   /// RETURNS: worker_id (HM_XXXX format), NOT Firebase UID
+  /// CRITICAL FIX: Now properly checks for duplicates before creating
   static Future<String> storeWorkerFromML({
     required MLWorker mlWorker,
   }) async {
@@ -136,19 +159,21 @@ class WorkerStorageService {
       String email = mlWorker.email.toLowerCase().trim();
       String phone = mlWorker.phoneNumber.trim();
 
-      // CRITICAL: Check if worker already exists
+      // CRITICAL FIX: Check if worker already exists BEFORE creating
+      print('🔍 Step 1: Checking for existing worker...');
       String? existingWorkerId = await getExistingWorkerId(
         email: email,
         phoneNumber: phone,
       );
 
       if (existingWorkerId != null) {
-        print('✅ Worker already exists: $existingWorkerId');
+        print('✅ Worker already exists with worker_id: $existingWorkerId');
+        print('   Skipping creation to avoid duplicates');
         print('========== WORKER STORAGE END ==========\n');
-        return existingWorkerId; // Return the worker_id (HM_XXXX)
+        return existingWorkerId; // Return the existing worker_id (HM_XXXX)
       }
 
-      print('📝 Creating new worker account...');
+      print('📝 Step 2: No existing worker found, creating new account...');
 
       // Save current user context
       User? currentUser = _auth.currentUser;
@@ -161,6 +186,7 @@ class WorkerStorageService {
       String workerUid;
 
       try {
+        print('🔐 Creating Firebase Auth account...');
         workerCredential = await _auth.createUserWithEmailAndPassword(
           email: email,
           password: tempPassword,
@@ -169,13 +195,36 @@ class WorkerStorageService {
         print('✅ Firebase Auth account created: $workerUid');
       } catch (e) {
         if (e.toString().contains('email-already-in-use')) {
-          print('⚠️  Email exists, signing in...');
+          print('⚠️  Email exists in Auth, signing in...');
           workerCredential = await _auth.signInWithEmailAndPassword(
             email: email,
             password: tempPassword,
           );
           workerUid = workerCredential.user!.uid;
           print('✅ Signed in to existing account: $workerUid');
+
+          // CRITICAL: Double check if this worker already has a profile
+          DocumentSnapshot existingWorkerDoc =
+              await _firestore.collection('workers').doc(workerUid).get();
+
+          if (existingWorkerDoc.exists) {
+            String existingId =
+                (existingWorkerDoc.data() as Map<String, dynamic>)['worker_id'];
+            print('✅ Worker profile already exists: $existingId');
+
+            // Restore user session
+            if (currentUserEmail != null && currentUserUid != null) {
+              try {
+                await _auth.signOut();
+                print('🔄 Restored original user session');
+              } catch (e) {
+                print('⚠️  Could not restore session: $e');
+              }
+            }
+
+            print('========== WORKER STORAGE END ==========\n');
+            return existingId;
+          }
         } else {
           throw e;
         }
@@ -199,7 +248,7 @@ class WorkerStorageService {
         'first_name': firstName,
         'last_name': lastName,
         'service_type': mlWorker.serviceType,
-        'service_category': mlWorker.serviceType, // Same as service_type
+        'service_category': mlWorker.serviceType,
         'business_name':
             '$firstName\'s ${mlWorker.serviceType.replaceAll('_', ' ')} Service',
         'rating': mlWorker.rating,
@@ -212,8 +261,8 @@ class WorkerStorageService {
         'phone_number': phone,
         'location': {
           'city': mlWorker.city,
-          'district': mlWorker.city, // Use city as district
-          'latitude': 0.0, // Default, will be updated later
+          'district': mlWorker.city,
+          'latitude': 0.0,
           'longitude': 0.0,
         },
         'pricing': {
@@ -231,7 +280,7 @@ class WorkerStorageService {
             'end': '18:00',
           },
         },
-        'capabilities': [], // Empty for now
+        'capabilities': [],
         'profile': {
           'bio': mlWorker.bio,
           'profile_image': '',
@@ -239,11 +288,11 @@ class WorkerStorageService {
         },
       };
 
-      // Store in workers collection (document ID = Firebase UID)
+      // Store in workers collection
       await _firestore.collection('workers').doc(workerUid).set(workerData);
       print('✅ Worker document created in workers collection');
 
-      // Store in users collection (document ID = Firebase UID)
+      // Store in users collection
       Map<String, dynamic> userData = {
         'uid': workerUid,
         'email': email,
@@ -269,46 +318,43 @@ class WorkerStorageService {
         await _auth.signOut();
       }
 
-      print('✅ Worker stored successfully!');
+      print('✅ Worker stored successfully with worker_id: $workerId');
       print('========== WORKER STORAGE END ==========\n');
 
-      return workerId; // RETURN worker_id (HM_XXXX), NOT UID
+      // Return the worker_id (HM_XXXX format), NOT the Firebase UID
+      return workerId;
     } catch (e) {
       print('❌ Error storing worker: $e');
       print('========== WORKER STORAGE END ==========\n');
-      rethrow;
+
+      // Try to restore user session even on error
+      try {
+        await _auth.signOut();
+      } catch (signOutError) {
+        print('⚠️  Could not sign out: $signOutError');
+      }
+
+      throw Exception('Failed to store worker from ML: $e');
     }
   }
 
-  /// Get worker_id by email
-  static Future<String?> getWorkerIdByEmail(String email) async {
+  /// Get worker details by worker_id (HM_XXXX format)
+  static Future<Map<String, dynamic>?> getWorkerByWorkerId(
+      String workerId) async {
     try {
-      QuerySnapshot userQuery = await _firestore
-          .collection('users')
-          .where('email', isEqualTo: email.toLowerCase().trim())
+      QuerySnapshot query = await _firestore
+          .collection('workers')
+          .where('worker_id', isEqualTo: workerId)
           .limit(1)
           .get();
 
-      if (userQuery.docs.isNotEmpty) {
-        Map<String, dynamic>? userData =
-            userQuery.docs.first.data() as Map<String, dynamic>?;
-        if (userData != null && userData.containsKey('worker_id')) {
-          return userData['worker_id'];
-        }
-
-        // If not in users, check workers collection
-        String uid = userQuery.docs.first.id;
-        DocumentSnapshot workerDoc =
-            await _firestore.collection('workers').doc(uid).get();
-
-        if (workerDoc.exists) {
-          return (workerDoc.data() as Map<String, dynamic>)['worker_id'];
-        }
+      if (query.docs.isEmpty) {
+        return null;
       }
 
-      return null;
+      return query.docs.first.data() as Map<String, dynamic>;
     } catch (e) {
-      print('Error getting worker_id by email: $e');
+      print('Error getting worker by worker_id: $e');
       return null;
     }
   }
