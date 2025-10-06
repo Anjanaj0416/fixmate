@@ -1,4 +1,6 @@
 // lib/screens/enhanced_worker_selection_screen.dart
+// MODIFIED VERSION - Added Location Filter Dropdown
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -48,12 +50,15 @@ class _EnhancedWorkerSelectionScreenState
   String _selectedSortBy = 'rating';
   bool _showFilters = false;
 
-  // FIXED: Initialize filters to show ALL workers
+  // Initialize filters to show ALL workers
   double _maxDistance = 100.0;
-  double _minRating = 0.0; // Changed from 3.0 to 0.0
+  double _minRating = 0.0;
   RangeValues _experienceRange = RangeValues(0, 20);
   RangeValues _priceRange = RangeValues(0, 100000);
-  String _locationFilter = 'all';
+
+  // ✅ NEW: Location filter with default value 'all'
+  String _selectedLocationFilter = 'all';
+  List<String> _availableLocations = ['all']; // Will be populated from workers
 
   @override
   void initState() {
@@ -135,14 +140,28 @@ class _EnhancedWorkerSelectionScreenState
         print('DEBUG: Manual filtering found ${workers.length} workers');
       }
 
-      // IMPORTANT: Update state with ALL workers - don't apply filters yet
+      // ✅ NEW: Extract unique locations from workers
+      Set<String> locationSet = {};
+      for (var worker in workers) {
+        if (worker.location.city.isNotEmpty) {
+          locationSet.add(worker.location.city);
+        }
+      }
+      List<String> locations = locationSet.toList()..sort();
+
+      // Update state with ALL workers and available locations
       setState(() {
         _allWorkers = workers;
         _filteredWorkers = workers; // Show ALL workers initially
+        _availableLocations = [
+          'all',
+          ...locations
+        ]; // Add 'all' as first option
         _isLoading = false;
       });
 
       print('DEBUG: Successfully loaded ${workers.length} workers');
+      print('DEBUG: Available locations: $_availableLocations');
       print('DEBUG: _allWorkers.length = ${_allWorkers.length}');
       print('DEBUG: _filteredWorkers.length = ${_filteredWorkers.length}');
 
@@ -160,7 +179,7 @@ class _EnhancedWorkerSelectionScreenState
   void _applySortingAndFilters() {
     print('DEBUG: Applying sorting and filters...');
     print('DEBUG: Starting with ${_allWorkers.length} workers');
-    print('DEBUG: Min rating filter: $_minRating');
+    print('DEBUG: Selected location filter: $_selectedLocationFilter');
 
     List<WorkerModel> filtered = List.from(_allWorkers);
 
@@ -188,9 +207,10 @@ class _EnhancedWorkerSelectionScreenState
         return false;
       }
 
-      // Location filter
-      if (_locationFilter != 'all' &&
-          worker.location.city.toLowerCase() != _locationFilter.toLowerCase()) {
+      // ✅ MODIFIED: Location filter - only filter if not 'all'
+      if (_selectedLocationFilter != 'all' &&
+          worker.location.city.toLowerCase() !=
+              _selectedLocationFilter.toLowerCase()) {
         print(
             'DEBUG: Filtering out ${worker.workerName} - location ${worker.location.city}');
         return false;
@@ -235,7 +255,7 @@ class _EnhancedWorkerSelectionScreenState
       _minRating = 0.0;
       _experienceRange = RangeValues(0, 20);
       _priceRange = RangeValues(0, 100000);
-      _locationFilter = 'all';
+      _selectedLocationFilter = 'all'; // ✅ MODIFIED: Reset location to 'all'
       _filteredWorkers = List.from(_allWorkers);
     });
     print('DEBUG: Filters cleared, showing ${_filteredWorkers.length} workers');
@@ -258,6 +278,9 @@ class _EnhancedWorkerSelectionScreenState
           // Sort and Filter Bar
           _buildSortAndFilterBar(),
 
+          // ✅ NEW: Location Filter Dropdown
+          _buildLocationFilterBar(),
+
           // Worker Count
           if (!_isLoading)
             Padding(
@@ -276,7 +299,87 @@ class _EnhancedWorkerSelectionScreenState
           Expanded(
             child: _isLoading
                 ? Center(child: CircularProgressIndicator(color: Colors.orange))
-                : _buildWorkerList(),
+                : _filteredWorkers.isEmpty
+                    ? _buildEmptyState()
+                    : RefreshIndicator(
+                        onRefresh: _loadWorkers,
+                        child: ListView.builder(
+                          padding: EdgeInsets.all(16),
+                          itemCount: _filteredWorkers.length,
+                          itemBuilder: (context, index) {
+                            return _buildWorkerCard(_filteredWorkers[index]);
+                          },
+                        ),
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ NEW: Location Filter Bar Widget
+  Widget _buildLocationFilterBar() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.orange[50],
+        border: Border(
+          bottom: BorderSide(color: Colors.grey[300]!, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.location_on, color: Colors.orange[700], size: 20),
+          SizedBox(width: 8),
+          Text(
+            'Location:',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[300]!),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedLocationFilter,
+                  isExpanded: true,
+                  icon: Icon(Icons.arrow_drop_down, color: Colors.orange[700]),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[800]),
+                  items: _availableLocations.map((String location) {
+                    return DropdownMenuItem<String>(
+                      value: location,
+                      child: Text(
+                        location == 'all' ? 'All Locations' : location,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: location == _selectedLocationFilter
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        _selectedLocationFilter = newValue;
+                      });
+                      _applySortingAndFilters();
+                      print('DEBUG: Location filter changed to: $newValue');
+                    }
+                  },
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -285,7 +388,7 @@ class _EnhancedWorkerSelectionScreenState
 
   Widget _buildSortAndFilterBar() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -293,332 +396,208 @@ class _EnhancedWorkerSelectionScreenState
             color: Colors.grey.withOpacity(0.1),
             spreadRadius: 1,
             blurRadius: 3,
-            offset: Offset(0, 1),
+            offset: Offset(0, 2),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Sort By Row
           Row(
             children: [
-              Text(
-                'Sort by:',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              SizedBox(width: 16),
+              // Sort Dropdown
               Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _buildSortChip('Rating', 'rating', Icons.star),
-                      _buildSortChip('Price', 'price', Icons.attach_money),
-                      _buildSortChip('Experience', 'experience', Icons.work),
-                      _buildSortChip(
-                          'Jobs Completed', 'jobs', Icons.check_circle),
-                    ],
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedSortBy,
+                      isExpanded: true,
+                      icon: Icon(Icons.sort, size: 20),
+                      items: [
+                        DropdownMenuItem(
+                            value: 'rating', child: Text('Sort: Rating')),
+                        DropdownMenuItem(
+                            value: 'price', child: Text('Sort: Price')),
+                        DropdownMenuItem(
+                            value: 'experience',
+                            child: Text('Sort: Experience')),
+                        DropdownMenuItem(
+                            value: 'jobs', child: Text('Sort: Jobs Completed')),
+                      ],
+                      onChanged: (value) {
+                        setState(() => _selectedSortBy = value!);
+                        _applySortingAndFilters();
+                      },
+                    ),
                   ),
                 ),
               ),
-              IconButton(
-                icon: Icon(
-                  _showFilters ? Icons.filter_list : Icons.filter_list_outlined,
-                  color: _showFilters ? Colors.orange : Colors.grey,
-                ),
+              SizedBox(width: 12),
+              // Filter Button
+              ElevatedButton.icon(
                 onPressed: () {
-                  setState(() {
-                    _showFilters = !_showFilters;
-                  });
+                  setState(() => _showFilters = !_showFilters);
                 },
+                icon: Icon(Icons.filter_list, size: 18),
+                label: Text('Filters'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      _showFilters ? Colors.orange : Colors.grey[200],
+                  foregroundColor:
+                      _showFilters ? Colors.white : Colors.grey[800],
+                  elevation: 0,
+                ),
               ),
             ],
           ),
 
-          // Filters Panel
+          // Filter Panel
           if (_showFilters) ...[
             SizedBox(height: 16),
-            Divider(),
-            SizedBox(height: 8),
-            _buildFiltersPanel(),
+            _buildFilterPanel(),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildSortChip(String label, String value, IconData icon) {
-    bool isSelected = _selectedSortBy == value;
-    return Padding(
-      padding: EdgeInsets.only(right: 8),
-      child: FilterChip(
-        label: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon,
-                size: 16, color: isSelected ? Colors.white : Colors.grey),
-            SizedBox(width: 4),
-            Text(label),
-          ],
-        ),
-        selected: isSelected,
-        onSelected: (selected) {
-          setState(() {
-            _selectedSortBy = value;
-          });
-          _applySortingAndFilters();
-        },
-        selectedColor: Colors.orange,
-        labelStyle: TextStyle(
-          color: isSelected ? Colors.white : Colors.grey[700],
-        ),
+  Widget _buildFilterPanel() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
       ),
-    );
-  }
-
-  Widget _buildFiltersPanel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Filters',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            TextButton(
-              onPressed: _clearAllFilters,
-              child: Text('Clear All'),
-            ),
-          ],
-        ),
-        SizedBox(height: 8),
-
-        // Minimum Rating
-        Text('Minimum Rating: ${_minRating.toStringAsFixed(1)}'),
-        Slider(
-          value: _minRating,
-          min: 0,
-          max: 5,
-          divisions: 10,
-          activeColor: Colors.orange,
-          onChanged: (value) {
-            setState(() {
-              _minRating = value;
-            });
-          },
-          onChangeEnd: (value) {
-            _applySortingAndFilters();
-          },
-        ),
-
-        SizedBox(height: 8),
-
-        // Experience Range
-        Text(
-            'Experience: ${_experienceRange.start.round()} - ${_experienceRange.end.round()} years'),
-        RangeSlider(
-          values: _experienceRange,
-          min: 0,
-          max: 20,
-          divisions: 20,
-          activeColor: Colors.orange,
-          onChanged: (values) {
-            setState(() {
-              _experienceRange = values;
-            });
-          },
-          onChangeEnd: (values) {
-            _applySortingAndFilters();
-          },
-        ),
-
-        SizedBox(height: 8),
-
-        // Price Range
-        Text(
-            'Price Range: LKR ${_priceRange.start.round()} - LKR ${_priceRange.end.round()}'),
-        RangeSlider(
-          values: _priceRange,
-          min: 0,
-          max: 100000,
-          divisions: 100,
-          activeColor: Colors.orange,
-          onChanged: (values) {
-            setState(() {
-              _priceRange = values;
-            });
-          },
-          onChangeEnd: (values) {
-            _applySortingAndFilters();
-          },
-        ),
-
-        SizedBox(height: 8),
-
-        // Apply Filters Button
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: () {
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Rating Filter
+          Text('Minimum Rating: ${_minRating.toStringAsFixed(1)}⭐',
+              style: TextStyle(fontWeight: FontWeight.w600)),
+          Slider(
+            value: _minRating,
+            min: 0,
+            max: 5,
+            divisions: 10,
+            activeColor: Colors.orange,
+            onChanged: (value) {
+              setState(() => _minRating = value);
               _applySortingAndFilters();
-              setState(() {
-                _showFilters = false;
-              });
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              padding: EdgeInsets.symmetric(vertical: 12),
-            ),
-            child: Text('Apply Filters', style: TextStyle(color: Colors.white)),
           ),
+          SizedBox(height: 12),
+
+          // Experience Filter
+          Text(
+              'Experience: ${_experienceRange.start.round()}-${_experienceRange.end.round()} years',
+              style: TextStyle(fontWeight: FontWeight.w600)),
+          RangeSlider(
+            values: _experienceRange,
+            min: 0,
+            max: 20,
+            divisions: 20,
+            activeColor: Colors.orange,
+            onChanged: (values) {
+              setState(() => _experienceRange = values);
+              _applySortingAndFilters();
+            },
+          ),
+          SizedBox(height: 12),
+
+          // Price Filter
+          Text(
+              'Price Range: LKR ${_priceRange.start.round()}-${_priceRange.end.round()}',
+              style: TextStyle(fontWeight: FontWeight.w600)),
+          RangeSlider(
+            values: _priceRange,
+            min: 0,
+            max: 100000,
+            divisions: 100,
+            activeColor: Colors.orange,
+            onChanged: (values) {
+              setState(() => _priceRange = values);
+              _applySortingAndFilters();
+            },
+          ),
+          SizedBox(height: 16),
+
+          // Clear Filters Button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _clearAllFilters,
+              icon: Icon(Icons.clear_all),
+              label: Text('Clear All Filters'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.orange,
+                side: BorderSide(color: Colors.orange),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 80, color: Colors.grey[400]),
+            SizedBox(height: 16),
+            Text(
+              'No workers found',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Try adjusting your filters or changing the location',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _clearAllFilters,
+              icon: Icon(Icons.refresh),
+              label: Text('Reset Filters'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+            ),
+          ],
         ),
-      ],
-    );
-  }
-
-  Widget _buildWorkerList() {
-    print('DEBUG: Building worker list...');
-    print('DEBUG: _allWorkers.length = ${_allWorkers.length}');
-    print('DEBUG: _filteredWorkers.length = ${_filteredWorkers.length}');
-
-    // Check if we have any workers at all
-    if (_allWorkers.isEmpty) {
-      return _buildNoWorkersFound();
-    }
-
-    // Check if filtered list is empty but we have workers
-    if (_filteredWorkers.isEmpty && _allWorkers.isNotEmpty) {
-      return _buildNoWorkersMatchingFilters();
-    }
-
-    // Display the workers
-    return RefreshIndicator(
-      onRefresh: _loadWorkers,
-      color: Colors.orange,
-      child: ListView.builder(
-        padding: EdgeInsets.all(16),
-        itemCount: _filteredWorkers.length,
-        itemBuilder: (context, index) {
-          print(
-              'DEBUG: Building worker card for ${_filteredWorkers[index].workerName}');
-          return _buildWorkerCard(_filteredWorkers[index]);
-        },
       ),
     );
   }
-
-  Widget _buildNoWorkersFound() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.search_off,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          SizedBox(height: 16),
-          Text(
-            'No Professionals Available',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[600],
-            ),
-          ),
-          SizedBox(height: 8),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              'No workers found for ${widget.serviceType.replaceAll('_', ' ')} service.\nPlease try again later.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[500],
-              ),
-            ),
-          ),
-          SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _loadWorkers,
-            icon: Icon(Icons.refresh),
-            label: Text('Retry'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNoWorkersMatchingFilters() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.filter_list_off,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          SizedBox(height: 16),
-          Text(
-            'No Professionals Match Filters',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[600],
-            ),
-          ),
-          SizedBox(height: 8),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              'Try adjusting your filters or search criteria',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[500],
-              ),
-            ),
-          ),
-          SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _clearAllFilters,
-            icon: Icon(Icons.clear_all),
-            label: Text('Clear Filters'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // REPLACE THE _buildWorkerCard METHOD IN enhanced_worker_selection_screen.dart
-// Find the existing _buildWorkerCard method and replace it with this version
 
   Widget _buildWorkerCard(WorkerModel worker) {
     return Card(
-      elevation: 2,
       margin: EdgeInsets.only(bottom: 16),
+      elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Worker Header with Profile Picture
+            // Header Row
             Row(
               children: [
-                // ✅ Profile Picture with fallback to avatar
+                // Profile Picture
                 CircleAvatar(
                   radius: 30,
                   backgroundColor: Colors.orange[100],
@@ -628,19 +607,11 @@ class _EnhancedWorkerSelectionScreenState
                       : null,
                   child: worker.profilePictureUrl == null ||
                           worker.profilePictureUrl!.isEmpty
-                      ? Text(
-                          worker.workerName.isNotEmpty
-                              ? worker.workerName[0].toUpperCase()
-                              : 'W',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange[700],
-                          ),
-                        )
+                      ? Icon(Icons.person, size: 30, color: Colors.orange)
                       : null,
                 ),
                 SizedBox(width: 12),
+                // Worker Info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -655,151 +626,89 @@ class _EnhancedWorkerSelectionScreenState
                       Text(
                         worker.businessName,
                         style: TextStyle(
-                          color: Colors.grey[600],
                           fontSize: 14,
+                          color: Colors.grey[600],
                         ),
                       ),
-                      if (worker.verified)
-                        Row(
-                          children: [
-                            Icon(Icons.verified, size: 16, color: Colors.blue),
-                            SizedBox(width: 4),
-                            Text(
-                              'Verified',
-                              style: TextStyle(
-                                color: Colors.blue,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
+                      SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.star, color: Colors.amber, size: 16),
+                          SizedBox(width: 4),
+                          Text(
+                            worker.rating > 0
+                                ? '${worker.rating.toStringAsFixed(1)}'
+                                : 'New',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          SizedBox(width: 12),
+                          Icon(Icons.work, color: Colors.green, size: 16),
+                          SizedBox(width: 4),
+                          Text('${worker.jobsCompleted} jobs'),
+                        ],
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
 
-            SizedBox(height: 12),
+            Divider(height: 24),
 
-            // Stats Row
+            // Location
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildStatItem(
-                  Icons.star,
-                  worker.rating > 0
-                      ? '${worker.rating.toStringAsFixed(1)}'
-                      : 'New',
-                  'Rating',
-                ),
-                _buildStatItem(
-                  Icons.work,
-                  '${worker.experienceYears}',
-                  'Years Exp',
-                ),
-                _buildStatItem(
-                  Icons.check_circle,
-                  '${worker.jobsCompleted}',
-                  'Jobs',
+                Icon(Icons.location_on, size: 18, color: Colors.grey[600]),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${worker.location.city}, ${worker.location.state}',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                  ),
                 ),
               ],
             ),
-
-            SizedBox(height: 12),
-
-            // Minimum Charge and Location
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Minimum Charge',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                    Text(
-                      'LKR ${worker.pricing.minimumChargeLkr.toStringAsFixed(0)}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green[700],
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
-                    SizedBox(width: 4),
-                    Text(
-                      worker.location.city,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-
-            SizedBox(height: 12),
-
-            // Availability Badge
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: worker.availability.availableToday
-                    ? Colors.green[50]
-                    : Colors.orange[50],
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                worker.availability.availableToday
-                    ? 'Available Today'
-                    : 'Schedule Required',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: worker.availability.availableToday
-                      ? Colors.green[700]
-                      : Colors.orange[700],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-
-            SizedBox(height: 12),
-            Divider(),
             SizedBox(height: 8),
 
-            // ✅ Action Buttons Row
+            // Experience
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                // View Details Button
+                Icon(Icons.work_history, size: 18, color: Colors.grey[600]),
+                SizedBox(width: 8),
+                Text(
+                  '${worker.experienceYears} years experience',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+
+            // Pricing
+            Row(
+              children: [
+                Icon(Icons.payments, size: 18, color: Colors.green[700]),
+                SizedBox(width: 8),
+                Text(
+                  'From LKR ${worker.pricing.minimumChargeLkr.toStringAsFixed(0)}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green[700],
+                  ),
+                ),
+              ],
+            ),
+
+            SizedBox(height: 16),
+
+            // Action Buttons
+            Row(
+              children: [
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _showWorkerDetailsDialog(worker),
                     icon: Icon(Icons.info_outline, size: 18),
                     label: Text('Details'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.orange,
-                      side: BorderSide(color: Colors.orange),
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 8),
-                // View Rates Button
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _showRatesDialog(worker),
-                    icon: Icon(Icons.attach_money, size: 18),
-                    label: Text('Rates'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.green,
                       side: BorderSide(color: Colors.green),
@@ -808,7 +717,6 @@ class _EnhancedWorkerSelectionScreenState
                   ),
                 ),
                 SizedBox(width: 8),
-                // View Reviews Button
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _showReviewsDialog(worker),
@@ -854,7 +762,6 @@ class _EnhancedWorkerSelectionScreenState
     );
   }
 
-// ✅ NEW: Show Worker Details Dialog
   void _showWorkerDetailsDialog(WorkerModel worker) {
     showDialog(
       context: context,
@@ -869,7 +776,7 @@ class _EnhancedWorkerSelectionScreenState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Header with profile picture
+                  // Header
                   Row(
                     children: [
                       CircleAvatar(
@@ -881,14 +788,7 @@ class _EnhancedWorkerSelectionScreenState
                             : null,
                         child: worker.profilePictureUrl == null ||
                                 worker.profilePictureUrl!.isEmpty
-                            ? Text(
-                                worker.workerName[0].toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.orange[700],
-                                ),
-                              )
+                            ? Icon(Icons.person, size: 40, color: Colors.orange)
                             : null,
                       ),
                       SizedBox(width: 16),
@@ -905,26 +805,8 @@ class _EnhancedWorkerSelectionScreenState
                             ),
                             Text(
                               worker.businessName,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
+                              style: TextStyle(color: Colors.grey[600]),
                             ),
-                            if (worker.verified)
-                              Row(
-                                children: [
-                                  Icon(Icons.verified,
-                                      size: 16, color: Colors.blue),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Verified Professional',
-                                    style: TextStyle(
-                                      color: Colors.blue,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
                           ],
                         ),
                       ),
@@ -935,27 +817,27 @@ class _EnhancedWorkerSelectionScreenState
                     ],
                   ),
                   SizedBox(height: 20),
-                  Divider(),
-                  SizedBox(height: 16),
 
                   // Bio
-                  Text(
-                    'About',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  if (worker.profile.bio.isNotEmpty) ...[
+                    Text(
+                      'About',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    worker.profile.bio,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                  ),
-                  SizedBox(height: 16),
+                    SizedBox(height: 8),
+                    Text(
+                      worker.profile.bio,
+                      style: TextStyle(color: Colors.grey[700]),
+                    ),
+                    SizedBox(height: 16),
+                  ],
 
-                  // Contact Information
+                  // Contact Info
                   Text(
-                    'Contact Information',
+                    'Contact',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -964,8 +846,8 @@ class _EnhancedWorkerSelectionScreenState
                   SizedBox(height: 8),
                   _buildDetailRow(Icons.phone, worker.contact.phoneNumber),
                   _buildDetailRow(Icons.email, worker.contact.email),
-                  if (worker.contact.website != null)
-                    _buildDetailRow(Icons.language, worker.contact.website!),
+                  if (worker.contact.whatsappAvailable)
+                    _buildDetailRow(Icons.message, 'WhatsApp Available'),
                   SizedBox(height: 16),
 
                   // Location
@@ -984,43 +866,30 @@ class _EnhancedWorkerSelectionScreenState
                   SizedBox(height: 16),
 
                   // Specializations
-                  Text(
-                    'Specializations',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  if (worker.profile.specializations.isNotEmpty) ...[
+                    Text(
+                      'Specializations',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: worker.profile.specializations.map((spec) {
-                      return Chip(
-                        label: Text(spec, style: TextStyle(fontSize: 12)),
-                        backgroundColor: Colors.orange[50],
-                        labelStyle: TextStyle(color: Colors.orange[700]),
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      );
-                    }).toList(),
-                  ),
-                  SizedBox(height: 16),
-
-                  // Languages
-                  Text(
-                    'Languages',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                    SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: worker.profile.specializations.map((spec) {
+                        return Chip(
+                          label: Text(spec, style: TextStyle(fontSize: 12)),
+                          backgroundColor: Colors.orange[50],
+                          labelStyle: TextStyle(color: Colors.orange[700]),
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        );
+                      }).toList(),
                     ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    worker.capabilities.languages.join(', '),
-                    style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                  ),
-                  SizedBox(height: 16),
+                    SizedBox(height: 16),
+                  ],
 
                   // Capabilities
                   Text(
@@ -1032,7 +901,7 @@ class _EnhancedWorkerSelectionScreenState
                   ),
                   SizedBox(height: 8),
                   if (worker.capabilities.toolsOwned)
-                    _buildCapabilityChip('Tools Owned', Icons.build),
+                    _buildCapabilityChip('Owns Tools', Icons.build),
                   if (worker.capabilities.vehicleAvailable)
                     _buildCapabilityChip(
                         'Vehicle Available', Icons.directions_car),
@@ -1040,282 +909,67 @@ class _EnhancedWorkerSelectionScreenState
                     _buildCapabilityChip('Certified', Icons.verified),
                   if (worker.capabilities.insurance)
                     _buildCapabilityChip('Insured', Icons.shield),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+                  SizedBox(height: 16),
 
-// ✅ NEW: Show Rates Dialog
-  void _showRatesDialog(WorkerModel worker) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.attach_money, color: Colors.green),
-            SizedBox(width: 8),
-            Text('Pricing Details'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildPriceRow('Daily Wage',
-                'LKR ${worker.pricing.dailyWageLkr.toStringAsFixed(0)}'),
-            _buildPriceRow('Half Day Rate',
-                'LKR ${worker.pricing.halfDayRateLkr.toStringAsFixed(0)}'),
-            _buildPriceRow('Minimum Charge',
-                'LKR ${worker.pricing.minimumChargeLkr.toStringAsFixed(0)}'),
-            _buildPriceRow('Overtime Rate',
-                'LKR ${worker.pricing.overtimeHourlyLkr.toStringAsFixed(0)}/hour'),
-            if (worker.pricing.emergencyRateMultiplier > 1.0)
-              _buildPriceRow('Emergency Multiplier',
-                  '${worker.pricing.emergencyRateMultiplier}x'),
-            SizedBox(height: 16),
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, size: 20, color: Colors.blue[700]),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Final price may vary based on job complexity and duration',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue[700],
-                      ),
+                  // Pricing
+                  Text(
+                    'Pricing',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
+                  SizedBox(height: 8),
+                  _buildPriceRow('Minimum Charge',
+                      'LKR ${worker.pricing.minimumChargeLkr.toStringAsFixed(0)}'),
+                  _buildPriceRow('Daily Wage',
+                      'LKR ${worker.pricing.dailyWageLkr.toStringAsFixed(0)}'),
+                  _buildPriceRow('Half Day',
+                      'LKR ${worker.pricing.halfDayRateLkr.toStringAsFixed(0)}'),
                 ],
               ),
             ),
-          ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _selectWorker(worker);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: Text('Select Worker', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
 
-// ✅ NEW: Show Reviews Dialog
-  // REPLACE the _showReviewsDialog method in enhanced_worker_selection_screen.dart
-// This version works WITHOUT requiring a Firestore index
-
-// ✅ FIXED: Show Reviews Dialog - No index required
   void _showReviewsDialog(WorkerModel worker) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.rate_review, color: Colors.blue),
-            SizedBox(width: 8),
-            Text('Reviews & Ratings'),
-          ],
-        ),
+        title: Text('${worker.workerName} - Reviews'),
         content: Container(
           width: double.maxFinite,
-          constraints: BoxConstraints(maxHeight: 500),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Overall Rating
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    Column(
-                      children: [
-                        Text(
-                          worker.rating.toStringAsFixed(1),
-                          style: TextStyle(
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange[700],
-                          ),
-                        ),
-                        Row(
-                          children: List.generate(5, (index) {
-                            return Icon(
-                              index < worker.rating.floor()
-                                  ? Icons.star
-                                  : Icons.star_border,
-                              color: Colors.orange,
-                              size: 20,
-                            );
-                          }),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          '${worker.jobsCompleted} reviews',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Success Rate',
-                          style:
-                              TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        ),
-                        Text(
-                          '${worker.successRate.toStringAsFixed(1)}%',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green[700],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              Row(
+                children: [
+                  Icon(Icons.star, color: Colors.amber, size: 32),
+                  SizedBox(width: 8),
+                  Text(
+                    worker.rating > 0
+                        ? worker.rating.toStringAsFixed(1)
+                        : 'New',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(width: 8),
+                  Text('/ 5.0', style: TextStyle(color: Colors.grey[600])),
+                ],
               ),
               SizedBox(height: 16),
-
-              // ✅ Load reviews WITHOUT orderBy (no index required)
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('reviews')
-                      .where('worker_id', isEqualTo: worker.workerId)
-                      .limit(50)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return Center(
-                        child: CircularProgressIndicator(color: Colors.orange),
-                      );
-                    }
-
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.error_outline,
-                                size: 48, color: Colors.red),
-                            SizedBox(height: 8),
-                            Text(
-                              'Error loading reviews',
-                              style: TextStyle(color: Colors.red),
-                            ),
-                            SizedBox(height: 4),
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                snapshot.error.toString(),
-                                style:
-                                    TextStyle(fontSize: 11, color: Colors.grey),
-                                textAlign: TextAlign.center,
-                                maxLines: 3,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.rate_review_outlined,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'No reviews yet',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              'Be the first to review this worker',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    // ✅ Sort reviews manually after fetching (no index needed)
-                    List<DocumentSnapshot> reviewDocs = snapshot.data!.docs;
-                    reviewDocs.sort((a, b) {
-                      try {
-                        var aData = a.data() as Map<String, dynamic>;
-                        var bData = b.data() as Map<String, dynamic>;
-
-                        Timestamp? aTime = aData['created_at'] as Timestamp?;
-                        Timestamp? bTime = bData['created_at'] as Timestamp?;
-
-                        if (aTime == null && bTime == null) return 0;
-                        if (aTime == null) return 1;
-                        if (bTime == null) return -1;
-
-                        return bTime.compareTo(aTime); // Newest first
-                      } catch (e) {
-                        return 0;
-                      }
-                    });
-
-                    // Display reviews
-                    return ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: reviewDocs.length,
-                      itemBuilder: (context, index) {
-                        Map<String, dynamic> reviewData =
-                            reviewDocs[index].data() as Map<String, dynamic>;
-
-                        return _buildReviewCard(reviewData);
-                      },
-                    );
-                  },
-                ),
+              Text(
+                'Based on ${worker.jobsCompleted} completed jobs',
+                style: TextStyle(color: Colors.grey[600]),
               ),
+              SizedBox(height: 16),
+              if (worker.rating == 0)
+                Text(
+                  'No reviews yet. This worker is new to the platform.',
+                  style: TextStyle(fontStyle: FontStyle.italic),
+                ),
             ],
           ),
         ),
@@ -1329,189 +983,6 @@ class _EnhancedWorkerSelectionScreenState
     );
   }
 
-// ✅ Build individual review card
-  Widget _buildReviewCard(Map<String, dynamic> reviewData) {
-    String customerName = reviewData['customer_name'] ?? 'Anonymous';
-    int rating = reviewData['rating'] ?? 0;
-    String reviewText = reviewData['review'] ?? '';
-    String serviceType = reviewData['service_type'] ?? 'Service';
-    List<dynamic> tags = reviewData['tags'] ?? [];
-    DateTime? createdAt;
-
-    try {
-      if (reviewData['created_at'] != null) {
-        createdAt = (reviewData['created_at'] as Timestamp).toDate();
-      }
-    } catch (e) {
-      print('Error parsing date: $e');
-    }
-
-    return Card(
-      margin: EdgeInsets.only(bottom: 12),
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: Padding(
-        padding: EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header: Customer name and rating
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: Colors.blue[100],
-                        child: Text(
-                          customerName[0].toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue[700],
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              customerName,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (createdAt != null)
-                              Text(
-                                _formatDate(createdAt),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Star rating
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.orange[50],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.star, color: Colors.orange, size: 14),
-                      SizedBox(width: 4),
-                      Text(
-                        rating.toString(),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: Colors.orange[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-
-            SizedBox(height: 8),
-
-            // Service type badge
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                serviceType.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.blue[700],
-                ),
-              ),
-            ),
-
-            SizedBox(height: 8),
-
-            // Review text
-            if (reviewText.isNotEmpty)
-              Text(
-                reviewText,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey[800],
-                  height: 1.4,
-                ),
-              ),
-
-            // Tags
-            if (tags.isNotEmpty) ...[
-              SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: tags.map((tag) {
-                  return Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                    child: Text(
-                      tag.toString(),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-// ✅ Format date helper
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      if (difference.inHours == 0) {
-        return '${difference.inMinutes}m ago';
-      }
-      return '${difference.inHours}h ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inDays < 30) {
-      return '${(difference.inDays / 7).floor()}w ago';
-    } else if (difference.inDays < 365) {
-      return '${(difference.inDays / 30).floor()}mo ago';
-    } else {
-      return '${(difference.inDays / 365).floor()}y ago';
-    }
-  }
-
-// Helper Widgets
   Widget _buildDetailRow(IconData icon, String text) {
     return Padding(
       padding: EdgeInsets.only(bottom: 8),
@@ -1663,12 +1134,6 @@ class _EnhancedWorkerSelectionScreenState
     }
   }
 
-  // lib/screens/enhanced_worker_selection_screen.dart
-// FIND AND REPLACE the _createBooking method with this FIXED version
-
-// ==================== FIXED BOOKING METHOD ====================
-// Replace your existing _createBooking method with this:
-
   Future<void> _createBooking(WorkerModel worker) async {
     try {
       print('\n========== BOOKING CREATION START ==========');
@@ -1710,33 +1175,33 @@ class _EnhancedWorkerSelectionScreenState
       String customerPhone = customerData['phone_number'] ?? '';
       String customerEmail = customerData['email'] ?? user.email ?? '';
 
-      // CRITICAL FIX: Get worker_id from WorkerModel and handle null
+      // Get worker_id from WorkerModel and handle null
       String? nullableWorkerId = worker.workerId;
 
       if (nullableWorkerId == null || nullableWorkerId.isEmpty) {
         throw Exception('Worker ID is missing');
       }
 
-      String workerId = nullableWorkerId; // Now it's non-null
+      String workerId = nullableWorkerId;
 
       print('📋 Booking details:');
       print('   Customer ID: $customerId');
-      print('   Worker ID: $workerId'); // Should be HM_XXXX
+      print('   Worker ID: $workerId');
       print('   Service: ${widget.serviceType}');
 
-      // CRITICAL: Verify workerId format
+      // Verify workerId format
       if (!workerId.startsWith('HM_')) {
         throw Exception(
             'Invalid worker_id format: $workerId (expected HM_XXXX format)');
       }
 
-      // Create booking using BookingService
+      // Create booking using BookingService with named parameters
       String bookingId = await BookingService.createBooking(
         customerId: customerId,
         customerName: customerName,
         customerPhone: customerPhone,
         customerEmail: customerEmail,
-        workerId: workerId, // ✅ This is HM_XXXX format
+        workerId: workerId,
         workerName: worker.workerName,
         workerPhone: worker.contact.phoneNumber,
         serviceType: widget.serviceType,
@@ -1754,47 +1219,33 @@ class _EnhancedWorkerSelectionScreenState
 
       print('✅ Booking created successfully!');
       print('   Booking ID: $bookingId');
-      print('   Worker ID: $workerId');
-      print('========== BOOKING CREATION END ==========\n');
 
       // Close loading dialog
       Navigator.pop(context);
 
       // Show success dialog
-      await showDialog(
+      showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          title: Column(
-            mainAxisSize: MainAxisSize.min,
+          title: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 60),
-              SizedBox(height: 16),
-              Text('Booking Successful!'),
+              Icon(Icons.check_circle, color: Colors.green, size: 32),
+              SizedBox(width: 12),
+              Text('Booking Created!'),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Your booking has been created successfully!',
-                textAlign: TextAlign.center,
-              ),
+              Text('Your booking has been created successfully.'),
               SizedBox(height: 12),
-              Text(
-                'Booking ID: ${bookingId.length > 12 ? bookingId.substring(0, 12) + '...' : bookingId}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                  fontFamily: 'monospace',
-                ),
-              ),
-              SizedBox(height: 12),
-              Text(
-                '${worker.workerName} will be notified about your request.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14),
-              ),
+              Text('Booking ID: $bookingId',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              Text('Worker: ${worker.workerName}'),
+              Text('Service: ${widget.serviceType.replaceAll('_', ' ')}'),
             ],
           ),
           actions: [
@@ -1802,45 +1253,24 @@ class _EnhancedWorkerSelectionScreenState
               onPressed: () {
                 Navigator.pop(context); // Close dialog
                 Navigator.pop(context); // Go back to previous screen
+                Navigator.pop(context); // Go back again
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-              ),
-              child: Text('Done'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: Text('Done', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
       );
-    } catch (e) {
-      print('❌ Error creating booking: $e');
-      print('========== BOOKING CREATION END ==========\n');
 
-      // Close loading dialog if still open
+      print('✅ Booking dialog shown');
+      print('========== BOOKING CREATION END ==========\n');
+    } catch (e) {
+      // Close loading dialog if open
       Navigator.pop(context);
 
-      // Show error dialog
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.red),
-              SizedBox(width: 8),
-              Text('Booking Failed'),
-            ],
-          ),
-          content: Text(
-            'Failed to create booking: $e\n\nPlease try again.',
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('OK'),
-            ),
-          ],
-        ),
-      );
+      print('❌ Error creating booking: $e');
+      print('========== BOOKING CREATION END ==========\n');
+      _showErrorSnackBar('Failed to create booking: ${e.toString()}');
     }
   }
 }
