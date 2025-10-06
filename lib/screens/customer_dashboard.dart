@@ -598,12 +598,15 @@ class _CustomerDashboardState extends State<CustomerDashboard>
     );
   }
 
+  // Fix for _buildEnhancedAppBar() method in customer_dashboard.dart
+// Replace the existing _buildEnhancedAppBar() method with this fixed version
+
   Widget _buildEnhancedAppBar() {
     return SliverAppBar(
       floating: true,
       backgroundColor: Colors.white,
       elevation: 0,
-      expandedHeight: 145,
+      expandedHeight: 160, // ✅ INCREASED from 145 to 160 to fix overflow
       automaticallyImplyLeading: false,
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
@@ -623,13 +626,14 @@ class _CustomerDashboardState extends State<CustomerDashboard>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // ✅ REDUCED font sizes slightly to prevent overflow
                     RichText(
                       text: TextSpan(
                         children: [
                           TextSpan(
                             text: 'Hi ',
                             style: TextStyle(
-                              fontSize: 22,
+                              fontSize: 20, // ✅ REDUCED from 22
                               fontWeight: FontWeight.w500,
                               color: Colors.grey[700],
                               letterSpacing: -0.3,
@@ -639,7 +643,7 @@ class _CustomerDashboardState extends State<CustomerDashboard>
                           TextSpan(
                             text: '$_userName,',
                             style: TextStyle(
-                              fontSize: 22,
+                              fontSize: 20, // ✅ REDUCED from 22
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF1A1A1A),
                               letterSpacing: -0.3,
@@ -655,7 +659,7 @@ class _CustomerDashboardState extends State<CustomerDashboard>
                     Text(
                       'How can I help you today?',
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 22, // ✅ REDUCED from 24
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF1A1A1A),
                         letterSpacing: -0.5,
@@ -664,7 +668,7 @@ class _CustomerDashboardState extends State<CustomerDashboard>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    SizedBox(height: 6),
+                    SizedBox(height: 4), // ✅ REDUCED from 6
                     Container(
                       padding:
                           EdgeInsets.symmetric(horizontal: 10, vertical: 5),
