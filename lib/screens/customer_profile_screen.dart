@@ -1,5 +1,5 @@
 // lib/screens/customer_profile_screen.dart
-// FIXED VERSION - Resolves LateInitializationError and initState issues
+// MODIFIED VERSION - Updated styling with blue colors and gradient background
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -100,7 +100,6 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
 
   @override
   void dispose() {
-    // CRITICAL FIX: Safely dispose controllers only if they were initialized
     _firstNameController?.dispose();
     _lastNameController?.dispose();
     _emailController?.dispose();
@@ -114,49 +113,35 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
   Future<void> _saveProfile() async {
     if (!_validateInputs()) return;
 
-    setState(() {
-      _isSaving = true;
-    });
+    setState(() => _isSaving = true);
 
     try {
       User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception('User not authenticated');
-      }
+      if (user == null) throw Exception('User not authenticated');
 
-      // Prepare update data
-      Map<String, dynamic> updates = {
+      await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .update({
         'first_name': _firstNameController!.text.trim(),
         'last_name': _lastNameController!.text.trim(),
-        'customer_name':
-            '${_firstNameController!.text.trim()} ${_lastNameController!.text.trim()}',
         'email': _emailController!.text.trim(),
         'phone_number': _phoneController!.text.trim(),
-      };
-
-      // Add location data if provided
-      if (_addressController!.text.trim().isNotEmpty ||
-          _cityController!.text.trim().isNotEmpty ||
-          _postalCodeController!.text.trim().isNotEmpty) {
-        updates['location'] = {
-          'address': _addressController!.text.trim(),
-          'city': _cityController!.text.trim(),
-          'postal_code': _postalCodeController!.text.trim(),
-        };
-      }
-
-      // Update in database
-      await CustomerService.updateCustomer(user.uid, updates);
-
-      // Reload profile to get updated data
-      await _loadCustomerProfile();
+        'customer_name':
+            '${_firstNameController!.text.trim()} ${_lastNameController!.text.trim()}',
+        'location.address': _addressController!.text.trim(),
+        'location.city': _cityController!.text.trim(),
+        'location.postal_code': _postalCodeController!.text.trim(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
 
       setState(() {
         _isEditing = false;
         _isSaving = false;
       });
 
-      _showSuccessSnackBar('Profile updated successfully!');
+      _showSuccessSnackBar('Profile updated successfully');
+      await _loadCustomerProfile();
     } catch (e) {
       setState(() {
         _isSaving = false;
@@ -217,10 +202,15 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     );
   }
 
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      // 🎨 GRADIENT BACKGROUND ADDED: White at top → Light blue at bottom
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text('My Profile'),
         backgroundColor: Colors.white,
@@ -245,28 +235,41 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
             ),
         ],
       ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : _customer == null
-              ? _buildProfileNotFound()
-              : SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      _buildProfileHeader(),
-                      SizedBox(height: 16),
-                      _buildPersonalInfoSection(),
-                      SizedBox(height: 16),
-                      _buildContactInfoSection(),
-                      SizedBox(height: 16),
-                      _buildLocationSection(),
-                      SizedBox(height: 16),
-                      _buildAccountInfoSection(),
-                      SizedBox(height: 32),
-                      if (_isEditing) _buildSaveButton(),
-                      SizedBox(height: 32),
-                    ],
+      body: Container(
+        // 🎨 GRADIENT BACKGROUND
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              Color(0xFFE3F2FD), // Soft light blue
+            ],
+          ),
+        ),
+        child: _isLoading
+            ? Center(child: CircularProgressIndicator())
+            : _customer == null
+                ? _buildProfileNotFound()
+                : SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        _buildProfileHeader(),
+                        SizedBox(height: 16),
+                        _buildPersonalInfoSection(),
+                        SizedBox(height: 16),
+                        _buildContactInfoSection(),
+                        SizedBox(height: 16),
+                        _buildLocationSection(),
+                        SizedBox(height: 16),
+                        _buildAccountInfoSection(),
+                        SizedBox(height: 32),
+                        if (_isEditing) _buildSaveButton(),
+                        SizedBox(height: 32),
+                      ],
+                    ),
                   ),
-                ),
+      ),
     );
   }
 
@@ -484,12 +487,13 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 🎨 MAIN TOPIC - BLUE COLOR
           Text(
             title,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
+              color: Colors.blue, // Changed from Colors.grey[800] to blue
             ),
           ),
           SizedBox(height: 16),
@@ -511,11 +515,13 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 🎨 SECOND LEVEL TOPIC - LIGHT BLUE COLOR
           Text(
             label,
             style: TextStyle(
               fontSize: 12,
-              color: Colors.grey[600],
+              color: Colors
+                  .lightBlue, // Changed from Colors.grey[600] to light blue
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -564,11 +570,13 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 🎨 SECOND LEVEL TOPIC - LIGHT BLUE COLOR
           Text(
             label,
             style: TextStyle(
               fontSize: 12,
-              color: Colors.grey[600],
+              color: Colors
+                  .lightBlue, // Changed from Colors.grey[600] to light blue
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -600,7 +608,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       child: ElevatedButton(
         onPressed: _isSaving ? null : _saveProfile,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue[700],
+          backgroundColor: Colors.blue,
           padding: EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -619,45 +627,11 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                 'Save Changes',
                 style: TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                   color: Colors.white,
                 ),
               ),
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
-  }
-}
-
-// Customer Service class (if not defined elsewhere)
-class CustomerService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  static Future<CustomerModel?> getCustomerByUserId(String userId) async {
-    try {
-      DocumentSnapshot doc =
-          await _firestore.collection('customers').doc(userId).get();
-
-      if (doc.exists) {
-        return CustomerModel.fromFirestore(doc);
-      }
-      return null;
-    } catch (e) {
-      print('Error getting customer: $e');
-      return null;
-    }
-  }
-
-  static Future<void> updateCustomer(
-      String userId, Map<String, dynamic> updates) async {
-    try {
-      await _firestore.collection('customers').doc(userId).update(updates);
-    } catch (e) {
-      print('Error updating customer: $e');
-      throw e;
-    }
   }
 }
