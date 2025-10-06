@@ -1,5 +1,9 @@
 // lib/screens/chat_screen.dart
-// FIXED VERSION - Enhanced logging and better message display
+// MODIFIED VERSION - Updated background gradient and chat bubble colors
+// Background: Soft light-orange and white gradient (white at top → light orange at bottom)
+// Customer chat: Light orange
+// Worker chat: Orange
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/chat_service.dart';
@@ -49,7 +53,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _loadUserName() async {
-    // This would load the user's display name from Firestore if needed
     setState(() {
       _currentUserName = _currentUser?.displayName ??
           (widget.currentUserType == 'customer' ? 'Customer' : 'Worker');
@@ -122,174 +125,216 @@ class _ChatScreenState extends State<ChatScreen> {
         backgroundColor: appBarColor,
         foregroundColor: Colors.white,
       ),
-      body: Column(
-        children: [
-          // Messages list
-          Expanded(
-            child: StreamBuilder<List<ChatMessage>>(
-              stream: ChatService.getMessagesStream(widget.chatId),
-              builder: (context, snapshot) {
-                print('📊 StreamBuilder update:');
-                print('   Connection State: ${snapshot.connectionState}');
-                print('   Has Data: ${snapshot.hasData}');
-                print('   Has Error: ${snapshot.hasError}');
-
-                if (snapshot.hasError) {
-                  print('   Error: ${snapshot.error}');
-                }
-
-                if (snapshot.hasData) {
-                  print('   Message Count: ${snapshot.data!.length}');
-                  // Log each message
-                  for (var i = 0; i < snapshot.data!.length; i++) {
-                    var msg = snapshot.data![i];
-                    print(
-                        '   Message $i: ${msg.senderName} (${msg.senderType}): ${msg.message.substring(0, msg.message.length > 30 ? 30 : msg.message.length)}...');
-                  }
-                }
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Loading messages...'),
-                      ],
-                    ),
-                  );
-                }
-
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline, size: 64, color: Colors.red),
-                        SizedBox(height: 16),
-                        Text(
-                          'Error loading messages',
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          '${snapshot.error}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                          textAlign: TextAlign.center,
-                        ),
-                        SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            setState(() {}); // Trigger rebuild
-                          },
-                          child: Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  print('⚠️ No messages to display');
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.chat_bubble_outline,
-                            size: 64, color: Colors.grey[400]),
-                        SizedBox(height: 16),
-                        Text(
-                          'No messages yet',
-                          style:
-                              TextStyle(fontSize: 16, color: Colors.grey[600]),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Start the conversation!',
-                          style:
-                              TextStyle(fontSize: 14, color: Colors.grey[500]),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                List<ChatMessage> messages = snapshot.data!;
-                print('✅ Rendering ${messages.length} messages');
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  reverse: true,
-                  padding: EdgeInsets.all(16),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    ChatMessage message = messages[index];
-                    bool isMe = message.senderType == widget.currentUserType;
-
-                    return _buildMessageBubble(message, isMe);
-                  },
-                );
-              },
-            ),
+      // 🎨 NEW: Soft light-orange and white gradient background
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white, // White at top
+              Color(0xFFFFE5CC), // Soft light orange at bottom
+            ],
           ),
+        ),
+        child: Column(
+          children: [
+            // Messages list
+            Expanded(
+              child: StreamBuilder<List<ChatMessage>>(
+                stream: ChatService.getMessagesStream(widget.chatId),
+                builder: (context, snapshot) {
+                  print('📊 StreamBuilder update:');
+                  print('   Connection State: ${snapshot.connectionState}');
+                  print('   Has Data: ${snapshot.hasData}');
+                  print('   Has Error: ${snapshot.hasError}');
 
-          // Message input
-          Container(
-            padding: EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 4,
-                  offset: Offset(0, -2),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: 'Type a message...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
+                  if (snapshot.hasError) {
+                    print('   Error: ${snapshot.error}');
+                  }
+
+                  if (snapshot.hasData) {
+                    print('   Message Count: ${snapshot.data!.length}');
+                    // Log each message
+                    for (var i = 0; i < snapshot.data!.length; i++) {
+                      var msg = snapshot.data![i];
+                      print(
+                          '   Message $i: ${msg.senderName} (${msg.senderType}): ${msg.message.substring(0, msg.message.length > 30 ? 30 : msg.message.length)}...');
+                    }
+                  }
+
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('Loading messages...'),
+                        ],
                       ),
-                      maxLines: null,
-                      textCapitalization: TextCapitalization.sentences,
-                      onSubmitted: (_) => _sendMessage(),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  CircleAvatar(
-                    backgroundColor: widget.currentUserType == 'customer'
-                        ? Colors.blue
-                        : Colors.orange,
-                    child: IconButton(
-                      icon: Icon(Icons.send, color: Colors.white),
-                      onPressed: _sendMessage,
-                    ),
+                    );
+                  }
+
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline,
+                              size: 64, color: Colors.red),
+                          SizedBox(height: 16),
+                          Text(
+                            'Error loading messages',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            '${snapshot.error}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                            textAlign: TextAlign.center,
+                          ),
+                          SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() {}); // Trigger rebuild
+                            },
+                            child: Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    print('⚠️ No messages to display');
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.chat_bubble_outline,
+                              size: 64, color: Colors.grey[400]),
+                          SizedBox(height: 16),
+                          Text(
+                            'No messages yet',
+                            style: TextStyle(
+                                fontSize: 16, color: Colors.grey[600]),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Start the conversation!',
+                            style: TextStyle(
+                                fontSize: 14, color: Colors.grey[500]),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  List<ChatMessage> messages = snapshot.data!;
+                  print('✅ Rendering ${messages.length} messages');
+
+                  return ListView.builder(
+                    controller: _scrollController,
+                    reverse: true,
+                    padding: EdgeInsets.all(16),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      ChatMessage message = messages[index];
+                      bool isMe = message.senderType == widget.currentUserType;
+
+                      return _buildMessageBubble(message, isMe);
+                    },
+                  );
+                },
+              ),
+            ),
+
+            // Message input
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 4,
+                    offset: Offset(0, -2),
                   ),
                 ],
               ),
+              child: SafeArea(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _messageController,
+                        decoration: InputDecoration(
+                          hintText: 'Type a message...',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                        ),
+                        maxLines: null,
+                        textCapitalization: TextCapitalization.sentences,
+                        onSubmitted: (_) => _sendMessage(),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    CircleAvatar(
+                      backgroundColor: widget.currentUserType == 'customer'
+                          ? Colors.blue
+                          : Colors.orange,
+                      child: IconButton(
+                        icon: Icon(Icons.send, color: Colors.white),
+                        onPressed: _sendMessage,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildMessageBubble(ChatMessage message, bool isMe) {
+    // 🎨 NEW: Determine bubble color based on sender type
+    Color bubbleColor;
+    Color textColor;
+
+    if (isMe) {
+      // Current user's message
+      if (widget.currentUserType == 'customer') {
+        // Customer's own message: light orange
+        bubbleColor = Color(0xFFFFCC99); // Light orange
+        textColor = Colors.black87;
+      } else {
+        // Worker's own message: orange
+        bubbleColor = Colors.orange;
+        textColor = Colors.white;
+      }
+    } else {
+      // Other person's message
+      if (widget.currentUserType == 'customer') {
+        // Customer viewing worker's message: orange
+        bubbleColor = Colors.orange;
+        textColor = Colors.white;
+      } else {
+        // Worker viewing customer's message: light orange
+        bubbleColor = Color(0xFFFFCC99); // Light orange
+        textColor = Colors.black87;
+      }
+    }
+
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -318,11 +363,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 maxWidth: MediaQuery.of(context).size.width * 0.75,
               ),
               decoration: BoxDecoration(
-                color: isMe
-                    ? (widget.currentUserType == 'customer'
-                        ? Colors.blue
-                        : Colors.orange)
-                    : Colors.grey[200],
+                color: bubbleColor, // 🎨 NEW: Use calculated bubble color
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(16),
                   topRight: Radius.circular(16),
@@ -336,7 +377,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   Text(
                     message.message,
                     style: TextStyle(
-                      color: isMe ? Colors.white : Colors.black87,
+                      color: textColor, // 🎨 NEW: Use calculated text color
                       fontSize: 15,
                     ),
                   ),
@@ -344,7 +385,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   Text(
                     _formatTime(message.timestamp),
                     style: TextStyle(
-                      color: isMe ? Colors.white70 : Colors.grey[600],
+                      color: textColor
+                          .withOpacity(0.7), // 🎨 NEW: Adjust time text color
                       fontSize: 11,
                     ),
                   ),

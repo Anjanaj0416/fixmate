@@ -1,5 +1,5 @@
 // lib/screens/worker_profile_screen.dart
-// MODIFIED VERSION - Added profile picture upload functionality
+// MODIFIED VERSION - Updated UI with gradient background and orange theme
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -114,58 +114,52 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
       print('🔄 Starting profile picture upload...');
 
-      // ✅ Upload new profile picture
+      // Upload new profile picture
       String downloadUrl = await StorageService.uploadWorkerProfilePicture(
         imageFile: image,
       );
 
       print('✅ Upload complete, URL: $downloadUrl');
 
-      // ✅ Update Firestore with new URL FIRST
+      // Update Firestore with new URL FIRST
       User? user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         await FirebaseFirestore.instance
             .collection('workers')
             .doc(user.uid)
-            .update({
-          'profile_picture_url': downloadUrl,
-          'last_active': FieldValue.serverTimestamp(),
-        });
+            .update({'profilePictureUrl': downloadUrl});
+
         print('✅ Firestore updated with new profile picture URL');
 
-        // ✅ CRITICAL: Wait a moment for Firestore to propagate
-        await Future.delayed(Duration(milliseconds: 300));
+        setState(() {
+          _worker = WorkerModel(
+            workerId: _worker.workerId,
+            workerName: _worker.workerName,
+            firstName: _worker.firstName,
+            lastName: _worker.lastName,
+            serviceType: _worker.serviceType,
+            serviceCategory: _worker.serviceCategory,
+            businessName: _worker.businessName,
+            location: _worker.location,
+            rating: _worker.rating,
+            experienceYears: _worker.experienceYears,
+            jobsCompleted: _worker.jobsCompleted,
+            successRate: _worker.successRate,
+            pricing: _worker.pricing,
+            availability: _worker.availability,
+            capabilities: _worker.capabilities,
+            contact: _worker.contact,
+            profile: _worker.profile,
+            verified: _worker.verified,
+            createdAt: _worker.createdAt,
+            lastActive: _worker.lastActive,
+            profilePictureUrl: downloadUrl,
+          );
+          _isUploadingImage = false;
+        });
+
+        _showSuccessSnackBar('Profile picture updated successfully!');
       }
-
-      // ✅ Update the worker model with new URL
-      setState(() {
-        _worker = WorkerModel(
-          workerId: _worker.workerId,
-          workerName: _worker.workerName,
-          firstName: _worker.firstName,
-          lastName: _worker.lastName,
-          serviceType: _worker.serviceType,
-          serviceCategory: _worker.serviceCategory,
-          businessName: _worker.businessName,
-          location: _worker.location,
-          rating: _worker.rating,
-          experienceYears: _worker.experienceYears,
-          jobsCompleted: _worker.jobsCompleted,
-          successRate: _worker.successRate,
-          pricing: _worker.pricing,
-          availability: _worker.availability,
-          capabilities: _worker.capabilities,
-          contact: _worker.contact,
-          profile: _worker.profile,
-          verified: _worker.verified,
-          createdAt: _worker.createdAt,
-          lastActive: _worker.lastActive,
-          profilePictureUrl: downloadUrl,
-        );
-        _isUploadingImage = false;
-      });
-
-      _showSuccessSnackBar('Profile picture updated successfully!');
 
       print('✅ Profile picture update complete!');
     } catch (e) {
@@ -285,29 +279,47 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Worker Profile'),
-        backgroundColor: Color(0xFFFF9800),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Color(0xFFFF9800)),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
           if (!_isEditing)
             IconButton(
-              icon: Icon(Icons.edit),
+              icon: Icon(Icons.edit, color: Color(0xFFFF9800)),
               onPressed: () => setState(() => _isEditing = true),
             ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _buildProfileHeader(),
-            SizedBox(height: 16),
-            if (_isEditing) ...[
-              _buildEditableFields(),
-            ] else ...[
-              _buildViewOnlyFields(),
+      extendBodyBehindAppBar: true,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              Color(0xFFFFE0B2), // Light orange
             ],
-          ],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _buildProfileHeader(),
+                SizedBox(height: 16),
+                if (_isEditing) ...[
+                  _buildEditableFields(),
+                ] else ...[
+                  _buildViewOnlyFields(),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
       floatingActionButton: _isEditing
@@ -340,7 +352,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
           children: [
             Stack(
               children: [
-                // ✅ Profile Picture with better error handling
+                // Profile Picture with better error handling
                 Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
@@ -360,7 +372,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                     ),
                   ),
                 ),
-                // ✅ Upload button overlay
+                // Upload button overlay
                 Positioned(
                   bottom: 0,
                   right: 0,
@@ -385,18 +397,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                       ),
                       child: _isUploadingImage
                           ? SizedBox(
-                              width: 20,
-                              height: 20,
+                              width: 16,
+                              height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFFFF9800),
-                                ),
+                                color: Color(0xFFFF9800),
                               ),
                             )
                           : Icon(
                               Icons.camera_alt,
-                              size: 20,
+                              size: 16,
                               color: Color(0xFFFF9800),
                             ),
                     ),
@@ -405,62 +415,21 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               ],
             ),
             SizedBox(height: 16),
-            if (_isEditing) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _firstNameController,
-                      decoration: InputDecoration(
-                        labelText: 'First Name',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _lastNameController,
-                      decoration: InputDecoration(
-                        labelText: 'Last Name',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 12),
-              TextFormField(
-                controller: _businessNameController,
-                decoration: InputDecoration(
-                  labelText: 'Business Name',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ] else ...[
-              Text(
-                _worker.workerName,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 4),
-              Text(
-                _worker.businessName,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
-            SizedBox(height: 8),
-            Chip(
-              label: Text(_worker.serviceType),
-              backgroundColor: Color(0xFFFF9800).withOpacity(0.1),
-              labelStyle: TextStyle(
-                color: Color(0xFFFF9800),
+            Text(
+              _worker.workerName,
+              style: TextStyle(
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
+                color: Color(0xFF2C3E50),
+              ),
+            ),
+            SizedBox(height: 4),
+            Text(
+              _worker.serviceType,
+              style: TextStyle(
+                fontSize: 16,
+                color: Color(0xFFFF9800),
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -469,21 +438,23 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     );
   }
 
-// ✅ NEW: Helper method to build profile image with proper error handling
   Widget _buildProfileImage() {
-    if (_worker.profilePictureUrl != null &&
-        _worker.profilePictureUrl!.isNotEmpty) {
-      // Add cache-busting parameter to force reload
-      String imageUrl = _worker.profilePictureUrl!;
-      if (!imageUrl.contains('&t=')) {
-        imageUrl = '$imageUrl&t=${DateTime.now().millisecondsSinceEpoch}';
+    String? profileUrl = _worker.profilePictureUrl;
+
+    if (profileUrl != null && profileUrl.isNotEmpty) {
+      if (!profileUrl.contains('&t=')) {
+        profileUrl = '$profileUrl&t=${DateTime.now().millisecondsSinceEpoch}';
       }
 
       return Image.network(
-        imageUrl,
+        profileUrl,
         width: 100,
         height: 100,
         fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          print('❌ Error loading profile picture: $error');
+          return _buildDefaultAvatar();
+        },
         loadingBuilder: (context, child, loadingProgress) {
           if (loadingProgress == null) return child;
           return Center(
@@ -492,37 +463,24 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                   ? loadingProgress.cumulativeBytesLoaded /
                       loadingProgress.expectedTotalBytes!
                   : null,
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              color: Colors.white,
             ),
           );
         },
-        errorBuilder: (context, error, stackTrace) {
-          print('⚠️ Error loading profile picture: $error');
-          return _buildFallbackAvatar();
-        },
       );
-    } else {
-      return _buildFallbackAvatar();
     }
+
+    return _buildDefaultAvatar();
   }
 
-// ✅ NEW: Fallback avatar when no image
-  Widget _buildFallbackAvatar() {
-    return Container(
-      width: 100,
-      height: 100,
-      color: Color(0xFFFF9800),
-      child: Center(
-        child: Text(
-          _worker.firstName.isNotEmpty
-              ? _worker.firstName[0].toUpperCase()
-              : 'W',
-          style: TextStyle(
-            fontSize: 40,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+  Widget _buildDefaultAvatar() {
+    return Center(
+      child: Text(
+        _worker.firstName.isNotEmpty ? _worker.firstName[0].toUpperCase() : 'W',
+        style: TextStyle(
+          fontSize: 40,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
         ),
       ),
     );
@@ -565,6 +523,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color: Color(0xFFFF9800),
               ),
             ),
             SizedBox(height: 16),
@@ -606,6 +565,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color: Color(0xFFFF9800),
               ),
             ),
             SizedBox(height: 16),
@@ -615,6 +575,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                 labelText: 'Phone Number',
                 border: OutlineInputBorder(),
               ),
+              keyboardType: TextInputType.phone,
             ),
             SizedBox(height: 12),
             TextField(
@@ -623,6 +584,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                 labelText: 'Email',
                 border: OutlineInputBorder(),
               ),
+              keyboardType: TextInputType.emailAddress,
             ),
             SizedBox(height: 12),
             TextField(
@@ -631,6 +593,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                 labelText: 'Website (Optional)',
                 border: OutlineInputBorder(),
               ),
+              keyboardType: TextInputType.url,
             ),
             SizedBox(height: 24),
             Text(
@@ -638,6 +601,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color: Color(0xFFFF9800),
               ),
             ),
             SizedBox(height: 16),
@@ -652,7 +616,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
             TextField(
               controller: _stateController,
               decoration: InputDecoration(
-                labelText: 'State',
+                labelText: 'State/Province',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -670,6 +634,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color: Color(0xFFFF9800),
               ),
             ),
             SizedBox(height: 16),
@@ -714,6 +679,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color: Color(0xFFFF9800),
               ),
             ),
             SizedBox(height: 16),
@@ -782,6 +748,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   }
 
   Widget _buildInfoCard(String title, List<Widget> children) {
+    // Determine if this is a main category (orange) or sub-category (light orange)
+    bool isMainCategory = title == 'Personal Information' ||
+        title == 'Location' ||
+        title == 'Pricing' ||
+        title == 'Professional Details';
+
+    Color titleColor = isMainCategory ? Color(0xFFFF9800) : Color(0xFFFFB74D);
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -795,6 +769,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color: titleColor,
               ),
             ),
             SizedBox(height: 12),
@@ -817,7 +792,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               label,
               style: TextStyle(
                 fontWeight: FontWeight.w500,
-                color: Colors.grey[600],
+                color: Color(0xFFFFB74D), // Light orange for labels
               ),
             ),
           ),

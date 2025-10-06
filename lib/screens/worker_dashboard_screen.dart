@@ -13,6 +13,7 @@ import '../screens/worker_chats_screen.dart';
 import '../services/rating_service.dart';
 import 'worker_notifications_screen.dart';
 import 'customer_dashboard.dart';
+import 'worker_reviews_screen.dart';
 
 class WorkerDashboardScreen extends StatefulWidget {
   @override

@@ -138,7 +138,19 @@ class _WorkerNotificationsScreenState extends State<WorkerNotificationsScreen> {
           backgroundColor: Color(0xFFFF9800),
           foregroundColor: Colors.white,
         ),
-        body: Center(child: CircularProgressIndicator()),
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white,
+                Color(0xFFFFE5CC), // Soft light orange
+              ],
+            ),
+          ),
+          child: Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
@@ -149,8 +161,20 @@ class _WorkerNotificationsScreenState extends State<WorkerNotificationsScreen> {
           backgroundColor: Color(0xFFFF9800),
           foregroundColor: Colors.white,
         ),
-        body: Center(
-          child: Text('Unable to load worker profile'),
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white,
+                Color(0xFFFFE5CC), // Soft light orange
+              ],
+            ),
+          ),
+          child: Center(
+            child: Text('Unable to load worker profile'),
+          ),
         ),
       );
     }
@@ -168,230 +192,237 @@ class _WorkerNotificationsScreenState extends State<WorkerNotificationsScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore
-            .collection('notifications')
-            .where('recipient_type', isEqualTo: 'worker')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          }
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              Color(0xFFFFE5CC), // Soft light orange at bottom
+            ],
+          ),
+        ),
+        child: StreamBuilder<QuerySnapshot>(
+          stream: _firestore
+              .collection('notifications')
+              .where('recipient_type', isEqualTo: 'worker')
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Center(child: CircularProgressIndicator());
+            }
 
-          if (snapshot.hasError) {
-            return Center(child: Text('Error loading notifications'));
-          }
+            if (snapshot.hasError) {
+              return Center(child: Text('Error loading notifications'));
+            }
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return _buildEmptyState();
-          }
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return _buildEmptyState();
+            }
 
-          // Filter notifications for this worker
-          List<QueryDocumentSnapshot> allDocs = snapshot.data!.docs;
-          List<QueryDocumentSnapshot> workerDocs = allDocs.where((doc) {
-            var data = doc.data() as Map<String, dynamic>;
-            String? workerId = data['worker_id'];
-            String? recipientId = data['recipient_id'];
-            return workerId == _workerId || recipientId == _workerId;
-          }).toList();
+            // Filter notifications for this worker
+            List<QueryDocumentSnapshot> allDocs = snapshot.data!.docs;
+            List<QueryDocumentSnapshot> workerDocs = allDocs.where((doc) {
+              var data = doc.data() as Map<String, dynamic>;
+              String? workerId = data['worker_id'];
+              String? recipientId = data['recipient_id'];
+              return workerId == _workerId || recipientId == _workerId;
+            }).toList();
 
-          // Sort by timestamp
-          workerDocs.sort((a, b) {
-            Timestamp? aTime = (a.data() as Map<String, dynamic>)['created_at'];
-            Timestamp? bTime = (b.data() as Map<String, dynamic>)['created_at'];
-            if (aTime == null) return 1;
-            if (bTime == null) return -1;
-            return bTime.compareTo(aTime);
-          });
+            // Sort by timestamp
+            workerDocs.sort((a, b) {
+              Timestamp? aTime =
+                  (a.data() as Map<String, dynamic>)['created_at'];
+              Timestamp? bTime =
+                  (b.data() as Map<String, dynamic>)['created_at'];
+              if (aTime == null) return 1;
+              if (bTime == null) return -1;
+              return bTime.compareTo(aTime);
+            });
 
-          if (workerDocs.isEmpty) {
-            return _buildEmptyState();
-          }
+            if (workerDocs.isEmpty) {
+              return _buildEmptyState();
+            }
 
-          return ListView.builder(
-            itemCount: workerDocs.length,
-            padding: EdgeInsets.all(16),
-            itemBuilder: (context, index) {
-              DocumentSnapshot doc = workerDocs[index];
-              String notificationId = doc.id;
-              Map<String, dynamic> notification =
-                  doc.data() as Map<String, dynamic>;
+            return ListView.builder(
+              itemCount: workerDocs.length,
+              padding: EdgeInsets.all(16),
+              itemBuilder: (context, index) {
+                DocumentSnapshot doc = workerDocs[index];
+                String notificationId = doc.id;
+                Map<String, dynamic> notification =
+                    doc.data() as Map<String, dynamic>;
 
-              bool isRead = notification['read'] ?? false;
-              String type = notification['type'] ?? 'general';
-              String title = notification['title'] ?? 'Notification';
-              String message = notification['message'] ?? '';
-              Timestamp? createdAt = notification['created_at'] as Timestamp?;
+                bool isRead = notification['read'] ?? false;
+                String type = notification['type'] ?? 'general';
+                String title = notification['title'] ?? 'Notification';
+                String message = notification['message'] ?? '';
+                Timestamp? createdAt = notification['created_at'] as Timestamp?;
 
-              // Format timestamp
-              String timeAgo = 'Just now';
-              if (createdAt != null) {
-                DateTime dateTime = createdAt.toDate();
-                Duration difference = DateTime.now().difference(dateTime);
+                // Calculate time ago
+                String timeAgo = 'Just now';
+                if (createdAt != null) {
+                  DateTime notificationTime = createdAt.toDate();
+                  Duration difference =
+                      DateTime.now().difference(notificationTime);
 
-                if (difference.inDays > 7) {
-                  timeAgo = DateFormat('MMM d, yyyy').format(dateTime);
-                } else if (difference.inDays > 0) {
-                  timeAgo = '${difference.inDays}d ago';
-                } else if (difference.inHours > 0) {
-                  timeAgo = '${difference.inHours}h ago';
-                } else if (difference.inMinutes > 0) {
-                  timeAgo = '${difference.inMinutes}m ago';
+                  if (difference.inDays > 7) {
+                    timeAgo =
+                        DateFormat('MMM dd, yyyy').format(notificationTime);
+                  } else if (difference.inDays > 0) {
+                    timeAgo = '${difference.inDays}d ago';
+                  } else if (difference.inHours > 0) {
+                    timeAgo = '${difference.inHours}h ago';
+                  } else if (difference.inMinutes > 0) {
+                    timeAgo = '${difference.inMinutes}m ago';
+                  }
                 }
-              }
 
-              // Get icon and color based on notification type
-              IconData icon;
-              Color iconColor;
+                // Icon and color based on notification type
+                IconData icon;
+                Color iconColor;
+                switch (type) {
+                  case 'new_booking':
+                    icon = Icons.calendar_today;
+                    iconColor = Colors.orange;
+                    break;
+                  case 'booking_status_update':
+                    icon = Icons.update;
+                    iconColor = Colors.blue;
+                    break;
+                  case 'new_message':
+                    icon = Icons.message;
+                    iconColor = Colors.green;
+                    break;
+                  case 'payment':
+                    icon = Icons.payment;
+                    iconColor = Colors.purple;
+                    break;
+                  default:
+                    icon = Icons.notifications;
+                    iconColor = Colors.red;
+                }
 
-              switch (type) {
-                case 'new_booking':
-                  icon = Icons.calendar_today;
-                  iconColor = Colors.blue;
-                  break;
-                case 'booking_status_update':
-                  icon = Icons.update;
-                  iconColor = Colors.orange;
-                  break;
-                case 'booking_accepted':
-                  icon = Icons.check_circle;
-                  iconColor = Colors.green;
-                  break;
-                case 'booking_declined':
-                  icon = Icons.cancel;
-                  iconColor = Colors.red;
-                  break;
-                case 'booking_cancelled':
-                  icon = Icons.cancel_outlined;
-                  iconColor = Colors.red;
-                  break;
-                case 'message':
-                  icon = Icons.message;
-                  iconColor = Colors.purple;
-                  break;
-                default:
-                  icon = Icons.notifications;
-                  iconColor = Colors.grey;
-              }
-
-              return Dismissible(
-                key: Key(notificationId),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  color: Colors.red,
-                  alignment: Alignment.centerRight,
-                  padding: EdgeInsets.symmetric(horizontal: 20),
-                  child: Icon(Icons.delete, color: Colors.white),
-                ),
-                confirmDismiss: (direction) async {
-                  return await showDialog(
-                    context: context,
-                    builder: (BuildContext context) {
-                      return AlertDialog(
-                        title: Text('Delete Notification'),
-                        content: Text(
-                            'Are you sure you want to delete this notification?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            child: Text('Cancel'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            child: Text('Delete',
-                                style: TextStyle(color: Colors.red)),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                },
-                onDismissed: (direction) {
-                  _deleteNotification(notificationId);
-                },
-                child: Card(
-                  elevation: isRead ? 0 : 2,
-                  color: isRead ? Colors.grey[100] : Colors.white,
-                  margin: EdgeInsets.only(bottom: 12),
-                  child: InkWell(
-                    onTap: () {
-                      if (!isRead) {
-                        _markAsRead(notificationId);
-                      }
-                    },
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: iconColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
+                return Dismissible(
+                  key: Key(notificationId),
+                  background: Container(
+                    color: Colors.red,
+                    alignment: Alignment.centerRight,
+                    padding: EdgeInsets.only(right: 20),
+                    child: Icon(Icons.delete, color: Colors.white),
+                  ),
+                  direction: DismissDirection.endToStart,
+                  confirmDismiss: (direction) async {
+                    return await showDialog(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title: Text('Delete Notification'),
+                          content: Text(
+                              'Are you sure you want to delete this notification?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(false),
+                              child: Text('Cancel'),
                             ),
-                            child: Icon(icon, color: iconColor, size: 24),
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        title,
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: isRead
-                                              ? FontWeight.normal
-                                              : FontWeight.bold,
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(true),
+                              child: Text('Delete',
+                                  style: TextStyle(color: Colors.red)),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                  onDismissed: (direction) {
+                    _deleteNotification(notificationId);
+                  },
+                  child: Card(
+                    elevation: isRead ? 0 : 2,
+                    color: isRead ? Colors.grey[100] : Colors.white,
+                    margin: EdgeInsets.only(bottom: 12),
+                    child: InkWell(
+                      onTap: () {
+                        if (!isRead) {
+                          _markAsRead(notificationId);
+                        }
+                      },
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: iconColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(icon, color: iconColor, size: 24),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          title,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: isRead
+                                                ? FontWeight.normal
+                                                : FontWeight.bold,
+                                          ),
                                         ),
                                       ),
+                                      if (!isRead)
+                                        Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: BoxDecoration(
+                                            color: Color(0xFFFF9800),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    message,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[700],
                                     ),
-                                    if (!isRead)
-                                      Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: BoxDecoration(
-                                          color: Color(0xFFFF9800),
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  message,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[700],
                                   ),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  timeAgo,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[500],
+                                  SizedBox(height: 8),
+                                  Text(
+                                    timeAgo,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[500],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              );
-            },
-          );
-        },
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
