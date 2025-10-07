@@ -8,6 +8,8 @@ import '../models/worker_model.dart';
 import '../models/booking_model.dart';
 import '../services/booking_service.dart';
 import '../constants/service_constants.dart';
+import 'customer_bookings_screen.dart';
+import 'customer_dashboard.dart';
 
 class EnhancedWorkerSelectionScreen extends StatefulWidget {
   final String serviceType;
@@ -1265,12 +1267,22 @@ class _EnhancedWorkerSelectionScreenState
           actions: [
             ElevatedButton(
               onPressed: () {
+                // FIXED: Navigate to CustomerDashboard with Bookings tab (index 1)
                 Navigator.pop(context); // Close dialog
-                Navigator.pop(context); // Go back to previous screen
-                Navigator.pop(context); // Go back again
+
+                // Navigate to Customer Dashboard with Bookings tab selected
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CustomerDashboard(
+                        initialIndex: 1), // Open on Bookings tab
+                  ),
+                  (route) => false, // Remove all previous routes
+                );
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-              child: Text('Done', style: TextStyle(color: Colors.white)),
+              child:
+                  Text('View Bookings', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),

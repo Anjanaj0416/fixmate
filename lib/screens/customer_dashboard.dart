@@ -18,13 +18,16 @@ import 'customer_favorites_screen.dart';
 import 'admin_support_chat_screen.dart';
 
 class CustomerDashboard extends StatefulWidget {
+  final int initialIndex;
+  const CustomerDashboard({Key? key, this.initialIndex = 0})
+      : super(key: key); // MODIFY THIS LINE
   @override
   _CustomerDashboardState createState() => _CustomerDashboardState();
 }
 
 class _CustomerDashboardState extends State<CustomerDashboard>
     with TickerProviderStateMixin {
-  int _currentIndex = 0;
+  late int _currentIndex;
   String _userLocation = 'Loading...';
   String _userName = 'User';
   String _userInitials = 'U';
@@ -39,6 +42,7 @@ class _CustomerDashboardState extends State<CustomerDashboard>
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex;
     _loadUserLocation();
     _loadCustomerIdAndListenToNotifications();
     _loadUserName();
