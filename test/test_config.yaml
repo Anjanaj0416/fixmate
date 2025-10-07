@@ -1,0 +1,90 @@
+test_suite:
+  name: "FixMate White Box Testing Suite"
+  version: "1.0.0"
+  coverage_target: 90
+  
+flutter_tests:
+  unit_tests:
+    - name: "WT001 - Booking Service Worker ID Validation"
+      file: "test/unit/services/booking_service_test.dart"
+      coverage_target: 100
+      critical: true
+      
+    - name: "WT002 - Google Auth Service Flow"
+      file: "test/unit/services/google_auth_service_test.dart"
+      coverage_target: 95
+      critical: true
+      
+    - name: "WT003 - ML Service HTTP Communication"
+      file: "test/unit/services/ml_service_test.dart"
+      coverage_target: 100
+      critical: true
+      
+    - name: "WT004 - Booking Status Update Logic"
+      file: "test/unit/services/booking_service_test.dart"
+      coverage_target: 100
+      critical: true
+      
+    - name: "WT005 - AI Chat Screen Logic"
+      file: "test/unit/screens/ai_chat_screen_test.dart"
+      coverage_target: 85
+      critical: false
+      
+    - name: "WT006 - Storage Service Upload"
+      file: "test/unit/services/storage_service_test.dart"
+      coverage_target: 95
+      critical: true
+      
+    - name: "WT007 - Rating Service Validation"
+      file: "test/unit/services/rating_service_test.dart"
+      coverage_target: 100
+      critical: true
+      
+    - name: "WT009 - Booking ID Generation"
+      file: "test/unit/services/enhanced_booking_service_test.dart"
+      coverage_target: 100
+      critical: true
+
+python_tests:
+  ml_tests:
+    - name: "WT008 - AI Service Classifier"
+      file: "test_ml/test_ai_service_classifier.py"
+      coverage_target: 85
+      critical: true
+      
+    - name: "WT010 - Worker Search Algorithm"
+      file: "test_ml/test_worker_search.py"
+      coverage_target: 90
+      critical: true
+
+test_execution:
+  parallel: true
+  max_workers: 4
+  timeout_seconds: 300
+  retry_on_failure: 1
+  
+reporting:
+  formats:
+    - html
+    - json
+    - lcov
+  output_dir: "test_reports"
+  
+code_coverage:
+  include:
+    - "lib/services/**"
+    - "lib/screens/**"
+    - "lib/models/**"
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "test/**"
+    
+ci_cd:
+  pre_test_commands:
+    - "flutter pub get"
+    - "flutter analyze"
+    - "pip install -r requirements.txt"
+  post_test_commands:
+    - "flutter format --set-exit-if-changed ."
+    - "genhtml coverage/lcov.info -o coverage/html"
