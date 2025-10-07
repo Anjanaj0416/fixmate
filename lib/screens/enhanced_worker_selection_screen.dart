@@ -266,53 +266,67 @@ class _EnhancedWorkerSelectionScreenState
     return Scaffold(
       appBar: AppBar(
         title: Text(
-            'Select ${widget.serviceType.replaceAll('_', ' ').toUpperCase()} Professional'),
-        backgroundColor: Colors.orange,
+            'Select ${widget.serviceType.replaceAll('_', ' ').toLowerCase().replaceFirstMapped(
+                  RegExp(r'^[a-z]'),
+                  (match) => match.group(0)!.toUpperCase(),
+                )} Professional'),
+        backgroundColor: Colors.blue[800],
         leading: IconButton(
           icon: Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Column(
-        children: [
-          // Sort and Filter Bar
-          _buildSortAndFilterBar(),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white, // White at top
+              Color(0xFFE3F2FD), // Soft light blue at bottom
+            ],
+          ),
+        ),
+        child: Column(
+          children: [
+            // Sort and Filter Bar
+            _buildSortAndFilterBar(),
 
-          // ✅ NEW: Location Filter Dropdown
-          _buildLocationFilterBar(),
+            // Location Filter Dropdown
+            _buildLocationFilterBar(),
 
-          // Worker Count
-          if (!_isLoading)
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                '${_filteredWorkers.length} professional${_filteredWorkers.length != 1 ? 's' : ''} found',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
+            // Worker Count
+            if (!_isLoading)
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  '${_filteredWorkers.length} professional${_filteredWorkers.length != 1 ? 's' : ''} found',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
-
-          // Worker List
-          Expanded(
-            child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: Colors.orange))
-                : _filteredWorkers.isEmpty
-                    ? _buildEmptyState()
-                    : RefreshIndicator(
-                        onRefresh: _loadWorkers,
-                        child: ListView.builder(
-                          padding: EdgeInsets.all(16),
-                          itemCount: _filteredWorkers.length,
-                          itemBuilder: (context, index) {
-                            return _buildWorkerCard(_filteredWorkers[index]);
-                          },
+            // Worker List
+            Expanded(
+              child: _isLoading
+                  ? Center(child: CircularProgressIndicator(color: Colors.blue))
+                  : _filteredWorkers.isEmpty
+                      ? _buildEmptyState()
+                      : RefreshIndicator(
+                          onRefresh: _loadWorkers,
+                          child: ListView.builder(
+                            padding: EdgeInsets.all(16),
+                            itemCount: _filteredWorkers.length,
+                            itemBuilder: (context, index) {
+                              return _buildWorkerCard(_filteredWorkers[index]);
+                            },
+                          ),
                         ),
-                      ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -322,14 +336,14 @@ class _EnhancedWorkerSelectionScreenState
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.orange[50],
+        color: Colors.blue[50],
         border: Border(
           bottom: BorderSide(color: Colors.grey[300]!, width: 1),
         ),
       ),
       child: Row(
         children: [
-          Icon(Icons.location_on, color: Colors.orange[700], size: 20),
+          Icon(Icons.location_on, color: Colors.blue[700], size: 20),
           SizedBox(width: 8),
           Text(
             'Location:',
@@ -346,13 +360,13 @@ class _EnhancedWorkerSelectionScreenState
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange[300]!),
+                border: Border.all(color: Colors.blue[300]!),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: _selectedLocationFilter,
                   isExpanded: true,
-                  icon: Icon(Icons.arrow_drop_down, color: Colors.orange[700]),
+                  icon: Icon(Icons.arrow_drop_down, color: Colors.blue[700]),
                   style: TextStyle(fontSize: 14, color: Colors.grey[800]),
                   items: _availableLocations.map((String location) {
                     return DropdownMenuItem<String>(
@@ -446,7 +460,7 @@ class _EnhancedWorkerSelectionScreenState
                 label: Text('Filters'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor:
-                      _showFilters ? Colors.orange : Colors.grey[200],
+                      _showFilters ? Colors.blue : Colors.grey[200],
                   foregroundColor:
                       _showFilters ? Colors.white : Colors.grey[800],
                   elevation: 0,
@@ -484,7 +498,7 @@ class _EnhancedWorkerSelectionScreenState
             min: 0,
             max: 5,
             divisions: 10,
-            activeColor: Colors.orange,
+            activeColor: Colors.blue,
             onChanged: (value) {
               setState(() => _minRating = value);
               _applySortingAndFilters();
@@ -501,7 +515,7 @@ class _EnhancedWorkerSelectionScreenState
             min: 0,
             max: 20,
             divisions: 20,
-            activeColor: Colors.orange,
+            activeColor: Colors.blue,
             onChanged: (values) {
               setState(() => _experienceRange = values);
               _applySortingAndFilters();
@@ -518,7 +532,7 @@ class _EnhancedWorkerSelectionScreenState
             min: 0,
             max: 100000,
             divisions: 100,
-            activeColor: Colors.orange,
+            activeColor: Colors.blue,
             onChanged: (values) {
               setState(() => _priceRange = values);
               _applySortingAndFilters();
@@ -534,8 +548,8 @@ class _EnhancedWorkerSelectionScreenState
               icon: Icon(Icons.clear_all),
               label: Text('Clear All Filters'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.orange,
-                side: BorderSide(color: Colors.orange),
+                foregroundColor: Colors.blue,
+                side: BorderSide(color: Colors.blue),
               ),
             ),
           ),
@@ -573,7 +587,7 @@ class _EnhancedWorkerSelectionScreenState
               icon: Icon(Icons.refresh),
               label: Text('Reset Filters'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
+                backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
@@ -600,14 +614,14 @@ class _EnhancedWorkerSelectionScreenState
                 // Profile Picture
                 CircleAvatar(
                   radius: 30,
-                  backgroundColor: Colors.orange[100],
+                  backgroundColor: Colors.blue[100],
                   backgroundImage: worker.profilePictureUrl != null &&
                           worker.profilePictureUrl!.isNotEmpty
                       ? NetworkImage(worker.profilePictureUrl!)
                       : null,
                   child: worker.profilePictureUrl == null ||
                           worker.profilePictureUrl!.isEmpty
-                      ? Icon(Icons.person, size: 30, color: Colors.orange)
+                      ? Icon(Icons.person, size: 30, color: Colors.blue)
                       : null,
                 ),
                 SizedBox(width: 12),
@@ -723,8 +737,8 @@ class _EnhancedWorkerSelectionScreenState
                     icon: Icon(Icons.rate_review, size: 18),
                     label: Text('Reviews'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.blue,
-                      side: BorderSide(color: Colors.blue),
+                      foregroundColor: Colors.orange,
+                      side: BorderSide(color: Colors.orange),
                       padding: EdgeInsets.symmetric(vertical: 8),
                     ),
                   ),
@@ -740,7 +754,7 @@ class _EnhancedWorkerSelectionScreenState
               child: ElevatedButton(
                 onPressed: () => _selectWorker(worker),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
+                  backgroundColor: Colors.blue,
                   padding: EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -881,8 +895,8 @@ class _EnhancedWorkerSelectionScreenState
                       children: worker.profile.specializations.map((spec) {
                         return Chip(
                           label: Text(spec, style: TextStyle(fontSize: 12)),
-                          backgroundColor: Colors.orange[50],
-                          labelStyle: TextStyle(color: Colors.orange[700]),
+                          backgroundColor: Colors.blue[50],
+                          labelStyle: TextStyle(color: Colors.blue[700]),
                           padding:
                               EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         );
@@ -1122,7 +1136,7 @@ class _EnhancedWorkerSelectionScreenState
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
             child: Text('Confirm', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -1145,7 +1159,7 @@ class _EnhancedWorkerSelectionScreenState
         builder: (context) => AlertDialog(
           content: Row(
             children: [
-              CircularProgressIndicator(color: Colors.orange),
+              CircularProgressIndicator(color: Colors.blue),
               SizedBox(width: 16),
               Text('Creating booking...'),
             ],
@@ -1230,7 +1244,7 @@ class _EnhancedWorkerSelectionScreenState
         builder: (context) => AlertDialog(
           title: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 32),
+              Icon(Icons.check_circle, color: Colors.blue, size: 32),
               SizedBox(width: 12),
               Text('Booking Created!'),
             ],
@@ -1255,7 +1269,7 @@ class _EnhancedWorkerSelectionScreenState
                 Navigator.pop(context); // Go back to previous screen
                 Navigator.pop(context); // Go back again
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
               child: Text('Done', style: TextStyle(color: Colors.white)),
             ),
           ],

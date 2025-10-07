@@ -1,5 +1,6 @@
 // lib/screens/customer_favorites_screen.dart
-// NEW FILE - Shows customer's favorite workers with option to book again
+// MODIFIED VERSION - Added ONLY gradient background (white → light red)
+// All original functionality preserved exactly as-is
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -152,17 +153,30 @@ class _CustomerFavoritesScreenState extends State<CustomerFavoritesScreen> {
         backgroundColor: Colors.red,
         foregroundColor: Colors.white,
       ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: Colors.red))
-          : _favoriteWorkers.isEmpty
-              ? _buildEmptyState()
-              : ListView.builder(
-                  padding: EdgeInsets.all(16),
-                  itemCount: _favoriteWorkers.length,
-                  itemBuilder: (context, index) {
-                    return _buildWorkerCard(_favoriteWorkers[index]);
-                  },
-                ),
+      // ✅ ONLY CHANGE: Wrapped body in Container with gradient
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white, // White at top
+              Color(0xFFFFE5E5), // Light red at bottom
+            ],
+          ),
+        ),
+        child: _isLoading
+            ? Center(child: CircularProgressIndicator(color: Colors.red))
+            : _favoriteWorkers.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    padding: EdgeInsets.all(16),
+                    itemCount: _favoriteWorkers.length,
+                    itemBuilder: (context, index) {
+                      return _buildWorkerCard(_favoriteWorkers[index]);
+                    },
+                  ),
+      ),
     );
   }
 
