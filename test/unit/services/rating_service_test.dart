@@ -3,7 +3,7 @@ import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fixmate/services/rating_service.dart';
-
+import 'dart:typed_data';
 @GenerateMocks([
   FirebaseFirestore,
   CollectionReference,
