@@ -1,5 +1,6 @@
 // lib/screens/worker_bookings_screen.dart
-// COMPLETE FIXED VERSION - Replace your entire file with this
+// MODIFIED VERSION - Added gradient background (white at top → light orange at bottom)
+// All original functionality preserved exactly as-is
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -62,7 +63,25 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
   Widget build(BuildContext context) {
     if (_isLoading || _workerId == null) {
       return Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        appBar: AppBar(
+          title: Text('My Bookings'),
+          backgroundColor: Color(0xFFFF9800),
+          elevation: 0,
+        ),
+        // 🎨 ADDED: Gradient background during loading
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white,
+                Color(0xFFFFE5CC), // Soft light orange
+              ],
+            ),
+          ),
+          child: Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
@@ -85,15 +104,28 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildBookingsList('requested'),
-          _buildBookingsList('accepted'),
-          _buildBookingsList('in_progress'),
-          _buildBookingsList('completed'),
-          _buildBookingsList('all'),
-        ],
+      // 🎨 MODIFIED: Wrapped TabBarView with gradient background
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              Color(0xFFFFE5CC), // Soft light orange
+            ],
+          ),
+        ),
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildBookingsList('requested'),
+            _buildBookingsList('accepted'),
+            _buildBookingsList('in_progress'),
+            _buildBookingsList('completed'),
+            _buildBookingsList('all'),
+          ],
+        ),
       ),
     );
   }
@@ -498,7 +530,7 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
               SizedBox(height: 4),
               Text(booking.problemDescription),
 
-              // NEW: Photo viewing section
+              // Photo viewing section
               if (booking.problemImageUrls.isNotEmpty) ...[
                 SizedBox(height: 12),
                 Container(
@@ -523,8 +555,8 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
                       ),
                       TextButton.icon(
                         onPressed: () {
-                          Navigator.pop(context); // Close dialog
-                          _viewIssuePhotos(booking); // Open photo viewer
+                          Navigator.pop(context);
+                          _viewIssuePhotos(booking);
                         },
                         icon: Icon(Icons.remove_red_eye, size: 18),
                         label: Text('View'),
@@ -546,7 +578,7 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    Navigator.pop(context); // Close dialog first
+                    Navigator.pop(context);
                     _openChatWithCustomer(booking);
                   },
                   icon: Icon(Icons.chat_bubble_outline, color: Colors.white),
@@ -592,7 +624,6 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
     );
   }
 
-// NEW METHOD: Add this method to your WorkerBookingsScreen class
   void _viewIssuePhotos(BookingModel booking) {
     if (booking.problemImageUrls.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -616,17 +647,14 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
     );
   }
 
-// ADD this new method to your worker_bookings_screen.dart file:
   Future<void> _openChatWithCustomer(BookingModel booking) async {
     try {
-      // Show loading
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => Center(child: CircularProgressIndicator()),
       );
 
-      // Create or get chat room
       String chatId = await ChatService.createOrGetChatRoom(
         bookingId: booking.bookingId,
         customerId: booking.customerId,
@@ -635,10 +663,8 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
         workerName: booking.workerName,
       );
 
-      // Close loading
       Navigator.pop(context);
 
-      // Open chat screen
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -651,10 +677,8 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
         ),
       );
     } catch (e) {
-      // Close loading
       Navigator.pop(context);
 
-      // Show error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to open chat: $e'),
@@ -685,7 +709,6 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
     );
   }
 
-  // ==================== ACCEPT BOOKING ====================
   void _acceptBooking(BookingModel booking) {
     TextEditingController priceController = TextEditingController();
     TextEditingController notesController = TextEditingController();
@@ -772,7 +795,6 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
     }
   }
 
-  // ==================== DECLINE BOOKING ====================
   void _declineBooking(BookingModel booking) {
     TextEditingController reasonController = TextEditingController();
 
@@ -823,7 +845,6 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
     try {
       print('🔄 Declining booking: $bookingId');
 
-      // CRITICAL: Use 'declined' status with reason
       await BookingService.updateBookingStatus(
         bookingId: bookingId,
         newStatus: BookingStatus.declined,
@@ -838,7 +859,6 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
     }
   }
 
-  // ==================== START WORK ====================
   void _startWork(BookingModel booking) {
     showDialog(
       context: context,
@@ -871,7 +891,6 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
     );
   }
 
-  // ==================== COMPLETE WORK ====================
   void _completeBooking(BookingModel booking) {
     TextEditingController notesController = TextEditingController();
 
@@ -924,7 +943,6 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
     );
   }
 
-  // ==================== SNACKBAR HELPERS ====================
   void _showSuccessSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -960,9 +978,7 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
   }
 }
 
-// COMPLETE CLASS - Add this at the end of worker_bookings_screen.dart
-// Replace the incomplete IssuePhotoViewerScreenWorker class
-
+// COMPLETE CLASS - Issue Photo Viewer Screen for Workers
 class IssuePhotoViewerScreenWorker extends StatefulWidget {
   final List<String> imageUrls;
   final String problemDescription;
