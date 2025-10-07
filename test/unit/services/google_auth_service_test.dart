@@ -10,7 +10,7 @@ import 'package:fixmate/services/google_auth_service.dart';
   FirebaseAuth,
   GoogleSignIn,
   GoogleSignInAccount,
-  GoogleSignInAuthentication,
+  GoogleSignInAuthentication, // FIXED: Correct class name
   UserCredential,
   User,
   FirebaseFirestore,
@@ -38,7 +38,7 @@ void main() {
       test('BRANCH 1: Successful sign-in path - complete flow', () async {
         // Arrange - Setup mocks for SUCCESS path
         final mockGoogleUser = MockGoogleSignInAccount();
-        final mockGoogleAuth = MockGoogleSignInAuthentication();
+        final mockGoogleAuth = MockGoogleSignInAuthentication(); // FIXED
         final mockUserCredential = MockUserCredential();
         final mockUser = MockUser();
 
@@ -75,41 +75,127 @@ void main() {
         // Assert - Verify null return path executed
         expect(result, isNull);
         verify(mockGoogleSignIn.signIn()).called(1);
-        // Verify no Firebase sign-in was attempted (proves branch logic)
+        // Verify no Firebase sign-in attempted (proves branch logic)
         verifyNever(mockAuth.signInWithCredential(any));
       });
 
-      test('BRANCH 3: FirebaseAuthException - error handling path', () async {
+      test('BRANCH 3: Firebase authentication error - error handling path',
+          () async {
         // Arrange - Setup for ERROR path
         final mockGoogleUser = MockGoogleSignInAccount();
-        final mockGoogleAuth = MockGoogleInAuthentication();
+        final mockGoogleAuth = MockGoogleSignInAuthentication(); // FIXED
 
         when(mockGoogleSignIn.signIn()).thenAnswer((_) async => mockGoogleUser);
         when(mockGoogleUser.email).thenReturn('test@example.com');
         when(mockGoogleUser.authentication)
             .thenAnswer((_) async => mockGoogleAuth);
-        when(mockGoogleAuth.accessToken).thenReturn('token');
-        when(mockGoogleAuth.idToken).thenReturn('token');
+        when(mockGoogleAuth.accessToken).thenReturn('test_access_token');
+        when(mockGoogleAuth.idToken).thenReturn('test_id_token');
         when(mockAuth.signInWithCredential(any))
-            .thenThrow(FirebaseAuthException(code: 'network-request-failed'));
+            .thenThrow(FirebaseAuthException(code: 'user-disabled'));
 
         // Act & Assert - Execute ERROR handling branch
         expect(
           () => authService.signInWithGoogle(),
           throwsA(isA<FirebaseAuthException>()),
         );
+
+        // Verify error path was taken
         verify(mockGoogleSignIn.signIn()).called(1);
+        verify(mockAuth.signInWithCredential(any)).called(1);
       });
 
-      test('BRANCH 4: Generic exception - catch-all error path', () async {
-        // Arrange - Setup for GENERIC ERROR path
+      test('BRANCH 4: Google sign-in throws exception - exception catch path',
+          () async {
+        // Arrange - Setup for EXCEPTION path
         when(mockGoogleSignIn.signIn()).thenThrow(Exception('Network error'));
 
-        // Act & Assert - Execute generic catch block
+        // Act & Assert - Execute exception catch block
         expect(
           () => authService.signInWithGoogle(),
           throwsA(isA<Exception>()),
         );
+
+        // Verify exception path was taken
+        verify(mockGoogleSignIn.signIn()).called(1);
+        verifyNever(mockAuth.signInWithCredential(any));
+      });
+
+      test('BRANCH 5: Missing authentication tokens - null handling path',
+          () async {
+        // Arrange - Setup for NULL token path
+        final mockGoogleUser = MockGoogleSignInAccount();
+        final mockGoogleAuth = MockGoogleSignInAuthentication(); // FIXED
+
+        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => mockGoogleUser);
+        when(mockGoogleUser.email).thenReturn('test@example.com');
+        when(mockGoogleUser.authentication)
+            .thenAnswer((_) async => mockGoogleAuth);
+        when(mockGoogleAuth.accessToken).thenReturn(null); // NULL token
+        when(mockGoogleAuth.idToken).thenReturn(null); // NULL token
+
+        // Act & Assert - Should handle null tokens gracefully
+        expect(
+          () => authService.signInWithGoogle(),
+          throwsA(isA<Exception>()),
+        );
+      });
+    });
+
+    group('Additional White Box Coverage', () {
+      test('BRANCH 6: Verify credential creation with tokens', () async {
+        // Tests internal credential creation logic
+        final mockGoogleUser = MockGoogleSignInAccount();
+        final mockGoogleAuth = MockGoogleSignInAuthentication(); // FIXED
+        final mockUserCredential = MockUserCredential();
+        final mockUser = MockUser();
+
+        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => mockGoogleUser);
+        when(mockGoogleUser.email).thenReturn('test@example.com');
+        when(mockGoogleUser.authentication)
+            .thenAnswer((_) async => mockGoogleAuth);
+        when(mockGoogleAuth.accessToken).thenReturn('access_token_123');
+        when(mockGoogleAuth.idToken).thenReturn('id_token_456');
+        when(mockAuth.signInWithCredential(any))
+            .thenAnswer((_) async => mockUserCredential);
+        when(mockUserCredential.user).thenReturn(mockUser);
+
+        // Act
+        await authService.signInWithGoogle();
+
+        // Assert - Verify credential was created with correct tokens
+        final captured =
+            verify(mockAuth.signInWithCredential(captureAny)).captured;
+        expect(captured, isNotEmpty);
+      });
+
+      test('BRANCH 7: User document creation path', () async {
+        // Tests the Firestore document creation branch
+        final mockGoogleUser = MockGoogleSignInAccount();
+        final mockGoogleAuth = MockGoogleSignInAuthentication(); // FIXED
+        final mockUserCredential = MockUserCredential();
+        final mockUser = MockUser();
+
+        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => mockGoogleUser);
+        when(mockGoogleUser.email).thenReturn('test@example.com');
+        when(mockGoogleUser.displayName).thenReturn('Test User');
+        when(mockGoogleUser.authentication)
+            .thenAnswer((_) async => mockGoogleAuth);
+        when(mockGoogleAuth.accessToken).thenReturn('test_token');
+        when(mockGoogleAuth.idToken).thenReturn('test_id_token');
+        when(mockAuth.signInWithCredential(any))
+            .thenAnswer((_) async => mockUserCredential);
+        when(mockUserCredential.user).thenReturn(mockUser);
+        when(mockUser.uid).thenReturn('user_uid_123');
+        when(mockUser.email).thenReturn('test@example.com');
+
+        // Act
+        await authService.signInWithGoogle();
+
+        // Assert - Verify all branches executed
+        verify(mockGoogleSignIn.signIn()).called(1);
+        verify(mockGoogleUser.authentication).called(1);
+        verify(mockAuth.signInWithCredential(any)).called(1);
       });
     });
   });

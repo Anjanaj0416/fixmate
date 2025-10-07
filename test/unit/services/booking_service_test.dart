@@ -6,14 +6,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fixmate/services/booking_service.dart';
 import 'package:fixmate/models/booking_model.dart';
 
-// Generate mocks
+// Generate mocks with proper generic types
 @GenerateMocks([
   FirebaseFirestore,
   FirebaseAuth,
-  CollectionReference,
   DocumentReference,
   DocumentSnapshot,
   QuerySnapshot
+], customMocks: [
+  MockSpec<CollectionReference<Map<String, dynamic>>>(
+      as: #MockCollectionReference)
 ])
 import 'booking_service_test.mocks.dart';
 
@@ -155,6 +157,36 @@ void main() {
         });
         when(mockDocumentReference.update(any)).thenAnswer((_) async => {});
 
+        // Act - Tests ACCEPTED branch
+        await BookingService.updateBookingStatus(
+          bookingId: 'test_booking',
+          newStatus: BookingStatus.accepted,
+        );
+
+        // Assert - Verify accepted_at timestamp was set
+        final captured =
+            verify(mockDocumentReference.update(captureAny)).captured;
+        expect(captured.first['status'], equals('accepted'));
+        expect(captured.first['accepted_at'], isNotNull);
+      });
+
+      test('BRANCH 2: Status transition to COMPLETED with final price',
+          () async {
+        // Arrange
+        final mockBookingDoc = MockDocumentSnapshot();
+        when(mockFirestore.collection('bookings'))
+            .thenReturn(mockBookingsCollection);
+        when(mockBookingsCollection.doc(any)).thenReturn(mockDocumentReference);
+        when(mockDocumentReference.get())
+            .thenAnswer((_) async => mockBookingDoc);
+        when(mockBookingDoc.exists).thenReturn(true);
+        when(mockBookingDoc.data()).thenReturn({
+          'customer_id': 'customer_123',
+          'worker_name': 'Test Worker',
+          'status': 'in_progress',
+        });
+        when(mockDocumentReference.update(any)).thenAnswer((_) async => {});
+
         // Act - Tests COMPLETED branch with final price
         await BookingService.updateBookingStatus(
           bookingId: 'test_booking',
@@ -170,8 +202,36 @@ void main() {
         expect(captured.first['final_price'], equals(5000));
       });
 
-      test('BRANCH 4: Status transition to DECLINED - timestamp branch',
-          () async {
+      test('BRANCH 3: Status transition to IN_PROGRESS', () async {
+        // Arrange
+        final mockBookingDoc = MockDocumentSnapshot();
+        when(mockFirestore.collection('bookings'))
+            .thenReturn(mockBookingsCollection);
+        when(mockBookingsCollection.doc(any)).thenReturn(mockDocumentReference);
+        when(mockDocumentReference.get())
+            .thenAnswer((_) async => mockBookingDoc);
+        when(mockBookingDoc.exists).thenReturn(true);
+        when(mockBookingDoc.data()).thenReturn({
+          'customer_id': 'customer_123',
+          'worker_name': 'Test Worker',
+          'status': 'accepted',
+        });
+        when(mockDocumentReference.update(any)).thenAnswer((_) async => {});
+
+        // Act
+        await BookingService.updateBookingStatus(
+          bookingId: 'test_booking',
+          newStatus: BookingStatus.inProgress,
+        );
+
+        // Assert
+        final captured =
+            verify(mockDocumentReference.update(captureAny)).captured;
+        expect(captured.first['status'], equals('in_progress'));
+        expect(captured.first['started_at'], isNotNull);
+      });
+
+      test('BRANCH 4: Status transition to DECLINED', () async {
         // Arrange
         final mockBookingDoc = MockDocumentSnapshot();
         when(mockFirestore.collection('bookings'))
@@ -187,21 +247,20 @@ void main() {
         });
         when(mockDocumentReference.update(any)).thenAnswer((_) async => {});
 
-        // Act - Tests DECLINED branch
+        // Act
         await BookingService.updateBookingStatus(
           bookingId: 'test_booking',
           newStatus: BookingStatus.declined,
         );
 
-        // Assert - Verify declined_at timestamp was set
+        // Assert
         final captured =
             verify(mockDocumentReference.update(captureAny)).captured;
         expect(captured.first['status'], equals('declined'));
         expect(captured.first['declined_at'], isNotNull);
       });
 
-      test('BRANCH 5: Status transition to CANCELLED - timestamp branch',
-          () async {
+      test('BRANCH 5: Status transition to CANCELLED', () async {
         // Arrange
         final mockBookingDoc = MockDocumentSnapshot();
         when(mockFirestore.collection('bookings'))
