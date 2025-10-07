@@ -1,4 +1,5 @@
 // lib/screens/worker_reviews_screen.dart
+// MODIFIED VERSION - Added soft light-orange and white gradient background
 import 'package:flutter/material.dart';
 import '../models/review_model.dart';
 import '../services/rating_service.dart';
@@ -59,24 +60,34 @@ class _WorkerReviewsScreenState extends State<WorkerReviewsScreen> {
         title: Text('Reviews'),
         backgroundColor: Color(0xFFFF9800),
       ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadReviews,
-              child: _reviews.isEmpty
-                  ? _buildEmptyState()
-                  : SingleChildScrollView(
-                      physics: AlwaysScrollableScrollPhysics(),
-                      child: Column(
+      // ✅ ADDED: Gradient background container
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white, // White at top
+              Color(0xFFFFE0B2), // Light orange at bottom
+            ],
+          ),
+        ),
+        child: _isLoading
+            ? Center(child: CircularProgressIndicator())
+            : RefreshIndicator(
+                onRefresh: _loadReviews,
+                child: _reviews.isEmpty
+                    ? _buildEmptyState()
+                    : ListView(
+                        padding: EdgeInsets.all(16),
                         children: [
-                          _buildRatingHeader(),
-                          _buildRatingBreakdown(),
-                          Divider(thickness: 8, color: Colors.grey[200]),
+                          _buildStatsCard(),
+                          SizedBox(height: 16),
                           _buildReviewsList(),
                         ],
                       ),
-                    ),
-            ),
+              ),
+      ),
     );
   }
 
@@ -85,19 +96,23 @@ class _WorkerReviewsScreenState extends State<WorkerReviewsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.star_border, size: 80, color: Colors.grey[300]),
+          Icon(
+            Icons.rate_review_outlined,
+            size: 80,
+            color: Colors.grey[300],
+          ),
           SizedBox(height: 16),
           Text(
             'No reviews yet',
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
               color: Colors.grey[600],
             ),
           ),
           SizedBox(height: 8),
           Text(
-            'Reviews from customers will appear here',
+            'Be the first to leave a review!',
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey[500],
@@ -108,296 +123,194 @@ class _WorkerReviewsScreenState extends State<WorkerReviewsScreen> {
     );
   }
 
-  Widget _buildRatingHeader() {
-    double averageRating = _stats['average_rating'] ?? 0.0;
+  Widget _buildStatsCard() {
+    double avgRating = _stats['average_rating'] ?? 0.0;
     int totalReviews = _stats['total_reviews'] ?? 0;
+    Map<int, int> breakdown = _stats['rating_breakdown'] ?? {};
 
-    return Container(
-      padding: EdgeInsets.all(24),
-      color: Colors.white,
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Average rating
-              Column(
-                children: [
-                  Text(
-                    averageRating.toStringAsFixed(1),
-                    style: TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFFF9800),
-                    ),
-                  ),
-                  Row(
-                    children: List.generate(5, (index) {
-                      return Icon(
-                        index < averageRating.floor()
-                            ? Icons.star
-                            : (index < averageRating.ceil() &&
-                                    averageRating % 1 != 0)
-                                ? Icons.star_half
-                                : Icons.star_border,
-                        color: Color(0xFFFF9800),
-                        size: 24,
-                      );
-                    }),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    '$totalReviews ${totalReviews == 1 ? 'review' : 'reviews'}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(width: 32),
-
-              // Worker info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                Column(
                   children: [
                     Text(
-                      widget.workerName,
+                      avgRating.toStringAsFixed(1),
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 48,
                         fontWeight: FontWeight.bold,
+                        color: Color(0xFFFF9800),
                       ),
                     ),
-                    SizedBox(height: 8),
+                    Row(
+                      children: List.generate(5, (index) {
+                        return Icon(
+                          index < avgRating.floor()
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: Colors.amber,
+                          size: 24,
+                        );
+                      }),
+                    ),
+                    SizedBox(height: 4),
                     Text(
-                      _getRatingDescription(averageRating),
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
+                      '$totalReviews reviews',
+                      style: TextStyle(color: Colors.grey[600]),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-        ],
+                SizedBox(
+                  height: 120,
+                  child: VerticalDivider(thickness: 1),
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildRatingBar(5, breakdown[5] ?? 0, totalReviews),
+                      _buildRatingBar(4, breakdown[4] ?? 0, totalReviews),
+                      _buildRatingBar(3, breakdown[3] ?? 0, totalReviews),
+                      _buildRatingBar(2, breakdown[2] ?? 0, totalReviews),
+                      _buildRatingBar(1, breakdown[1] ?? 0, totalReviews),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildRatingBreakdown() {
-    Map<int, int> breakdown = _stats['rating_breakdown'] ?? {};
-    int totalReviews = _stats['total_reviews'] ?? 1;
+  Widget _buildRatingBar(int stars, int count, int total) {
+    double percentage = total > 0 ? (count / total) : 0.0;
 
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 2),
+      child: Row(
         children: [
-          Text(
-            'Rating Breakdown',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+          Text('$stars', style: TextStyle(fontSize: 12)),
+          SizedBox(width: 4),
+          Icon(Icons.star, size: 12, color: Colors.amber),
+          SizedBox(width: 8),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: percentage,
+                backgroundColor: Colors.grey[200],
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.amber),
+                minHeight: 6,
+              ),
             ),
           ),
-          SizedBox(height: 12),
-          ...List.generate(5, (index) {
-            int stars = 5 - index;
-            int count = breakdown[stars] ?? 0;
-            double percentage = totalReviews > 0 ? count / totalReviews : 0;
-
-            return Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Text(
-                    '$stars',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  SizedBox(width: 4),
-                  Icon(Icons.star, size: 16, color: Color(0xFFFF9800)),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: percentage,
-                        backgroundColor: Colors.grey[200],
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Color(0xFFFF9800),
-                        ),
-                        minHeight: 8,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  SizedBox(
-                    width: 30,
-                    child: Text(
-                      '$count',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                      textAlign: TextAlign.right,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
+          SizedBox(width: 8),
+          SizedBox(
+            width: 30,
+            child: Text(
+              '$count',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              textAlign: TextAlign.right,
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildReviewsList() {
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.all(16),
-      itemCount: _reviews.length,
-      separatorBuilder: (context, index) => Divider(height: 24),
-      itemBuilder: (context, index) {
-        return _buildReviewCard(_reviews[index]);
-      },
+    if (_reviews.isEmpty) {
+      return SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: Text(
+            'Recent Reviews',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2C3E50),
+            ),
+          ),
+        ),
+        ..._reviews.map((review) => _buildReviewCard(review)).toList(),
+      ],
     );
   }
 
   Widget _buildReviewCard(ReviewModel review) {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Customer name and rating
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: Colors.grey[300],
-                child: Text(
-                  review.customerName[0].toUpperCase(),
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      review.customerName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+    return Card(
+      margin: EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        review.customerName,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
-                    ),
-                    Row(
-                      children: [
-                        ...List.generate(5, (index) {
+                      SizedBox(height: 4),
+                      Row(
+                        children: List.generate(5, (index) {
                           return Icon(
-                            index < review.rating.floor()
+                            index < review.rating
                                 ? Icons.star
                                 : Icons.star_border,
-                            color: Color(0xFFFF9800),
+                            color: Colors.amber,
                             size: 16,
                           );
                         }),
-                        SizedBox(width: 8),
-                        Text(
-                          DateFormat('MMM dd, yyyy').format(review.createdAt),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  DateFormat('MMM d, yyyy').format(review.createdAt),
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            if (review.review.isNotEmpty) ...[
+              SizedBox(height: 12),
+              Text(
+                review.review,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[800],
+                  height: 1.4,
                 ),
               ),
             ],
-          ),
-          SizedBox(height: 12),
-
-          // Review text
-          Text(
-            review.review,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[800],
-              height: 1.5,
-            ),
-          ),
-
-          // Tags
-          if (review.tags.isNotEmpty) ...[
-            SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: review.tags.map((tag) {
-                return Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Color(0xFFFF9800).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    tag,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFFFF9800),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
           ],
-
-          // Service type badge
-          SizedBox(height: 12),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              review.serviceType,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
-  }
-
-  String _getRatingDescription(double rating) {
-    if (rating >= 4.5) return 'Excellent service quality';
-    if (rating >= 4.0) return 'Very good service quality';
-    if (rating >= 3.5) return 'Good service quality';
-    if (rating >= 3.0) return 'Average service quality';
-    return 'Needs improvement';
   }
 }

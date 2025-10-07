@@ -1,5 +1,5 @@
 // lib/screens/worker_chats_screen.dart
-// FIXED VERSION with built-in diagnostic
+// FIXED VERSION with built-in diagnostic and back button
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -194,7 +194,10 @@ Sample worker_ids in DB: ${sampleWorkerIds.join(', ')}
           title: Text('My Chats'),
           backgroundColor: Colors.orange,
           foregroundColor: Colors.white,
-          automaticallyImplyLeading: false,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context),
+          ),
         ),
         body: Container(
           decoration: BoxDecoration(
@@ -218,7 +221,10 @@ Sample worker_ids in DB: ${sampleWorkerIds.join(', ')}
           title: Text('My Chats'),
           backgroundColor: Colors.orange,
           foregroundColor: Colors.white,
-          automaticallyImplyLeading: false,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context),
+          ),
         ),
         body: Container(
           decoration: BoxDecoration(
@@ -253,7 +259,10 @@ Sample worker_ids in DB: ${sampleWorkerIds.join(', ')}
         title: Text('My Chats'),
         backgroundColor: Colors.orange,
         foregroundColor: Colors.white,
-        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
           IconButton(
             icon: Icon(Icons.support_agent),
