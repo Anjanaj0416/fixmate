@@ -47,143 +47,167 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Center(child: CircularProgressIndicator());
+      return Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.white, Colors.lightGreen.shade50],
+          ),
+        ),
+        child: Center(
+          child: CircularProgressIndicator(color: Colors.green.shade700),
+        ),
+      );
     }
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Admin Account',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Colors.lightGreen.shade50],
+        ),
+      ),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Admin Account Section
+            Text(
+              'Admin Account',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.green.shade700,
+              ),
             ),
-          ),
-          SizedBox(height: 24),
+            SizedBox(height: 24),
 
-          // Admin Info Card
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildInfoRow(
-                    'Email',
-                    _currentUser?.email ?? 'N/A',
-                    Icons.email,
-                  ),
-                  Divider(height: 24),
-                  _buildInfoRow(
-                    'User ID',
-                    _currentUser?.uid ?? 'N/A',
-                    Icons.fingerprint,
-                  ),
-                  Divider(height: 24),
-                  _buildInfoRow(
-                    'Role',
-                    _adminData?['role'] ?? 'admin',
-                    Icons.admin_panel_settings,
-                  ),
-                  Divider(height: 24),
-                  _buildInfoRow(
-                    'Account Type',
-                    _adminData?['accountType'] ?? 'admin',
-                    Icons.account_circle,
-                  ),
-                  if (_adminData?['displayName'] != null) ...[
+            // Admin Info Card
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    _buildInfoRow(
+                      'Email',
+                      _currentUser?.email ?? 'N/A',
+                      Icons.email,
+                    ),
                     Divider(height: 24),
                     _buildInfoRow(
-                      'Display Name',
-                      _adminData!['displayName'],
-                      Icons.person,
+                      'User ID',
+                      _currentUser?.uid ?? 'N/A',
+                      Icons.fingerprint,
+                    ),
+                    Divider(height: 24),
+                    _buildInfoRow(
+                      'Role',
+                      _adminData?['role'] ?? 'admin',
+                      Icons.admin_panel_settings,
+                    ),
+                    Divider(height: 24),
+                    _buildInfoRow(
+                      'Account Type',
+                      _adminData?['accountType'] ?? 'admin',
+                      Icons.account_circle,
+                    ),
+                    if (_adminData?['displayName'] != null) ...[
+                      Divider(height: 24),
+                      _buildInfoRow(
+                        'Display Name',
+                        _adminData!['displayName'],
+                        Icons.person,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: 24),
+
+            // Account Actions Section
+            Text(
+              'Account Actions',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.green.shade700,
+              ),
+            ),
+            SizedBox(height: 16),
+
+            _buildActionButton(
+              'Change Password',
+              Icons.lock,
+              Colors.blue,
+              _changePassword,
+            ),
+            SizedBox(height: 12),
+            _buildActionButton(
+              'Update Profile',
+              Icons.edit,
+              Colors.orange,
+              _updateProfile,
+            ),
+            SizedBox(height: 12),
+            _buildActionButton(
+              'View Activity Log',
+              Icons.history,
+              Colors.purple,
+              () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Activity log coming soon')),
+                );
+              },
+            ),
+
+            SizedBox(height: 24),
+
+            // System Information Section
+            Text(
+              'System Information',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.green.shade700,
+              ),
+            ),
+            SizedBox(height: 16),
+
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    _buildInfoRow(
+                      'App Version',
+                      '1.0.0',
+                      Icons.info,
+                    ),
+                    Divider(height: 24),
+                    _buildInfoRow(
+                      'Database',
+                      'Firebase Firestore',
+                      Icons.storage,
+                    ),
+                    Divider(height: 24),
+                    _buildInfoRow(
+                      'Authentication',
+                      'Firebase Auth',
+                      Icons.security,
                     ),
                   ],
-                ],
+                ),
               ),
             ),
-          ),
-
-          SizedBox(height: 24),
-
-          // Account Actions
-          Text(
-            'Account Actions',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 16),
-
-          _buildActionButton(
-            'Change Password',
-            Icons.lock,
-            Colors.blue,
-            _changePassword,
-          ),
-          SizedBox(height: 12),
-          _buildActionButton(
-            'Update Profile',
-            Icons.edit,
-            Colors.orange,
-            _updateProfile,
-          ),
-          SizedBox(height: 12),
-          _buildActionButton(
-            'View Activity Log',
-            Icons.history,
-            Colors.purple,
-            () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Activity log coming soon')),
-              );
-            },
-          ),
-
-          SizedBox(height: 24),
-
-          // System Info
-          Text(
-            'System Information',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 16),
-
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildInfoRow(
-                    'App Version',
-                    '1.0.0',
-                    Icons.info,
-                  ),
-                  Divider(height: 24),
-                  _buildInfoRow(
-                    'Database',
-                    'Firebase Firestore',
-                    Icons.storage,
-                  ),
-                  Divider(height: 24),
-                  _buildInfoRow(
-                    'Authentication',
-                    'Firebase Auth',
-                    Icons.security,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -295,40 +319,35 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: Text('Cancel'),
           ),
-          TextButton(
-            onPressed: () {
+          ElevatedButton(
+            onPressed: () async {
               if (newPasswordController.text ==
                   confirmPasswordController.text) {
-                Navigator.pop(context, true);
+                try {
+                  await _currentUser
+                      ?.updatePassword(newPasswordController.text);
+                  Navigator.pop(context, true);
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: ${e.toString()}')),
+                  );
+                }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Passwords do not match')),
                 );
               }
             },
-            child: Text('Change'),
+            child: Text('Update'),
           ),
         ],
       ),
     );
 
     if (result == true) {
-      try {
-        await _currentUser?.updatePassword(newPasswordController.text);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Password changed successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error changing password: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Password updated successfully')),
+      );
     }
   }
 
@@ -353,8 +372,21 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: Text('Cancel'),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(_currentUser?.uid)
+                    .update({'displayName': displayNameController.text});
+                await _loadAdminData();
+                Navigator.pop(context, true);
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: ${e.toString()}')),
+                );
+              }
+            },
             child: Text('Update'),
           ),
         ],
@@ -362,31 +394,9 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     );
 
     if (result == true) {
-      try {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(_currentUser!.uid)
-            .update({
-          'displayName': displayNameController.text,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        await _loadAdminData();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Profile updated successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating profile: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Profile updated successfully')),
+      );
     }
   }
 }

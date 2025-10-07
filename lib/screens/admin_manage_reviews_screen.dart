@@ -1,5 +1,5 @@
 // lib/screens/admin_manage_reviews_screen.dart
-// ENHANCED VERSION - Added delete inappropriate reviews functionality
+// MODIFIED VERSION - Removed AppBar, only showing "Manage Reviews" bar with gradient background
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -113,112 +113,245 @@ class _AdminManageReviewsScreenState extends State<AdminManageReviewsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('reviews')
-          .orderBy('created_at', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 64, color: Colors.red),
-                SizedBox(height: 16),
-                Text('Error: ${snapshot.error}'),
-              ],
-            ),
-          );
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.star_outline, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text(
-                  'No reviews found',
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white, // White at top
+              Color(0xFFE8F5E9), // Soft light green at bottom
+            ],
+          ),
+        ),
+        child: Column(
+          children: [
+            // ✅ Custom "Manage Reviews" header bar
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              decoration: BoxDecoration(),
+              child: SafeArea(
+                bottom: false,
+                child: Text(
+                  'Manage Reviews',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                  ),
                 ),
-              ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: EdgeInsets.all(16),
-          itemCount: snapshot.data!.docs.length,
-          itemBuilder: (context, index) {
-            DocumentSnapshot doc = snapshot.data!.docs[index];
-            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-
-            String customerName = data['customer_name'] ?? 'Unknown Customer';
-            String workerName = data['worker_name'] ?? 'Unknown Worker';
-            double rating = (data['rating'] ?? 0.0).toDouble();
-            String review = data['review'] ?? 'No review text';
-            String serviceType = data['service_type'] ?? 'Unknown';
-            Timestamp? createdAt = data['created_at'] as Timestamp?;
-            String bookingId = data['booking_id'] ?? 'N/A';
-
-            DateTime? reviewDate = createdAt?.toDate();
-            String formattedDate = reviewDate != null
-                ? '${reviewDate.day}/${reviewDate.month}/${reviewDate.year}'
-                : 'Unknown date';
-
-            return Card(
-              margin: EdgeInsets.only(bottom: 16),
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
               ),
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header row with customer, worker, and delete button
-                    Row(
-                      children: [
-                        Expanded(
+            ),
+            // ✅ Reviews list
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('reviews')
+                    .orderBy('created_at', descending: true)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator());
+                  }
+
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline,
+                              size: 64, color: Colors.red),
+                          SizedBox(height: 16),
+                          Text('Error: ${snapshot.error}'),
+                        ],
+                      ),
+                    );
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.star_outline,
+                              size: 64, color: Colors.grey),
+                          SizedBox(height: 16),
+                          Text(
+                            'No reviews found',
+                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: EdgeInsets.all(16),
+                    itemCount: snapshot.data!.docs.length,
+                    itemBuilder: (context, index) {
+                      DocumentSnapshot doc = snapshot.data!.docs[index];
+                      Map<String, dynamic> data =
+                          doc.data() as Map<String, dynamic>;
+
+                      String customerName =
+                          data['customer_name'] ?? 'Unknown Customer';
+                      String workerName =
+                          data['worker_name'] ?? 'Unknown Worker';
+                      double rating = (data['rating'] ?? 0.0).toDouble();
+                      String review = data['review'] ?? 'No review text';
+                      String serviceType = data['service_type'] ?? 'Unknown';
+                      Timestamp? createdAt = data['created_at'] as Timestamp?;
+                      String bookingId = data['booking_id'] ?? 'N/A';
+
+                      DateTime? reviewDate = createdAt?.toDate();
+                      String formattedDate = reviewDate != null
+                          ? '${reviewDate.day}/${reviewDate.month}/${reviewDate.year}'
+                          : 'Unknown date';
+
+                      return Card(
+                        margin: EdgeInsets.only(bottom: 12),
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Header with customer/worker info
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(Icons.person,
+                                                size: 16, color: Colors.blue),
+                                            SizedBox(width: 4),
+                                            Expanded(
+                                              child: Text(
+                                                customerName,
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            Icon(Icons.build,
+                                                size: 16, color: Colors.orange),
+                                            SizedBox(width: 4),
+                                            Expanded(
+                                              child: Text(
+                                                workerName,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Delete button
+                                  IconButton(
+                                    icon: Icon(Icons.delete, color: Colors.red),
+                                    tooltip: 'Delete inappropriate review',
+                                    onPressed: () =>
+                                        _deleteReview(doc.id, review),
+                                  ),
+                                ],
+                              ),
+                              Divider(height: 16),
+
+                              // Rating stars
                               Row(
                                 children: [
-                                  Icon(Icons.person,
-                                      size: 16, color: Colors.blue),
-                                  SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      customerName,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
+                                  ...List.generate(5, (starIndex) {
+                                    return Icon(
+                                      starIndex < rating
+                                          ? Icons.star
+                                          : Icons.star_border,
+                                      color: Colors.green.shade700,
+                                      size: 20,
+                                    );
+                                  }),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    rating.toStringAsFixed(1),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
                                     ),
                                   ),
                                 ],
                               ),
-                              SizedBox(height: 4),
+                              SizedBox(height: 12),
+
+                              // Review text
+                              Container(
+                                padding: EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey[200]!),
+                                ),
+                                child: Text(
+                                  review,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[800],
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 12),
+
+                              // Footer with service type, booking ID, and date
                               Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Icon(Icons.engineering,
-                                      size: 16, color: Colors.orange),
-                                  SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      'Worker: $workerName',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Service: ${serviceType.replaceAll('_', ' ')}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey[600],
+                                        ),
                                       ),
+                                      Text(
+                                        'Booking: $bookingId',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Text(
+                                    formattedDate,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey[500],
+                                      fontStyle: FontStyle.italic,
                                     ),
                                   ),
                                 ],
@@ -226,97 +359,15 @@ class _AdminManageReviewsScreenState extends State<AdminManageReviewsScreen> {
                             ],
                           ),
                         ),
-                        // Delete button
-                        IconButton(
-                          icon: Icon(Icons.delete, color: Colors.red),
-                          tooltip: 'Delete inappropriate review',
-                          onPressed: () => _deleteReview(doc.id, review),
-                        ),
-                      ],
-                    ),
-                    Divider(height: 16),
-
-                    // Rating stars
-                    Row(
-                      children: [
-                        ...List.generate(5, (starIndex) {
-                          return Icon(
-                            starIndex < rating ? Icons.star : Icons.star_border,
-                            color: Colors.amber,
-                            size: 20,
-                          );
-                        }),
-                        SizedBox(width: 8),
-                        Text(
-                          rating.toStringAsFixed(1),
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12),
-
-                    // Review text
-                    Container(
-                      padding: EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey[200]!),
-                      ),
-                      child: Text(
-                        review,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[800],
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 12),
-
-                    // Footer with service type, booking ID, and date
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Service: ${serviceType.replaceAll('_', ' ')}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            Text(
-                              'Booking: $bookingId',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          formattedDate,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey[500],
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      );
+                    },
+                  );
+                },
               ),
-            );
-          },
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

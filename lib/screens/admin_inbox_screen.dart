@@ -15,8 +15,7 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Support Inbox'),
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
+        foregroundColor: Colors.green,
         automaticallyImplyLeading: false,
       ),
       body: StreamBuilder<QuerySnapshot>(
