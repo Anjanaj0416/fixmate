@@ -53,53 +53,103 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: Text('${widget.serviceName} Services'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        bottom: PreferredSize(
-          preferredSize: Size.fromHeight(8),
-          child: Container(
-            margin: EdgeInsets.symmetric(horizontal: 16),
-            child: LinearProgressIndicator(
-              value: (_currentStep + 1) / _totalSteps,
-              backgroundColor: Colors.grey[300],
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-            ),
+      // ✨ MODIFIED: Added gradient background (white at top → light blue at bottom)
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white, // White at top
+              Color(0xFFE3F2FD), // Light blue at bottom
+            ],
           ),
         ),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  _getStepTitle(),
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+        child: Column(
+          children: [
+            // AppBar with gradient background
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white,
+                    Colors.white.withOpacity(0.95),
+                  ],
                 ),
-                Text(
-                  'Step ${_currentStep + 1} of $_totalSteps',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                  ),
+              ),
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    // AppBar content
+                    Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.arrow_back, color: Colors.black),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          Expanded(
+                            child: Text(
+                              '${widget.serviceName} Services',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Progress bar
+                    Container(
+                      margin: EdgeInsets.symmetric(horizontal: 16),
+                      child: LinearProgressIndicator(
+                        value: (_currentStep + 1) / _totalSteps,
+                        backgroundColor: Colors.grey[300],
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-          Expanded(
-            child: _buildCurrentStep(),
-          ),
-          _buildBottomNavigation(),
-        ],
+            // Step title
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _getStepTitle(),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Step ${_currentStep + 1} of $_totalSteps',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Content
+            Expanded(
+              child: _buildCurrentStep(),
+            ),
+            // Bottom navigation
+            _buildBottomNavigation(),
+          ],
+        ),
       ),
     );
   }

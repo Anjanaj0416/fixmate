@@ -395,18 +395,30 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
           ),
         ),
       ),
-      body: PageView(
-        controller: _pageController,
-        physics: NeverScrollableScrollPhysics(),
-        children: [
-          _buildServiceTypeStep(),
-          _buildPersonalInfoStep(),
-          _buildBusinessInfoStep(),
-          _buildExperienceStep(),
-          _buildAvailabilityStep(),
-          _buildPricingStep(),
-          _buildLocationStep(),
-        ],
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white, // White at top
+              Color(0xFFE3F2FD), // Light blue at bottom
+            ],
+          ),
+        ),
+        child: PageView(
+          controller: _pageController,
+          physics: NeverScrollableScrollPhysics(),
+          children: [
+            _buildServiceTypeStep(),
+            _buildPersonalInfoStep(),
+            _buildBusinessInfoStep(),
+            _buildExperienceStep(),
+            _buildAvailabilityStep(),
+            _buildPricingStep(),
+            _buildLocationStep(),
+          ],
+        ),
       ),
       bottomNavigationBar: Container(
         padding: EdgeInsets.all(16),
