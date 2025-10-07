@@ -159,31 +159,9 @@ class _FakeConfirmationResult_11 extends _i1.SmartFake
         );
 }
 
-class _FakeFirebaseFirestore_12 extends _i1.SmartFake
-    implements _i4.FirebaseFirestore {
-  _FakeFirebaseFirestore_12(
-    Object parent,
-    Invocation parentInvocation,
-  ) : super(
-          parent,
-          parentInvocation,
-        );
-}
-
-class _FakeDocumentSnapshot_13<T1 extends Object?> extends _i1.SmartFake
-    implements _i4.DocumentSnapshot<T1> {
-  _FakeDocumentSnapshot_13(
-    Object parent,
-    Invocation parentInvocation,
-  ) : super(
-          parent,
-          parentInvocation,
-        );
-}
-
-class _FakeSnapshotMetadata_14 extends _i1.SmartFake
+class _FakeSnapshotMetadata_12 extends _i1.SmartFake
     implements _i4.SnapshotMetadata {
-  _FakeSnapshotMetadata_14(
+  _FakeSnapshotMetadata_12(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -192,9 +170,31 @@ class _FakeSnapshotMetadata_14 extends _i1.SmartFake
         );
 }
 
-class _FakeAggregateQuery_15 extends _i1.SmartFake
+class _FakeFirebaseFirestore_13 extends _i1.SmartFake
+    implements _i4.FirebaseFirestore {
+  _FakeFirebaseFirestore_13(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
+}
+
+class _FakeAggregateQuery_14 extends _i1.SmartFake
     implements _i4.AggregateQuery {
-  _FakeAggregateQuery_15(
+  _FakeAggregateQuery_14(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
+}
+
+class _FakeDocumentSnapshot_15<T extends Object?> extends _i1.SmartFake
+    implements _i4.DocumentSnapshot<T> {
+  _FakeDocumentSnapshot_15(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -1134,223 +1134,6 @@ class MockFirebaseAuth extends _i1.Mock implements _i7.FirebaseAuth {
       ) as _i5.Future<void>);
 }
 
-/// A class which mocks [DocumentReference].
-///
-/// See the documentation for Mockito's code generation for more information.
-// ignore: must_be_immutable
-class MockDocumentReference<T extends Object?> extends _i1.Mock
-    implements _i4.DocumentReference<T> {
-  MockDocumentReference() {
-    _i1.throwOnMissingStub(this);
-  }
-
-  @override
-  _i4.FirebaseFirestore get firestore => (super.noSuchMethod(
-        Invocation.getter(#firestore),
-        returnValue: _FakeFirebaseFirestore_12(
-          this,
-          Invocation.getter(#firestore),
-        ),
-      ) as _i4.FirebaseFirestore);
-
-  @override
-  String get id => (super.noSuchMethod(
-        Invocation.getter(#id),
-        returnValue: _i8.dummyValue<String>(
-          this,
-          Invocation.getter(#id),
-        ),
-      ) as String);
-
-  @override
-  _i4.CollectionReference<T> get parent => (super.noSuchMethod(
-        Invocation.getter(#parent),
-        returnValue: _FakeCollectionReference_2<T>(
-          this,
-          Invocation.getter(#parent),
-        ),
-      ) as _i4.CollectionReference<T>);
-
-  @override
-  String get path => (super.noSuchMethod(
-        Invocation.getter(#path),
-        returnValue: _i8.dummyValue<String>(
-          this,
-          Invocation.getter(#path),
-        ),
-      ) as String);
-
-  @override
-  _i4.CollectionReference<Map<String, dynamic>> collection(
-          String? collectionPath) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #collection,
-          [collectionPath],
-        ),
-        returnValue: _FakeCollectionReference_2<Map<String, dynamic>>(
-          this,
-          Invocation.method(
-            #collection,
-            [collectionPath],
-          ),
-        ),
-      ) as _i4.CollectionReference<Map<String, dynamic>>);
-
-  @override
-  _i5.Future<void> delete() => (super.noSuchMethod(
-        Invocation.method(
-          #delete,
-          [],
-        ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
-
-  @override
-  _i5.Future<void> update(Map<Object, Object?>? data) => (super.noSuchMethod(
-        Invocation.method(
-          #update,
-          [data],
-        ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
-
-  @override
-  _i5.Future<_i4.DocumentSnapshot<T>> get([_i3.GetOptions? options]) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #get,
-          [options],
-        ),
-        returnValue: _i5.Future<_i4.DocumentSnapshot<T>>.value(
-            _FakeDocumentSnapshot_13<T>(
-          this,
-          Invocation.method(
-            #get,
-            [options],
-          ),
-        )),
-      ) as _i5.Future<_i4.DocumentSnapshot<T>>);
-
-  @override
-  _i5.Stream<_i4.DocumentSnapshot<T>> snapshots({
-    bool? includeMetadataChanges = false,
-    _i3.ListenSource? source = _i3.ListenSource.defaultSource,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #snapshots,
-          [],
-          {
-            #includeMetadataChanges: includeMetadataChanges,
-            #source: source,
-          },
-        ),
-        returnValue: _i5.Stream<_i4.DocumentSnapshot<T>>.empty(),
-      ) as _i5.Stream<_i4.DocumentSnapshot<T>>);
-
-  @override
-  _i5.Future<void> set(
-    T? data, [
-    _i3.SetOptions? options,
-  ]) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #set,
-          [
-            data,
-            options,
-          ],
-        ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
-
-  @override
-  _i4.DocumentReference<R> withConverter<R>({
-    required _i4.FromFirestore<R>? fromFirestore,
-    required _i4.ToFirestore<R>? toFirestore,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #withConverter,
-          [],
-          {
-            #fromFirestore: fromFirestore,
-            #toFirestore: toFirestore,
-          },
-        ),
-        returnValue: _FakeDocumentReference_7<R>(
-          this,
-          Invocation.method(
-            #withConverter,
-            [],
-            {
-              #fromFirestore: fromFirestore,
-              #toFirestore: toFirestore,
-            },
-          ),
-        ),
-      ) as _i4.DocumentReference<R>);
-}
-
-/// A class which mocks [DocumentSnapshot].
-///
-/// See the documentation for Mockito's code generation for more information.
-class MockDocumentSnapshot<T extends Object?> extends _i1.Mock
-    implements _i4.DocumentSnapshot<T> {
-  MockDocumentSnapshot() {
-    _i1.throwOnMissingStub(this);
-  }
-
-  @override
-  String get id => (super.noSuchMethod(
-        Invocation.getter(#id),
-        returnValue: _i8.dummyValue<String>(
-          this,
-          Invocation.getter(#id),
-        ),
-      ) as String);
-
-  @override
-  _i4.DocumentReference<T> get reference => (super.noSuchMethod(
-        Invocation.getter(#reference),
-        returnValue: _FakeDocumentReference_7<T>(
-          this,
-          Invocation.getter(#reference),
-        ),
-      ) as _i4.DocumentReference<T>);
-
-  @override
-  _i4.SnapshotMetadata get metadata => (super.noSuchMethod(
-        Invocation.getter(#metadata),
-        returnValue: _FakeSnapshotMetadata_14(
-          this,
-          Invocation.getter(#metadata),
-        ),
-      ) as _i4.SnapshotMetadata);
-
-  @override
-  bool get exists => (super.noSuchMethod(
-        Invocation.getter(#exists),
-        returnValue: false,
-      ) as bool);
-
-  @override
-  dynamic get(Object? field) => super.noSuchMethod(Invocation.method(
-        #get,
-        [field],
-      ));
-
-  @override
-  dynamic operator [](Object? field) => super.noSuchMethod(Invocation.method(
-        #[],
-        [field],
-      ));
-}
-
 /// A class which mocks [QuerySnapshot].
 ///
 /// See the documentation for Mockito's code generation for more information.
@@ -1375,7 +1158,7 @@ class MockQuerySnapshot<T extends Object?> extends _i1.Mock
   @override
   _i4.SnapshotMetadata get metadata => (super.noSuchMethod(
         Invocation.getter(#metadata),
-        returnValue: _FakeSnapshotMetadata_14(
+        returnValue: _FakeSnapshotMetadata_12(
           this,
           Invocation.getter(#metadata),
         ),
@@ -1419,7 +1202,7 @@ class MockCollectionReference extends _i1.Mock
   @override
   _i4.FirebaseFirestore get firestore => (super.noSuchMethod(
         Invocation.getter(#firestore),
-        returnValue: _FakeFirebaseFirestore_12(
+        returnValue: _FakeFirebaseFirestore_13(
           this,
           Invocation.getter(#firestore),
         ),
@@ -1774,7 +1557,7 @@ class MockCollectionReference extends _i1.Mock
           #count,
           [],
         ),
-        returnValue: _FakeAggregateQuery_15(
+        returnValue: _FakeAggregateQuery_14(
           this,
           Invocation.method(
             #count,
@@ -1852,7 +1635,7 @@ class MockCollectionReference extends _i1.Mock
             aggregateField30,
           ],
         ),
-        returnValue: _FakeAggregateQuery_15(
+        returnValue: _FakeAggregateQuery_14(
           this,
           Invocation.method(
             #aggregate,
@@ -1891,4 +1674,226 @@ class MockCollectionReference extends _i1.Mock
           ),
         ),
       ) as _i4.AggregateQuery);
+}
+
+/// A class which mocks [DocumentReference].
+///
+/// See the documentation for Mockito's code generation for more information.
+// ignore: must_be_immutable
+class MockDocumentReference extends _i1.Mock
+    implements _i4.DocumentReference<Map<String, dynamic>> {
+  MockDocumentReference() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  _i4.FirebaseFirestore get firestore => (super.noSuchMethod(
+        Invocation.getter(#firestore),
+        returnValue: _FakeFirebaseFirestore_13(
+          this,
+          Invocation.getter(#firestore),
+        ),
+      ) as _i4.FirebaseFirestore);
+
+  @override
+  String get id => (super.noSuchMethod(
+        Invocation.getter(#id),
+        returnValue: _i8.dummyValue<String>(
+          this,
+          Invocation.getter(#id),
+        ),
+      ) as String);
+
+  @override
+  _i4.CollectionReference<Map<String, dynamic>> get parent =>
+      (super.noSuchMethod(
+        Invocation.getter(#parent),
+        returnValue: _FakeCollectionReference_2<Map<String, dynamic>>(
+          this,
+          Invocation.getter(#parent),
+        ),
+      ) as _i4.CollectionReference<Map<String, dynamic>>);
+
+  @override
+  String get path => (super.noSuchMethod(
+        Invocation.getter(#path),
+        returnValue: _i8.dummyValue<String>(
+          this,
+          Invocation.getter(#path),
+        ),
+      ) as String);
+
+  @override
+  _i4.CollectionReference<Map<String, dynamic>> collection(
+          String? collectionPath) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #collection,
+          [collectionPath],
+        ),
+        returnValue: _FakeCollectionReference_2<Map<String, dynamic>>(
+          this,
+          Invocation.method(
+            #collection,
+            [collectionPath],
+          ),
+        ),
+      ) as _i4.CollectionReference<Map<String, dynamic>>);
+
+  @override
+  _i5.Future<void> delete() => (super.noSuchMethod(
+        Invocation.method(
+          #delete,
+          [],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> update(Map<Object, Object?>? data) => (super.noSuchMethod(
+        Invocation.method(
+          #update,
+          [data],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<_i4.DocumentSnapshot<Map<String, dynamic>>> get(
+          [_i3.GetOptions? options]) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #get,
+          [options],
+        ),
+        returnValue:
+            _i5.Future<_i4.DocumentSnapshot<Map<String, dynamic>>>.value(
+                _FakeDocumentSnapshot_15<Map<String, dynamic>>(
+          this,
+          Invocation.method(
+            #get,
+            [options],
+          ),
+        )),
+      ) as _i5.Future<_i4.DocumentSnapshot<Map<String, dynamic>>>);
+
+  @override
+  _i5.Stream<_i4.DocumentSnapshot<Map<String, dynamic>>> snapshots({
+    bool? includeMetadataChanges = false,
+    _i3.ListenSource? source = _i3.ListenSource.defaultSource,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #snapshots,
+          [],
+          {
+            #includeMetadataChanges: includeMetadataChanges,
+            #source: source,
+          },
+        ),
+        returnValue:
+            _i5.Stream<_i4.DocumentSnapshot<Map<String, dynamic>>>.empty(),
+      ) as _i5.Stream<_i4.DocumentSnapshot<Map<String, dynamic>>>);
+
+  @override
+  _i5.Future<void> set(
+    Map<String, dynamic>? data, [
+    _i3.SetOptions? options,
+  ]) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #set,
+          [
+            data,
+            options,
+          ],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i4.DocumentReference<R> withConverter<R>({
+    required _i4.FromFirestore<R>? fromFirestore,
+    required _i4.ToFirestore<R>? toFirestore,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #withConverter,
+          [],
+          {
+            #fromFirestore: fromFirestore,
+            #toFirestore: toFirestore,
+          },
+        ),
+        returnValue: _FakeDocumentReference_7<R>(
+          this,
+          Invocation.method(
+            #withConverter,
+            [],
+            {
+              #fromFirestore: fromFirestore,
+              #toFirestore: toFirestore,
+            },
+          ),
+        ),
+      ) as _i4.DocumentReference<R>);
+}
+
+/// A class which mocks [DocumentSnapshot].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockDocumentSnapshot extends _i1.Mock
+    implements _i4.DocumentSnapshot<Map<String, dynamic>> {
+  MockDocumentSnapshot() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  String get id => (super.noSuchMethod(
+        Invocation.getter(#id),
+        returnValue: _i8.dummyValue<String>(
+          this,
+          Invocation.getter(#id),
+        ),
+      ) as String);
+
+  @override
+  _i4.DocumentReference<Map<String, dynamic>> get reference =>
+      (super.noSuchMethod(
+        Invocation.getter(#reference),
+        returnValue: _FakeDocumentReference_7<Map<String, dynamic>>(
+          this,
+          Invocation.getter(#reference),
+        ),
+      ) as _i4.DocumentReference<Map<String, dynamic>>);
+
+  @override
+  _i4.SnapshotMetadata get metadata => (super.noSuchMethod(
+        Invocation.getter(#metadata),
+        returnValue: _FakeSnapshotMetadata_12(
+          this,
+          Invocation.getter(#metadata),
+        ),
+      ) as _i4.SnapshotMetadata);
+
+  @override
+  bool get exists => (super.noSuchMethod(
+        Invocation.getter(#exists),
+        returnValue: false,
+      ) as bool);
+
+  @override
+  dynamic get(Object? field) => super.noSuchMethod(Invocation.method(
+        #get,
+        [field],
+      ));
+
+  @override
+  dynamic operator [](Object? field) => super.noSuchMethod(Invocation.method(
+        #[],
+        [field],
+      ));
 }
