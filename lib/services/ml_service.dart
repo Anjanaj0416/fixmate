@@ -1,11 +1,20 @@
 // lib/services/ml_service.dart
-// COMPLETE FIXED VERSION - Replace entire file
-
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class MLService {
   static const String baseUrl = 'http://localhost:8000';
+
+  // ADDED: Static test client for dependency injection during testing
+  static http.Client? _testClient;
+
+  // ADDED: Method to inject mock client for testing
+  static void setTestClient(http.Client? client) {
+    _testClient = client;
+  }
+
+  // ADDED: Get the HTTP client (test or real)
+  static http.Client get _client => _testClient ?? http.Client();
 
   /// Search for workers using ML model
   static Future<MLRecommendationResponse> searchWorkers({
@@ -13,7 +22,7 @@ class MLService {
     required String location,
   }) async {
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/search'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -36,7 +45,7 @@ class MLService {
   /// Check if ML service is running
   static Future<bool> isServiceAvailable() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/'));
+      final response = await _client.get(Uri.parse('$baseUrl/'));
       return response.statusCode == 200;
     } catch (e) {
       return false;
@@ -63,7 +72,7 @@ class MLRecommendationResponse {
 }
 
 class MLWorker {
-  final String workerId;
+  final String? workerId;
   final String workerName;
   final String serviceType;
   final double rating;
@@ -76,8 +85,14 @@ class MLWorker {
   final double aiConfidence;
   final String bio;
 
+  // ContactInfo getter for backward compatibility
+  ContactInfo get contact => ContactInfo(
+        phoneNumber: phoneNumber,
+        email: email,
+      );
+
   MLWorker({
-    required this.workerId,
+    this.workerId,
     required this.workerName,
     required this.serviceType,
     required this.rating,
@@ -107,26 +122,52 @@ class MLWorker {
       bio: json['bio'] ?? '',
     );
   }
+}
 
-  Map<String, dynamic> toJson() {
-    return {
-      'worker_id': workerId,
-      'worker_name': workerName,
-      'service_type': serviceType,
-      'rating': rating,
-      'experience_years': experienceYears,
-      'daily_wage_lkr': dailyWageLkr,
-      'phone_number': phoneNumber,
-      'email': email,
-      'city': city,
-      'distance_km': distanceKm,
-      'ai_confidence': aiConfidence,
-      'bio': bio,
-    };
+class ContactInfo {
+  final String phoneNumber;
+  final String email;
+
+  ContactInfo({
+    required this.phoneNumber,
+    required this.email,
+  });
+}
+
+class AIAnalysis {
+  final List<ServicePrediction> servicePredictions;
+  final String detectedService;
+  final String urgencyLevel;
+  final String timePreference;
+  final List<String> requiredSkills;
+  final double confidence;
+  final String userInputLocation;
+
+  AIAnalysis({
+    required this.servicePredictions,
+    required this.detectedService,
+    required this.urgencyLevel,
+    required this.timePreference,
+    required this.requiredSkills,
+    required this.confidence,
+    required this.userInputLocation,
+  });
+
+  factory AIAnalysis.fromJson(Map<String, dynamic> json) {
+    return AIAnalysis(
+      servicePredictions: (json['service_predictions'] as List)
+          .map((p) => ServicePrediction.fromJson(p))
+          .toList(),
+      detectedService: json['detected_service'] ?? '',
+      urgencyLevel: json['urgency_level'] ?? 'normal',
+      timePreference: json['time_preference'] ?? 'flexible',
+      requiredSkills: List<String>.from(json['required_skills'] ?? []),
+      confidence: (json['confidence'] ?? 0.0).toDouble(),
+      userInputLocation: json['user_input_location'] ?? '',
+    );
   }
 }
 
-// FIXED: ServicePrediction class to handle tuple format
 class ServicePrediction {
   final String serviceType;
   final double confidence;
@@ -136,108 +177,10 @@ class ServicePrediction {
     required this.confidence,
   });
 
-  // CRITICAL FIX: Handle tuple format [service_type, "percentage_string"]
-  factory ServicePrediction.fromJson(dynamic json) {
-    if (json is List && json.length >= 2) {
-      // Format: ["electrical", "97.1%"]
-      String serviceType = json[0].toString();
-      String confidenceStr = json[1].toString().replaceAll('%', '');
-      double confidence = double.tryParse(confidenceStr) ?? 0.0;
-
-      return ServicePrediction(
-        serviceType: serviceType,
-        confidence: confidence / 100.0, // Convert percentage to decimal
-      );
-    } else if (json is Map<String, dynamic>) {
-      // Fallback: Handle object format
-      return ServicePrediction(
-        serviceType: json['serviceType'] ?? json['service_type'] ?? '',
-        confidence: (json['confidence'] ?? 0.0).toDouble(),
-      );
-    } else {
-      // Default fallback
-      return ServicePrediction(
-        serviceType: 'unknown',
-        confidence: 0.0,
-      );
-    }
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'service_type': serviceType,
-      'confidence': confidence,
-    };
-  }
-}
-
-// FIXED: AIAnalysis class with proper parsing
-class AIAnalysis {
-  final String detectedService;
-  final String urgencyLevel;
-  final String timePreference;
-  final List<String> requiredSkills;
-  final double confidence;
-  final String userInputLocation;
-  final List<ServicePrediction> servicePredictions;
-  final String timeRequirement;
-
-  AIAnalysis({
-    required this.detectedService,
-    required this.urgencyLevel,
-    required this.timePreference,
-    required this.requiredSkills,
-    required this.confidence,
-    required this.userInputLocation,
-    required this.servicePredictions,
-    required this.timeRequirement,
-  });
-
-  factory AIAnalysis.fromJson(Map<String, dynamic> json) {
-    // CRITICAL FIX: Parse service_predictions as list of tuples
-    List<ServicePrediction> predictions = [];
-
-    if (json['service_predictions'] != null) {
-      var rawPredictions = json['service_predictions'];
-      if (rawPredictions is List) {
-        predictions =
-            rawPredictions.map((p) => ServicePrediction.fromJson(p)).toList();
-      }
-    }
-
-    // If no predictions, create a default one
-    if (predictions.isEmpty && json['detected_service'] != null) {
-      predictions.add(ServicePrediction(
-        serviceType: json['detected_service'],
-        confidence: (json['confidence'] ?? 0.0).toDouble(),
-      ));
-    }
-
-    return AIAnalysis(
-      detectedService: json['detected_service'] ?? '',
-      urgencyLevel: json['urgency_level'] ?? 'normal',
-      timePreference: json['time_preference'] ?? 'flexible',
-      requiredSkills: json['required_skills'] != null
-          ? List<String>.from(json['required_skills'])
-          : [],
+  factory ServicePrediction.fromJson(Map<String, dynamic> json) {
+    return ServicePrediction(
+      serviceType: json['service_type'] ?? '',
       confidence: (json['confidence'] ?? 0.0).toDouble(),
-      userInputLocation: json['user_input_location'] ?? 'Unknown',
-      servicePredictions: predictions,
-      timeRequirement:
-          json['time_requirement'] ?? json['time_preference'] ?? 'flexible',
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'detected_service': detectedService,
-      'urgency_level': urgencyLevel,
-      'time_preference': timePreference,
-      'required_skills': requiredSkills,
-      'confidence': confidence,
-      'user_input_location': userInputLocation,
-      'service_predictions': servicePredictions.map((p) => p.toJson()).toList(),
-      'time_requirement': timeRequirement,
-    };
   }
 }
