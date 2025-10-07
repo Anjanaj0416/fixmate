@@ -1078,6 +1078,10 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
     );
   }
 
+  // Find the _submitRegistration method in your worker_registration_flow.dart
+// Replace ONLY this method with the code below
+// Keep all other methods and code unchanged
+
   Future<void> _submitRegistration() async {
     setState(() {
       _isLoading = true;
@@ -1167,6 +1171,49 @@ class _WorkerRegistrationFlowState extends State<WorkerRegistrationFlow> {
       }
 
       print('✅ Verified worker document exists');
+
+      // ===== DUAL ACCOUNT LOGIC - UPDATE USER DOCUMENT =====
+      // Get current user document to check existing accountType
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+      String? currentAccountType = userData['accountType'];
+
+      // Determine new accountType based on existing account
+      String newAccountType;
+      if (currentAccountType == 'customer') {
+        // Customer is creating worker account - set to 'both'
+        newAccountType = 'both';
+        print('✅ Customer creating worker account - accountType set to "both"');
+      } else if (currentAccountType == 'service_provider') {
+        // Already a worker - keep as service_provider
+        newAccountType = 'service_provider';
+        print('✅ Keeping existing accountType: service_provider');
+      } else if (currentAccountType == 'both') {
+        // Already has both - keep as both
+        newAccountType = 'both';
+        print('✅ Keeping existing accountType: both');
+      } else {
+        // New worker account (no existing account type or null)
+        newAccountType = 'service_provider';
+        print('✅ New worker account - accountType set to "service_provider"');
+      }
+
+      // Update user document with new accountType and workerId
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'accountType': newAccountType,
+        'workerId': workerId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      print('✅ Worker registration complete. AccountType: $newAccountType');
+      // ===== END DUAL ACCOUNT LOGIC =====
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(

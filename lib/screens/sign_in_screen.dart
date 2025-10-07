@@ -100,9 +100,13 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  /// FIXED: Navigate based on PRIMARY account (first created account)
-  /// Priority: Admin > Primary Account (Customer/Worker/Both) > Secondary Account > Account Selection
-  /// CRITICAL FIX: Properly handles 'both' account type by checking timestamps
+  // In your lib/screens/sign_in_screen.dart file
+// Find the existing _navigateBasedOnRole method
+// Replace ONLY this method with the code below
+// DO NOT change anything else in the file
+
+  /// DUAL ACCOUNT NAVIGATION LOGIC
+  /// Navigate based on PRIMARY account (first created account)
   Future<void> _navigateBasedOnRole(User user) async {
     try {
       print('🔍 Starting navigation for user: ${user.uid}');
@@ -139,17 +143,16 @@ class _SignInScreenState extends State<SignInScreen> {
         return;
       }
 
-      // Priority 2: Handle single account types (customer or service_provider)
+      // Priority 2: Handle single account types
       if (accountType == 'customer') {
-        print(
-            '✅ Primary account is Customer - navigating to Customer Dashboard');
+        print('✅ Customer account - navigating to Customer Dashboard');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => CustomerDashboard()),
         );
         return;
       } else if (accountType == 'service_provider') {
-        print('✅ Primary account is Worker - navigating to Worker Dashboard');
+        print('✅ Worker account - navigating to Worker Dashboard');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => WorkerDashboardScreen()),
@@ -157,10 +160,9 @@ class _SignInScreenState extends State<SignInScreen> {
         return;
       }
 
-      // Priority 3: Handle 'both' account type - check which was created first
+      // Priority 3: Handle 'both' account type - navigate to PRIMARY account
       if (accountType == 'both') {
-        print(
-            '⚠️  User has BOTH accounts - checking timestamps to find primary account');
+        print('⚠️  User has BOTH accounts - checking which was created first');
 
         // Check both customer and worker documents
         DocumentSnapshot customerDoc = await FirebaseFirestore.instance
@@ -183,17 +185,17 @@ class _SignInScreenState extends State<SignInScreen> {
             Timestamp? workerCreated = workerData['created_at'];
 
             if (customerCreated != null && workerCreated != null) {
-              // Navigate to the account that was created first (primary account)
+              // Navigate to PRIMARY account (created first)
               if (customerCreated.compareTo(workerCreated) < 0) {
                 print(
-                    '✅ Customer was created first - navigating to Customer Dashboard');
+                    '✅ Customer was PRIMARY (created first) - navigating to Customer Dashboard');
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (context) => CustomerDashboard()),
                 );
               } else {
                 print(
-                    '✅ Worker was created first - navigating to Worker Dashboard');
+                    '✅ Worker was PRIMARY (created first) - navigating to Worker Dashboard');
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
@@ -205,86 +207,6 @@ class _SignInScreenState extends State<SignInScreen> {
           }
         }
 
-        // Fallback for 'both' case: navigate to customer if exists, otherwise worker
-        print(
-            '⚠️  Could not determine primary account from timestamps - using fallback');
-        if (customerDoc.exists) {
-          print('📍 Fallback: Navigating to Customer Dashboard');
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => CustomerDashboard()),
-          );
-        } else if (workerDoc.exists) {
-          print('📍 Fallback: Navigating to Worker Dashboard');
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => WorkerDashboardScreen()),
-          );
-        } else {
-          print(
-              '❌ No customer or worker account found - redirecting to account type selection');
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => AccountTypeScreen()),
-          );
-        }
-        return;
-      }
-
-      // Priority 4: If accountType is null or unknown, check which collection has documents
-      print(
-          '⚠️  AccountType is null or unknown - checking customer and worker collections');
-
-      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
-          .collection('customers')
-          .doc(user.uid)
-          .get();
-      DocumentSnapshot workerDoc = await FirebaseFirestore.instance
-          .collection('workers')
-          .doc(user.uid)
-          .get();
-
-      bool hasCustomer = customerDoc.exists;
-      bool hasWorker = workerDoc.exists;
-
-      print(
-          '📋 Collection check: hasCustomer=$hasCustomer, hasWorker=$hasWorker');
-
-      if (hasCustomer && hasWorker) {
-        print(
-            '⚠️  Both collections exist but accountType not set - checking timestamps');
-
-        Map<String, dynamic>? customerData =
-            customerDoc.data() as Map<String, dynamic>?;
-        Map<String, dynamic>? workerData =
-            workerDoc.data() as Map<String, dynamic>?;
-
-        if (customerData != null && workerData != null) {
-          Timestamp? customerCreated = customerData['created_at'];
-          Timestamp? workerCreated = workerData['created_at'];
-
-          if (customerCreated != null && workerCreated != null) {
-            // Navigate to the account that was created first
-            if (customerCreated.compareTo(workerCreated) < 0) {
-              print(
-                  '✅ Customer was created first - navigating to Customer Dashboard');
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => CustomerDashboard()),
-              );
-            } else {
-              print(
-                  '✅ Worker was created first - navigating to Worker Dashboard');
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => WorkerDashboardScreen()),
-              );
-            }
-            return;
-          }
-        }
-
         // Fallback: navigate to customer if exists
         print('📍 Fallback: Navigating to Customer Dashboard');
         Navigator.pushReplacement(
@@ -293,6 +215,18 @@ class _SignInScreenState extends State<SignInScreen> {
         );
         return;
       }
+
+      // Priority 4: No specific account type - check what exists
+      bool hasCustomer = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .get()
+          .then((doc) => doc.exists);
+      bool hasWorker = await FirebaseFirestore.instance
+          .collection('workers')
+          .doc(user.uid)
+          .get()
+          .then((doc) => doc.exists);
 
       if (hasCustomer) {
         print('✅ Customer account found - navigating to Customer Dashboard');
@@ -313,8 +247,7 @@ class _SignInScreenState extends State<SignInScreen> {
       }
 
       // Priority 5: No account exists - redirect to account type selection
-      print(
-          '❌ No customer or worker account found - redirecting to account type selection');
+      print('❌ No account found - redirecting to account type selection');
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => AccountTypeScreen()),
@@ -322,8 +255,6 @@ class _SignInScreenState extends State<SignInScreen> {
     } catch (e) {
       print('❌ Error in navigation: $e');
       _showErrorSnackBar('Navigation error: ${e.toString()}');
-
-      // Fallback to account type selection
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => AccountTypeScreen()),

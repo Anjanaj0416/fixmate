@@ -219,124 +219,153 @@ class _CustomerDashboardState extends State<CustomerDashboard>
     }
   }
 
-  Future<void> _handleWorkerAccountSwitch() async {
-    try {
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+  // PARTIAL UPDATE for lib/screens/customer_dashboard.dart
+// This is the UPDATED _handleWorkerAccountSwitch method
+// Replace the existing method in your customer_dashboard.dart file
 
+  Future<void> _handleWorkerAccountSwitch() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // Show loading dialog
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => Center(
-          child: CircularProgressIndicator(),
+          child: Card(
+            margin: EdgeInsets.all(32),
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Color(0xFFFF9800)),
+                  SizedBox(height: 16),
+                  Text('Checking worker account...'),
+                ],
+              ),
+            ),
+          ),
         ),
       );
 
-      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
-          .collection('customers')
+      // Check if worker account exists
+      DocumentSnapshot workerDoc = await FirebaseFirestore.instance
+          .collection('workers')
           .doc(user.uid)
           .get();
 
-      if (customerDoc.exists) {
-        Navigator.pop(context);
+      Navigator.pop(context); // Close loading dialog
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Switching to your customer account...'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 1),
-          ),
-        );
-
-        await Future.delayed(Duration(seconds: 1));
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CustomerDashboard(),
-          ),
-        );
-      } else {
-        DocumentSnapshot workerDoc = await FirebaseFirestore.instance
-            .collection('workers')
+      if (workerDoc.exists) {
+        // Worker account exists - update accountType to 'both' and switch
+        await FirebaseFirestore.instance
+            .collection('users')
             .doc(user.uid)
-            .get();
+            .update({
+          'accountType': 'both',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
 
-        if (workerDoc.exists) {
-          Navigator.pop(context);
-
-          bool? switchAccount = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text('Worker Account Found'),
-              content: Text(
-                  'You have a worker account. Would you like to switch to it?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                  ),
-                  child: Text('Switch'),
-                ),
+        bool? switchAccount = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
+              children: [
+                Icon(Icons.work, color: Color(0xFFFF9800)),
+                SizedBox(width: 12),
+                Text('Worker Account Found'),
               ],
             ),
-          );
-
-          if (switchAccount == true) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => WorkerDashboardScreen(),
+            content: Text(
+              'You have a worker account. Would you like to switch to it?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Cancel'),
               ),
-            );
-          }
-        } else {
-          Navigator.pop(context);
-
-          bool? registerWorker = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text('Become a Worker'),
-              content: Text(
-                  'You don\'t have a worker account yet. Would you like to register as a worker?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFFF9800),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text('Register'),
                 ),
-              ],
+                child: Text('Switch', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+
+        if (switchAccount == true) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => WorkerDashboardScreen(),
             ),
           );
-
-          if (registerWorker == true) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => WorkerRegistrationFlow(),
+        }
+      } else {
+        // Worker account does NOT exist - ask if they want to register
+        bool? registerWorker = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
+              children: [
+                Icon(Icons.work_outline, color: Color(0xFFFF9800)),
+                SizedBox(width: 12),
+                Text('Become a Worker'),
+              ],
+            ),
+            content: Text(
+              'You don\'t have a worker account yet. Would you like to register as a worker?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Cancel'),
               ),
-            );
-          }
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFFF9800),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text('Register', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+
+        if (registerWorker == true) {
+          // Navigate to Worker Registration Flow
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => WorkerRegistrationFlow(),
+            ),
+          );
         }
       }
     } catch (e) {
-      Navigator.pop(context);
+      Navigator.pop(context); // Close loading if still open
       print('❌ Error switching account: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: ${e.toString()}'),
           backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
         ),
       );
     }

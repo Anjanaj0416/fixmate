@@ -214,32 +214,159 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
     }
   }
 
-  Future<void> _switchToCustomerAccount() async {
-    try {
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+  // PARTIAL UPDATE for lib/screens/worker_dashboard_screen.dart
+// This is the UPDATED _switchToCustomerAccount method
+// Replace the existing method in your worker_dashboard_screen.dart file
 
+  Future<void> _switchToCustomerAccount() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: Card(
+            margin: EdgeInsets.all(32),
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Color(0xFF9C27B0)),
+                  SizedBox(height: 16),
+                  Text('Checking customer account...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Check if customer account exists
       DocumentSnapshot customerDoc = await FirebaseFirestore.instance
           .collection('customers')
           .doc(user.uid)
           .get();
 
+      Navigator.pop(context); // Close loading dialog
+
       if (customerDoc.exists) {
+        // Customer account exists - update accountType to 'both' and switch
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+          'accountType': 'both',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // Directly switch to customer dashboard
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => CustomerDashboard()),
+          MaterialPageRoute(
+            builder: (context) => CustomerDashboard(),
+          ),
         );
       } else {
+        // Customer account does NOT exist - create one automatically
+        print('📝 Creating customer account automatically...');
+
+        // Get user data
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (!userDoc.exists) {
+          throw Exception('User document not found');
+        }
+
+        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+
+        // Generate customer ID
+        String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+        String customerId = 'CUST_${timestamp}_${_generateRandomSuffix()}';
+
+        // Create customer document
+        await FirebaseFirestore.instance
+            .collection('customers')
+            .doc(user.uid)
+            .set({
+          'customer_id': customerId,
+          'customer_name': userData['name'] ?? '',
+          'first_name': userData['name']?.split(' ')[0] ?? '',
+          'last_name': userData['name']?.split(' ').skip(1).join(' ') ?? '',
+          'email': userData['email'] ?? '',
+          'phone_number': userData['phone'] ?? '',
+          'location': null,
+          'preferred_services': [],
+          'favorite_workers': [],
+          'preferences': {
+            'preferred_time_slots': [],
+            'communication_method': 'whatsapp',
+            'email_notifications': true,
+            'sms_notifications': true,
+            'push_notifications': true,
+            'language': 'en',
+            'currency': 'LKR',
+          },
+          'verified': false,
+          'created_at': FieldValue.serverTimestamp(),
+          'last_active': FieldValue.serverTimestamp(),
+        });
+
+        // Update user document
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+          'accountType': 'both',
+          'customerId': customerId,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        print('✅ Customer account created automatically');
+
+        // Show success and navigate
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('No customer account found. Please create one.'),
-            backgroundColor: Colors.orange,
+            content: Text('Customer account created successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Navigate to customer dashboard
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CustomerDashboard(),
           ),
         );
       }
     } catch (e) {
+      Navigator.pop(context); // Close loading if still open
       print('❌ Error switching to customer account: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
+  }
+
+// Helper method to generate random suffix
+  String _generateRandomSuffix() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final random = DateTime.now().millisecondsSinceEpoch;
+    return chars[(random % chars.length)] +
+        chars[((random ~/ 10) % chars.length)] +
+        chars[((random ~/ 100) % chars.length)];
   }
 
   Future<void> _handleSignOut() async {
