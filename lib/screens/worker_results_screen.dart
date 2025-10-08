@@ -89,6 +89,7 @@ class _WorkerResultsScreenState extends State<WorkerResultsScreen> {
                     Expanded(
                       child: _buildCompactInfo(
                         Icons.schedule,
+                        'Urgent',
                       ),
                     ),
                     SizedBox(width: 12),
