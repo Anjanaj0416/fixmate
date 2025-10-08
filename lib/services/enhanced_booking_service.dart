@@ -9,7 +9,7 @@ class EnhancedBookingService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // Generate unique booking ID
-  static Future<String> _generateBookingId() async {
+  static Future<String> generateBookingId() async {
     String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
     String randomSuffix = (math.Random().nextInt(9999) + 1000).toString();
     return 'BK_${timestamp.substring(timestamp.length - 6)}$randomSuffix';
@@ -37,7 +37,7 @@ class EnhancedBookingService {
     required String scheduledTime,
   }) async {
     try {
-      String bookingId = await _generateBookingId();
+      String bookingId = await generateBookingId();
 
       BookingModel booking = BookingModel(
         bookingId: bookingId,

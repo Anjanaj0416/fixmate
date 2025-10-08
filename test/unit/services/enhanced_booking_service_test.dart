@@ -3,14 +3,14 @@ import 'package:fixmate/services/enhanced_booking_service.dart';
 
 void main() {
   group('EnhancedBookingService White Box Tests - WT009', () {
-    group('_generateBookingId() - ID Generation Logic Branches', () {
+    group('generateBookingId() - ID Generation Logic Branches', () {
       test('BRANCH 1: Uniqueness validation - 100 iterations', () async {
         // Arrange
         final generatedIds = <String>{};
 
         // Act - Generate 100 IDs
         for (int i = 0; i < 100; i++) {
-          final id = await EnhancedBookingService._generateBookingId();
+          final id = await EnhancedBookingService.generateBookingId();
           generatedIds.add(id);
 
           // Assert format: BK_XXXXXX#### (6 digit timestamp + 4 digit random)
@@ -24,7 +24,7 @@ void main() {
 
       test('BRANCH 2: Timestamp extraction logic - last 6 digits', () async {
         // Act
-        final id = await EnhancedBookingService._generateBookingId();
+        final id = await EnhancedBookingService.generateBookingId();
 
         // Assert - Verify format and timestamp logic
         expect(id.startsWith('BK_'), isTrue);
@@ -42,7 +42,7 @@ void main() {
 
         // Act - Generate 50 IDs and extract random suffixes
         for (int i = 0; i < 50; i++) {
-          final id = await EnhancedBookingService._generateBookingId();
+          final id = await EnhancedBookingService.generateBookingId();
           final suffix = id.substring(id.length - 4); // Last 4 digits
           final suffixInt = int.parse(suffix);
           randomSuffixes.add(suffixInt);
@@ -62,9 +62,9 @@ void main() {
         final generatedIds = <String>{};
 
         // Act - Generate 10 IDs concurrently
-        final futures = List.generate(
+        final futures = List<Future<String>>.generate(
           10,
-          (_) => EnhancedBookingService._generateBookingId(),
+          (_) => EnhancedBookingService.generateBookingId(),
         );
         final ids = await Future.wait(futures);
 
@@ -81,7 +81,7 @@ void main() {
         final beforeTimestamp = DateTime.now().millisecondsSinceEpoch;
 
         // Act
-        final id = await EnhancedBookingService._generateBookingId();
+        final id = await EnhancedBookingService.generateBookingId();
 
         // Capture after
         final afterTimestamp = DateTime.now().millisecondsSinceEpoch;
@@ -111,7 +111,7 @@ void main() {
 
         // Act - Generate multiple IDs
         for (int i = 0; i < 20; i++) {
-          ids.add(await EnhancedBookingService._generateBookingId());
+          ids.add(await EnhancedBookingService.generateBookingId());
         }
 
         // Assert - All IDs follow the same format
@@ -128,7 +128,7 @@ void main() {
 
         // Act - Generate 100 IDs and collect first digit of random suffix
         for (int i = 0; i < 100; i++) {
-          final id = await EnhancedBookingService._generateBookingId();
+          final id = await EnhancedBookingService.generateBookingId();
           final randomPart = id.substring(id.length - 4);
           final firstDigit = int.parse(randomPart[0]);
           firstDigits.add(firstDigit);
@@ -143,9 +143,9 @@ void main() {
       test('BRANCH 8: Boundary condition - rapid sequential generation',
           () async {
         // Arrange & Act - Generate IDs as fast as possible
-        final id1 = await EnhancedBookingService._generateBookingId();
-        final id2 = await EnhancedBookingService._generateBookingId();
-        final id3 = await EnhancedBookingService._generateBookingId();
+        final id1 = await EnhancedBookingService.generateBookingId();
+        final id2 = await EnhancedBookingService.generateBookingId();
+        final id3 = await EnhancedBookingService.generateBookingId();
 
         // Assert - All should be unique even when generated rapidly
         expect(id1, isNot(equals(id2)));
@@ -157,7 +157,7 @@ void main() {
     group('Edge Cases and Additional Coverage', () {
       test('BRANCH 9: ID parsing - extracting components', () async {
         // Act
-        final id = await EnhancedBookingService._generateBookingId();
+        final id = await EnhancedBookingService.generateBookingId();
 
         // Assert - Can extract all components correctly
         expect(id.substring(0, 3), equals('BK_'));
@@ -176,7 +176,7 @@ void main() {
 
         // Act - Generate many IDs to test collision probability
         for (int i = 0; i < iterations; i++) {
-          final id = await EnhancedBookingService._generateBookingId();
+          final id = await EnhancedBookingService.generateBookingId();
           ids.add(id);
         }
 
