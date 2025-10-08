@@ -1,5 +1,5 @@
 // test/unit/services/notification_service_test.dart
-// WT019 - Notification Service White Box Test
+// FIXED VERSION - Corrected mock types
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
@@ -18,13 +18,16 @@ import 'notification_service_test.mocks.dart';
 void main() {
   group('WT019 - NotificationService.createNotification() Tests', () {
     late MockFirebaseFirestore mockFirestore;
-    late MockCollectionReference mockCollection;
-    late MockDocumentReference mockDocument;
+    late MockCollectionReference<Map<String, dynamic>>
+        mockCollection; // FIXED TYPE
+    late MockDocumentReference<Map<String, dynamic>> mockDocument; // FIXED TYPE
 
     setUp(() {
       mockFirestore = MockFirebaseFirestore();
-      mockCollection = MockCollectionReference();
-      mockDocument = MockDocumentReference();
+      mockCollection =
+          MockCollectionReference<Map<String, dynamic>>(); // FIXED TYPE
+      mockDocument =
+          MockDocumentReference<Map<String, dynamic>>(); // FIXED TYPE
 
       // Setup mock chain
       when(mockFirestore.collection('notifications'))
@@ -288,7 +291,7 @@ void main() {
         );
 
         expect(capturedData['read'], equals(false));
-        expect(capturedData['timestamp'], isNotNull);
+        expect(capturedData['created_at'], isNotNull);
         expect(capturedData['userId'], equals('USER_010'));
       });
     });

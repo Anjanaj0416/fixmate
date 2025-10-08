@@ -1,8 +1,12 @@
+// test/unit/screens/customer_dashboard_test.dart
+// FIXED VERSION - Corrected imports and mock types
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:fixmate/screens/customer_dashboard.dart'; // ADD THIS IMPORT
 
 @GenerateMocks([
   FirebaseFirestore,
@@ -19,20 +23,20 @@ void main() {
     late MockFirebaseFirestore mockFirestore;
     late MockFirebaseAuth mockAuth;
     late MockUser mockUser;
-    late MockDocumentReference mockDocRef;
-    late MockDocumentSnapshot mockDocSnap;
+    late MockDocumentReference<Map<String, dynamic>> mockDocRef; // FIXED TYPE
+    late MockDocumentSnapshot<Map<String, dynamic>> mockDocSnap; // FIXED TYPE
 
     setUp(() {
       mockFirestore = MockFirebaseFirestore();
       mockAuth = MockFirebaseAuth();
       mockUser = MockUser();
-      mockDocRef = MockDocumentReference();
-      mockDocSnap = MockDocumentSnapshot();
+      mockDocRef = MockDocumentReference<Map<String, dynamic>>(); // FIXED TYPE
+      mockDocSnap = MockDocumentSnapshot<Map<String, dynamic>>(); // FIXED TYPE
 
       when(mockAuth.currentUser).thenReturn(mockUser);
       when(mockUser.uid).thenReturn('TEST_USER_001');
       when(mockFirestore.collection('customers'))
-          .thenReturn(MockCollectionReference());
+          .thenReturn(MockCollectionReference<Map<String, dynamic>>());
       when(mockFirestore.collection('customers').doc(any))
           .thenReturn(mockDocRef);
       when(mockDocRef.get()).thenAnswer((_) async => mockDocSnap);
