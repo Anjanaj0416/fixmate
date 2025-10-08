@@ -10,9 +10,13 @@ class EnhancedBookingService {
 
   // Generate unique booking ID
   static Future<String> generateBookingId() async {
-    String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-    String randomSuffix = (math.Random().nextInt(9999) + 1000).toString();
-    return 'BK_${timestamp.substring(timestamp.length - 6)}$randomSuffix';
+    // Use microseconds instead of milliseconds for better uniqueness
+    String timestamp = DateTime.now().microsecondsSinceEpoch.toString();
+    // Take last 6 digits of microseconds timestamp
+    String timestampPart = timestamp.substring(timestamp.length - 6);
+    // Generate 4-digit random suffix (1000-9999)
+    String randomSuffix = (math.Random().nextInt(9000) + 1000).toString();
+    return 'BK_$timestampPart$randomSuffix';
   }
 
   // Create a new booking
