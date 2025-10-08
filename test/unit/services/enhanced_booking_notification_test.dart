@@ -15,7 +15,7 @@ void main() {
           'serviceType': 'Plumbing',
         }
       };
-      
+
       expect(notification['type'], equals('booking_created'));
       expect(notification['message'], contains('John Doe'));
     });
@@ -31,12 +31,13 @@ void main() {
           'customerName': 'Jane Smith',
         }
       };
-      
+
       expect(notification['type'], equals('new_booking'));
       expect(notification['message'], contains('Jane Smith'));
     });
 
-    test('BRANCH 3: booking_accepted - customer notification with worker name', () async {
+    test('BRANCH 3: booking_accepted - customer notification with worker name',
+        () async {
       Map<String, dynamic> notification = {
         'userId': 'CUST_001',
         'type': 'booking_accepted',
@@ -47,7 +48,7 @@ void main() {
           'workerName': 'John Doe',
         }
       };
-      
+
       expect(notification['message'], contains('accepted'));
       expect(notification['message'], contains('John Doe'));
     });
@@ -67,7 +68,7 @@ void main() {
           'message': 'You have completed the booking',
         }
       ];
-      
+
       expect(notifications.length, equals(2));
       expect(notifications[0]['userId'], equals('CUST_001'));
       expect(notifications[1]['userId'], equals('HM_0001'));
@@ -75,10 +76,10 @@ void main() {
 
     test('BRANCH 5: Invalid userId error path', () async {
       String invalidUserId = 'INVALID_USER';
-      
+
       // Should throw exception or skip notification
       expect(invalidUserId.length, greaterThan(0));
-      expect(invalidUserId, isNot(matches(RegExp(r'^(CUST|HM)_\d+))));
+      expect(invalidUserId, isNot(matches(RegExp(r'^(CUST|HM)_\d+$'))));
     });
   });
 }

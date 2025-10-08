@@ -161,6 +161,31 @@ class _CustomerDashboardState extends State<CustomerDashboard>
     }
   }
 
+  static Future<String> loadUserLocationStatic({
+    required FirebaseFirestore firestore,
+    required FirebaseAuth auth,
+  }) async {
+    try {
+      User? user = auth.currentUser;
+      if (user == null) return 'Location not set';
+
+      DocumentSnapshot userDoc =
+          await firestore.collection('customers').doc(user.uid).get();
+
+      if (userDoc.exists) {
+        Map<String, dynamic> data = userDoc.data() as Map<String, dynamic>;
+        if (data.containsKey('location') && data['location'] != null) {
+          Map<String, dynamic> locationData = data['location'];
+          return locationData['city'] ?? 'Location not set';
+        }
+      }
+      return 'Location not set';
+    } catch (e) {
+      print('Error loading location: $e');
+      return 'Location not set';
+    }
+  }
+
   Future<void> _loadUserLocation() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;

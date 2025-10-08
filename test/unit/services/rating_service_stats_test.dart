@@ -3,13 +3,17 @@ import 'package:mockito/mockito.dart';
 
 void main() {
   group('WT027 - RatingService.getWorkerRatingStats() Tests', () {
-    test('BRANCH 1: Worker with 10 reviews - average calculation', () async {
-      // Ratings: [5.0, 4.5, 5.0, 4.0, 4.5, 5.0, 3.5, 4.0, 4.5, 5.0]
-      // Expected average: 4.45
+    test('BRANCH 1: Worker with 10 reviews - average calculation', () {
+      // Arrange
       List<double> ratings = [5.0, 4.5, 5.0, 4.0, 4.5, 5.0, 3.5, 4.0, 4.5, 5.0];
+
+      // Act
       double average = ratings.reduce((a, b) => a + b) / ratings.length;
 
-      expect(average, closeTo(4.45, 0.01));
+      // Assert
+      expect(average,
+          closeTo(4.5, 0.01)); // FIXED: Expected value should be 4.5, not 4.45
+      // Sum = 45.0, Count = 10, Average = 4.5
     });
 
     test('BRANCH 2: Worker with 0 reviews - default values', () async {
