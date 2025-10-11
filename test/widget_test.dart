@@ -11,14 +11,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fixmate/main.dart';
 
 void main() {
-  testWidgets('FixMate app smoke test', (WidgetTester tester) async {
+  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(FixMateApp());
+    await tester.pumpWidget(const MyApp());
 
-    // Verify that the WelcomeScreen is displayed
-    expect(find.text('FixMate'), findsOneWidget);
+    // Verify that our counter starts at 0.
+    expect(find.text('0'), findsOneWidget);
+    expect(find.text('1'), findsNothing);
 
-    // Verify the welcome screen tagline is present
-    expect(find.textContaining('Find'), findsWidgets);
+    // Tap the '+' icon and trigger a frame.
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pump();
+
+    // Verify that our counter has incremented.
+    expect(find.text('0'), findsNothing);
+    expect(find.text('1'), findsOneWidget);
   });
 }

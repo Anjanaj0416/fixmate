@@ -29,13 +29,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  mockito: ^5.4.0
-  build_runner: ^2.4.0
-  fake_cloud_firestore: ^3.1.0
-  firebase_auth_mocks: ^0.14.0
-  http_mock_adapter: ^0.6.0
   flutter_lints: ^6.0.0
-  http: ^1.1.0
 
 # Fix for Firebase Auth Web compatibility issues
 dependency_overrides:

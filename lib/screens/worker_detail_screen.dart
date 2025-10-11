@@ -444,7 +444,7 @@ class _WorkerDetailScreenState extends State<WorkerDetailScreen> {
         bookingId: bookingId,
         customerId: customerId,
         customerName: customerName,
-        workerId: widget.worker.workerId!,
+        workerId: widget.worker.workerId,
         workerName: widget.worker.workerName,
       );
 

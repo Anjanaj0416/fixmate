@@ -8,63 +8,11 @@ class EnhancedBookingService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Track generated IDs to ensure absolute uniqueness
-  static final Set<String> _generatedIds = <String>{};
-  static int _counter = 0;
-  static int _lastTimestamp = 0;
-
   // Generate unique booking ID
-  static Future<String> generateBookingId() async {
-    String id;
-    int attempts = 0;
-    const maxAttempts = 100; // Safety limit
-
-    do {
-      // Use microseconds for better uniqueness
-      String timestamp = DateTime.now().microsecondsSinceEpoch.toString();
-      String timestampPart = timestamp.substring(timestamp.length - 6);
-      int currentTimestamp = int.parse(timestampPart);
-
-      // Reset counter if timestamp changed, otherwise increment
-      if (currentTimestamp != _lastTimestamp) {
-        _counter = 0;
-        _lastTimestamp = currentTimestamp;
-      } else {
-        _counter++;
-      }
-
-      // Generate base random number
-      int baseRandom = math.Random().nextInt(9000) + 1000;
-
-      // Add counter to ensure uniqueness within same timestamp
-      // Use modulo carefully to stay within 1000-9999 range
-      int uniqueSuffix = ((baseRandom - 1000 + _counter) % 9000) + 1000;
-
-      String randomSuffix = uniqueSuffix.toString().padLeft(4, '0');
-      id = 'BK_$timestampPart$randomSuffix';
-
-      attempts++;
-      if (attempts >= maxAttempts) {
-        // If we've tried too many times, force a unique ID with timestamp increment
-        await Future.delayed(Duration(microseconds: 1));
-        timestamp = DateTime.now().microsecondsSinceEpoch.toString();
-        timestampPart = timestamp.substring(timestamp.length - 6);
-        randomSuffix = (math.Random().nextInt(9000) + 1000).toString();
-        id = 'BK_$timestampPart$randomSuffix';
-        break;
-      }
-    } while (_generatedIds.contains(id));
-
-    _generatedIds.add(id);
-
-    // Clean up old IDs if set gets too large (keep last 10000)
-    if (_generatedIds.length > 10000) {
-      final idsToRemove =
-          _generatedIds.take(_generatedIds.length - 10000).toList();
-      _generatedIds.removeAll(idsToRemove);
-    }
-
-    return id;
+  static Future<String> _generateBookingId() async {
+    String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    String randomSuffix = (math.Random().nextInt(9999) + 1000).toString();
+    return 'BK_${timestamp.substring(timestamp.length - 6)}$randomSuffix';
   }
 
   // Create a new booking
@@ -89,7 +37,7 @@ class EnhancedBookingService {
     required String scheduledTime,
   }) async {
     try {
-      String bookingId = await generateBookingId();
+      String bookingId = await _generateBookingId();
 
       BookingModel booking = BookingModel(
         bookingId: bookingId,

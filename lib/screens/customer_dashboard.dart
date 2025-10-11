@@ -23,34 +23,6 @@ class CustomerDashboard extends StatefulWidget {
       : super(key: key); // MODIFY THIS LINE
   @override
   _CustomerDashboardState createState() => _CustomerDashboardState();
-  static Future<String> loadUserLocationStatic({
-    required FirebaseFirestore firestore,
-    required FirebaseAuth auth,
-  }) async {
-    try {
-      User? user = auth.currentUser;
-      if (user == null) return 'Location not set';
-
-      DocumentSnapshot userDoc =
-          await firestore.collection('customers').doc(user.uid).get();
-
-      if (userDoc.exists) {
-        Map<String, dynamic> data = userDoc.data() as Map<String, dynamic>;
-        if (data.containsKey('location') && data['location'] != null) {
-          Map<String, dynamic> locationData = data['location'];
-          String? city = locationData['city'];
-          // Check if city is not null and not empty
-          if (city != null && city.isNotEmpty) {
-            return city;
-          }
-        }
-      }
-      return 'Location not set';
-    } catch (e) {
-      print('Error loading location: $e');
-      return 'Location not set';
-    }
-  }
 }
 
 class _CustomerDashboardState extends State<CustomerDashboard>
@@ -186,31 +158,6 @@ class _CustomerDashboardState extends State<CustomerDashboard>
       }
     } catch (e) {
       print('Error loading notifications: $e');
-    }
-  }
-
-  static Future<String> loadUserLocationStatic({
-    required FirebaseFirestore firestore,
-    required FirebaseAuth auth,
-  }) async {
-    try {
-      User? user = auth.currentUser;
-      if (user == null) return 'Location not set';
-
-      DocumentSnapshot userDoc =
-          await firestore.collection('customers').doc(user.uid).get();
-
-      if (userDoc.exists) {
-        Map<String, dynamic> data = userDoc.data() as Map<String, dynamic>;
-        if (data.containsKey('location') && data['location'] != null) {
-          Map<String, dynamic> locationData = data['location'];
-          return locationData['city'] ?? 'Location not set';
-        }
-      }
-      return 'Location not set';
-    } catch (e) {
-      print('Error loading location: $e');
-      return 'Location not set';
     }
   }
 
