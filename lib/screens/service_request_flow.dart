@@ -1,4 +1,5 @@
 // lib/screens/service_request_flow.dart
+// ✅ COMPLETE FIXED VERSION - All errors resolved
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
@@ -6,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'enhanced_worker_selection_screen.dart';
 import '../services/storage_service.dart';
-import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
 
 class ServiceRequestFlow extends StatefulWidget {
   final String serviceType;
@@ -28,7 +29,6 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
   int _currentStep = 0;
   final int _totalSteps = 4;
 
-  // Add these missing variables:
   bool _isLoading = false;
   String _currentAddress = '';
 
@@ -39,7 +39,9 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
   String? _waterSupplyStatus;
   String _urgency = 'Same day';
   String _budgetRange = 'LKR 10000-LKR 15000';
-  List<File> _selectedImages = [];
+
+  // ✅ FIX 1: Changed from List<File> to List<XFile>
+  List<XFile> _selectedImages = [];
 
   final TextEditingController _descriptionController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
@@ -53,21 +55,19 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ✨ MODIFIED: Added gradient background (white at top → light blue at bottom)
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Colors.white, // White at top
-              Color(0xFFE3F2FD), // Light blue at bottom
+              Colors.white,
+              Color(0xFFE3F2FD),
             ],
           ),
         ),
         child: Column(
           children: [
-            // AppBar with gradient background
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -82,7 +82,6 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
               child: SafeArea(
                 child: Column(
                   children: [
-                    // AppBar content
                     Padding(
                       padding:
                           EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -105,7 +104,6 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
                         ],
                       ),
                     ),
-                    // Progress bar
                     Container(
                       margin: EdgeInsets.symmetric(horizontal: 16),
                       child: LinearProgressIndicator(
@@ -119,7 +117,6 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
                 ),
               ),
             ),
-            // Step title
             Padding(
               padding: EdgeInsets.all(16),
               child: Row(
@@ -142,11 +139,9 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
                 ],
               ),
             ),
-            // Content
             Expanded(
               child: _buildCurrentStep(),
             ),
-            // Bottom navigation
             _buildBottomNavigation(),
           ],
         ),
@@ -404,10 +399,11 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
           _buildSummaryRow('Location:',
               _selectedLocation?.replaceAll('_', ' ') ?? 'Not specified'),
           _buildSummaryRow(
-              'Description:',
-              _problemDescription.isNotEmpty
-                  ? _problemDescription
-                  : 'No description provided'),
+            'Description:',
+            _problemDescription.isNotEmpty
+                ? _problemDescription
+                : 'No description provided',
+          ),
           if (widget.serviceType == 'plumbing' && _waterSupplyStatus != null)
             _buildSummaryRow('Water Supply Status:', _waterSupplyStatus!),
           _buildSummaryRow('Urgency:', _urgency),
@@ -449,48 +445,198 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
     );
   }
 
-  List<Map<String, String>> _getIssueTypes() {
-    switch (widget.serviceType) {
-      case 'plumbing':
-        return [
-          {'label': 'Leak or drip', 'value': 'leak_or_drip'},
-          {'label': 'Blocked drain', 'value': 'blocked_drain'},
-          {'label': 'Installation needed', 'value': 'installation_needed'},
-          {'label': 'Repair needed', 'value': 'repair_needed'},
-          {'label': 'Emergency issue', 'value': 'emergency_issue'},
-          {'label': 'Other', 'value': 'other'},
-        ];
-      case 'electrical':
-        return [
-          {'label': 'Power outage', 'value': 'power_outage'},
-          {'label': 'Faulty wiring', 'value': 'faulty_wiring'},
-          {'label': 'Installation needed', 'value': 'installation_needed'},
-          {'label': 'Repair needed', 'value': 'repair_needed'},
-          {'label': 'Emergency issue', 'value': 'emergency_issue'},
-          {'label': 'Other', 'value': 'other'},
-        ];
-      default:
-        return [
-          {'label': 'Installation needed', 'value': 'installation_needed'},
-          {'label': 'Repair needed', 'value': 'repair_needed'},
-          {'label': 'Maintenance required', 'value': 'maintenance_required'},
-          {'label': 'Emergency issue', 'value': 'emergency_issue'},
-          {'label': 'Other', 'value': 'other'},
-        ];
+  Widget _buildBottomNavigation() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          if (_currentStep > 0)
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _goToPreviousStep,
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text('Back & Edit'),
+              ),
+            ),
+          if (_currentStep > 0) SizedBox(width: 16),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: _canProceed() ? _goToNextStep : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _currentStep < _totalSteps - 1
+                    ? Colors.blue
+                    : Colors.orange,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                _currentStep < _totalSteps - 1
+                    ? 'Next'
+                    : 'Confirm & Get Quotes',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _goToNextStep() {
+    if (_currentStep < _totalSteps - 1) {
+      setState(() {
+        _currentStep++;
+      });
+    } else {
+      _proceedToWorkerSelection();
     }
   }
 
-  List<Map<String, String>> _getLocationOptions() {
-    return [
-      {'label': 'Kitchen', 'value': 'kitchen'},
-      {'label': 'Bathroom', 'value': 'bathroom'},
-      {'label': 'Living room', 'value': 'living_room'},
-      {'label': 'Bedroom', 'value': 'bedroom'},
-      {'label': 'Garage', 'value': 'garage'},
-      {'label': 'Basement', 'value': 'basement'},
-      {'label': 'Outdoor area', 'value': 'outdoor_area'},
-      {'label': 'Other', 'value': 'other'},
-    ];
+  // ✅ FIX 2: Updated method to use correct StorageService method
+  Future<void> _proceedToWorkerSelection() async {
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      List<String> uploadedPhotoUrls = [];
+
+      if (_selectedImages.isNotEmpty) {
+        print('📤 Uploading ${_selectedImages.length} photos...');
+
+        for (int i = 0; i < _selectedImages.length; i++) {
+          XFile imageFile = _selectedImages[i]; // ✅ Now it's XFile
+          print('   Uploading photo ${i + 1}/${_selectedImages.length}...');
+
+          // ✅ FIX: Use correct method name - uploadIssuePhoto (not uploadImage)
+          String photoUrl = await StorageService.uploadIssuePhoto(
+            imageFile: imageFile, // ✅ Pass XFile directly
+          );
+
+          uploadedPhotoUrls.add(photoUrl);
+          print('   ✅ Photo ${i + 1} uploaded: $photoUrl');
+        }
+
+        print('✅ All ${uploadedPhotoUrls.length} photos uploaded successfully');
+      }
+
+      _problemDescription = _descriptionController.text.trim();
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => EnhancedWorkerSelectionScreen(
+            serviceType: widget.serviceType,
+            subService: widget.subService,
+            issueType: _selectedIssueType ?? 'other',
+            problemDescription: _problemDescription,
+            problemImageUrls: uploadedPhotoUrls,
+            location: _selectedLocation ?? 'other',
+            address: _currentAddress,
+            urgency: _urgency,
+            budgetRange: _budgetRange,
+            scheduledDate: DateTime.now().add(Duration(days: 1)),
+            scheduledTime: _urgency == 'Same day'
+                ? 'As soon as possible'
+                : '09:00 AM - 12:00 PM',
+          ),
+        ),
+      );
+    } catch (e) {
+      print('❌ Error in _proceedToWorkerSelection: $e');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error, color: Colors.white),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Failed to proceed: ${e.toString()}'),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: () => _proceedToWorkerSelection(),
+          ),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  bool _canProceed() {
+    switch (_currentStep) {
+      case 0:
+        return _selectedIssueType != null;
+      case 1:
+        return _selectedLocation != null && _problemDescription.isNotEmpty;
+      case 2:
+        return true;
+      case 3:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  void _goToPreviousStep() {
+    if (_currentStep > 0) {
+      setState(() {
+        _currentStep--;
+      });
+    }
+  }
+
+  // ✅ FIX 3: Updated to store XFile directly
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? image = await _picker.pickImage(source: source);
+      if (image != null) {
+        setState(() {
+          _selectedImages.add(image); // ✅ Store XFile directly
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error picking image: $e')),
+      );
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
+    });
   }
 
   Widget _buildRadioOption(String label, String value, String? selectedValue,
@@ -544,7 +690,6 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
   Widget _buildImageUploadSection() {
     return Column(
       children: [
-        // Only gallery upload option (camera removed as requested)
         SizedBox(
           width: double.infinity,
           child: _buildImageUploadCard(
@@ -594,6 +739,7 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
     );
   }
 
+  // ✅ FIX 4: Updated to display XFile images properly
   Widget _buildSelectedImagesGrid() {
     return Container(
       height: 120,
@@ -610,9 +756,21 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
                   height: 100,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
-                    image: DecorationImage(
-                      image: FileImage(_selectedImages[index]),
-                      fit: BoxFit.cover,
+                    color: Colors.grey[300],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: FutureBuilder<Uint8List>(
+                      future: _selectedImages[index].readAsBytes(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData) {
+                          return Image.memory(
+                            snapshot.data!,
+                            fit: BoxFit.cover,
+                          );
+                        }
+                        return Center(child: CircularProgressIndicator());
+                      },
                     ),
                   ),
                 ),
@@ -681,212 +839,47 @@ class _ServiceRequestFlowState extends State<ServiceRequestFlow> {
     );
   }
 
-  // lib/screens/service_request_flow.dart
-// MODIFIED - Changed to use Confirm & Get Quotes button instead of Submit Request
-// This now navigates to worker selection where quotes will be created
-
-// Find the _buildBottomNavigation method and replace it with this:
-
-  Widget _buildBottomNavigation() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          if (_currentStep > 0)
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _goToPreviousStep,
-                style: OutlinedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text('Back & Edit'),
-              ),
-            ),
-          if (_currentStep > 0) SizedBox(width: 16),
-          Expanded(
-            child: ElevatedButton(
-              onPressed: _canProceed() ? _goToNextStep : null,
-              style: ElevatedButton.styleFrom(
-                // CHANGED: Use orange color for "Confirm & Get Quotes"
-                backgroundColor: _currentStep < _totalSteps - 1
-                    ? Colors.blue
-                    : Colors.orange,
-                padding: EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: Text(
-                // CHANGED: Button text changed from "Submit Request" to "Confirm & Get Quotes"
-                _currentStep < _totalSteps - 1
-                    ? 'Next'
-                    : 'Confirm & Get Quotes',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-// Find the _goToNextStep method and replace it with this:
-
-  void _goToNextStep() {
-    if (_currentStep < _totalSteps - 1) {
-      setState(() {
-        _currentStep++;
-      });
-    } else {
-      // CHANGED: Now calls _proceedToWorkerSelection instead of _submitRequest
-      _proceedToWorkerSelection();
-    }
-  }
-
-// Add this new method to replace the _submitRequest functionality:
-
-  Future<void> _proceedToWorkerSelection() async {
-    if (_isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Upload images if any
-      List<String> uploadedPhotoUrls = [];
-      if (_selectedImages.isNotEmpty) {
-        print('📤 Uploading ${_selectedImages.length} photos...');
-
-        for (int i = 0; i < _selectedImages.length; i++) {
-          File imageFile = _selectedImages[i];
-          print('   Uploading photo ${i + 1}/${_selectedImages.length}...');
-
-          String? photoUrl = await StorageService.uploadImage(
-            imageFile: imageFile,
-            folder: 'service_requests',
-          );
-
-          if (photoUrl != null) {
-            uploadedPhotoUrls.add(photoUrl);
-            print('   ✅ Photo ${i + 1} uploaded: $photoUrl');
-          }
-        }
-
-        print('✅ All ${uploadedPhotoUrls.length} photos uploaded successfully');
-      }
-
-      // Store description
-      _problemDescription = _descriptionController.text.trim();
-
-      // Navigate to worker selection screen with all data
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => EnhancedWorkerSelectionScreen(
-            serviceType: widget.serviceType,
-            subService: widget.subService,
-            issueType: _selectedIssueType ?? 'other',
-            problemDescription: _problemDescription,
-            problemImageUrls: uploadedPhotoUrls,
-            location: _selectedLocation ?? 'other',
-            address: _currentAddress,
-            urgency: _urgency,
-            budgetRange: _budgetRange,
-            scheduledDate: DateTime.now().add(Duration(days: 1)),
-            scheduledTime: _urgency == 'Same day'
-                ? 'As soon as possible'
-                : '09:00 AM - 12:00 PM',
-          ),
-        ),
-      );
-    } catch (e) {
-      print('❌ Error in _proceedToWorkerSelection: $e');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.error, color: Colors.white),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text('Failed to proceed: ${e.toString()}'),
-              ),
-            ],
-          ),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'Retry',
-            textColor: Colors.white,
-            onPressed: () => _proceedToWorkerSelection(),
-          ),
-        ),
-      );
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  bool _canProceed() {
-    switch (_currentStep) {
-      case 0:
-        return _selectedIssueType != null;
-      case 1:
-        return _selectedLocation != null && _problemDescription.isNotEmpty;
-      case 2:
-        return true; // All fields in this step are optional or have defaults
-      case 3:
-        return true; // Review step
+  List<Map<String, String>> _getIssueTypes() {
+    switch (widget.serviceType) {
+      case 'plumbing':
+        return [
+          {'label': 'Leak or drip', 'value': 'leak_or_drip'},
+          {'label': 'Blocked drain', 'value': 'blocked_drain'},
+          {'label': 'Installation needed', 'value': 'installation_needed'},
+          {'label': 'Repair needed', 'value': 'repair_needed'},
+          {'label': 'Emergency issue', 'value': 'emergency_issue'},
+          {'label': 'Other', 'value': 'other'},
+        ];
+      case 'electrical':
+        return [
+          {'label': 'Power outage', 'value': 'power_outage'},
+          {'label': 'Faulty wiring', 'value': 'faulty_wiring'},
+          {'label': 'Installation needed', 'value': 'installation_needed'},
+          {'label': 'Repair needed', 'value': 'repair_needed'},
+          {'label': 'Emergency issue', 'value': 'emergency_issue'},
+          {'label': 'Other', 'value': 'other'},
+        ];
       default:
-        return false;
+        return [
+          {'label': 'Installation needed', 'value': 'installation_needed'},
+          {'label': 'Repair needed', 'value': 'repair_needed'},
+          {'label': 'Maintenance required', 'value': 'maintenance_required'},
+          {'label': 'Emergency issue', 'value': 'emergency_issue'},
+          {'label': 'Other', 'value': 'other'},
+        ];
     }
   }
 
-  void _goToPreviousStep() {
-    if (_currentStep > 0) {
-      setState(() {
-        _currentStep--;
-      });
-    }
-  }
-
-  Future<void> _pickImage(ImageSource source) async {
-    try {
-      final XFile? image = await _picker.pickImage(source: source);
-      if (image != null) {
-        setState(() {
-          _selectedImages.add(File(image.path));
-        });
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error picking image: $e')),
-      );
-    }
-  }
-
-  void _removeImage(int index) {
-    setState(() {
-      _selectedImages.removeAt(index);
-    });
+  List<Map<String, String>> _getLocationOptions() {
+    return [
+      {'label': 'Kitchen', 'value': 'kitchen'},
+      {'label': 'Bathroom', 'value': 'bathroom'},
+      {'label': 'Living room', 'value': 'living_room'},
+      {'label': 'Bedroom', 'value': 'bedroom'},
+      {'label': 'Garage', 'value': 'garage'},
+      {'label': 'Basement', 'value': 'basement'},
+      {'label': 'Outdoor area', 'value': 'outdoor_area'},
+      {'label': 'Other', 'value': 'other'},
+    ];
   }
 }
