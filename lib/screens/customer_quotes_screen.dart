@@ -150,16 +150,13 @@ class _CustomerQuotesScreenState extends State<CustomerQuotesScreen>
           return Center(child: Text('Error: ${snapshot.error}'));
         }
 
-        // MODIFIED: Filter out invoices that have been converted to bookings
-        // After QuoteModel is updated with bookingId field, this will work
+        // ✅ FIXED: Filter out invoices that have been converted to bookings
         List<QuoteModel> acceptedQuotes = (snapshot.data ?? [])
             .where((q) => q.status == QuoteStatus.accepted)
+            .where((q) =>
+                q.bookingId == null ||
+                q.bookingId!.isEmpty) // ✅ ENABLED: Filter out converted quotes
             .toList();
-
-        // Note: Once you add bookingId to QuoteModel, uncomment these lines:
-        // acceptedQuotes = acceptedQuotes
-        //     .where((q) => q.bookingId == null || q.bookingId!.isEmpty)
-        //     .toList();
 
         if (acceptedQuotes.isEmpty) {
           return _buildEmptyState(
