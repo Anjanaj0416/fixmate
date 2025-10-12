@@ -1,5 +1,5 @@
 // lib/screens/customer_quotes_screen.dart
-// NEW FILE - Customer Quotes Tab showing all quotes and accepted invoices
+// MODIFIED VERSION - Navigate to Accepted bookings tab after accepting invoice
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/quote_model.dart';
 import '../services/quote_service.dart';
 import 'quote_detail_customer_screen.dart';
+import 'customer_dashboard.dart'; // ADDED: Import CustomerDashboard
 
 class CustomerQuotesScreen extends StatefulWidget {
   @override
@@ -122,16 +123,17 @@ class _CustomerQuotesScreenState extends State<CustomerQuotesScreen>
             .toList();
 
         if (pendingQuotes.isEmpty) {
-          return _buildEmptyState('No pending quotes',
-              'Request quotes from workers to get started');
+          return _buildEmptyState(
+            'No pending quotes',
+            'Your quote requests will appear here',
+          );
         }
 
         return ListView.builder(
           padding: EdgeInsets.all(16),
           itemCount: pendingQuotes.length,
-          itemBuilder: (context, index) {
-            return _buildPendingQuoteCard(pendingQuotes[index]);
-          },
+          itemBuilder: (context, index) =>
+              _buildPendingQuoteCard(pendingQuotes[index]),
         );
       },
     );
@@ -154,16 +156,17 @@ class _CustomerQuotesScreenState extends State<CustomerQuotesScreen>
             .toList();
 
         if (acceptedQuotes.isEmpty) {
-          return _buildEmptyState('No accepted invoices',
-              'Invoices will appear here when workers accept your quotes');
+          return _buildEmptyState(
+            'No accepted invoices',
+            'Accepted quotes will appear here',
+          );
         }
 
         return ListView.builder(
           padding: EdgeInsets.all(16),
           itemCount: acceptedQuotes.length,
-          itemBuilder: (context, index) {
-            return _buildInvoiceCard(acceptedQuotes[index]);
-          },
+          itemBuilder: (context, index) =>
+              _buildInvoiceCard(acceptedQuotes[index]),
         );
       },
     );
@@ -174,115 +177,6 @@ class _CustomerQuotesScreenState extends State<CustomerQuotesScreen>
       margin: EdgeInsets.only(bottom: 12),
       elevation: 2,
       child: InkWell(
-        // ADDED: Navigate to detail screen on tap
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => QuoteDetailCustomerScreen(quote: quote),
-            ),
-          );
-        },
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _getQuoteStatusColor(quote.status),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      _getQuoteStatusText(quote.status),
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  // ADDED: Arrow icon to indicate it's tappable
-                  Icon(Icons.arrow_forward_ios,
-                      size: 16, color: Colors.grey[400]),
-                ],
-              ),
-              SizedBox(height: 12),
-              Text(
-                quote.workerName,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 4),
-              Text(
-                quote.serviceType.replaceAll('_', ' ').toUpperCase(),
-                style: TextStyle(color: Colors.grey[600], fontSize: 14),
-              ),
-              SizedBox(height: 8),
-              Text(
-                quote.problemDescription,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Colors.grey[700]),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Budget: ${quote.budgetRange}',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-              SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _deleteQuote(quote),
-                      icon: Icon(Icons.delete, size: 18),
-                      label: Text('Delete'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: BorderSide(color: Colors.red),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  // ADDED: View Details button
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                QuoteDetailCustomerScreen(quote: quote),
-                          ),
-                        );
-                      },
-                      icon: Icon(Icons.visibility, size: 18),
-                      label: Text('View'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInvoiceCard(QuoteModel quote) {
-    return Card(
-      margin: EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      child: InkWell(
-        // ADDED: Navigate to detail screen on tap
         onTap: () {
           Navigator.push(
             context,
@@ -300,35 +194,147 @@ class _CustomerQuotesScreenState extends State<CustomerQuotesScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '📄 INVOICE',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
+                    quote.workerName,
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-                  Row(
-                    children: [
-                      Icon(Icons.check_circle, color: Colors.green),
-                      SizedBox(width: 8),
-                      // ADDED: Arrow icon
-                      Icon(Icons.arrow_forward_ios,
-                          size: 16, color: Colors.grey[400]),
-                    ],
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color:
+                          _getQuoteStatusColor(quote.status).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border:
+                          Border.all(color: _getQuoteStatusColor(quote.status)),
+                    ),
+                    child: Text(
+                      _getQuoteStatusText(quote.status),
+                      style: TextStyle(
+                        color: _getQuoteStatusColor(quote.status),
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              Divider(height: 24),
-              Text(
-                quote.workerName,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 4),
+              SizedBox(height: 8),
               Text(
                 quote.serviceType.replaceAll('_', ' ').toUpperCase(),
-                style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                style: TextStyle(
+                  color: Colors.blue,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                quote.problemDescription,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
               SizedBox(height: 12),
+              if (quote.status == QuoteStatus.pending) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _deleteQuote(quote),
+                        icon: Icon(Icons.delete, size: 16),
+                        label: Text('Delete'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: BorderSide(color: Colors.red),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  QuoteDetailCustomerScreen(quote: quote),
+                            ),
+                          );
+                        },
+                        icon: Icon(Icons.visibility, size: 16),
+                        label: Text('View'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (quote.status == QuoteStatus.declined) ...[
+                Container(
+                  margin: EdgeInsets.only(top: 8),
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red[50],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.cancel, color: Colors.red, size: 16),
+                      SizedBox(width: 8),
+                      Text(
+                        'Worker declined this quote',
+                        style: TextStyle(color: Colors.red[700]),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInvoiceCard(QuoteModel quote) {
+    return Card(
+      margin: EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => QuoteDetailCustomerScreen(quote: quote),
+            ),
+          );
+        },
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    quote.workerName,
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  Icon(Icons.receipt, color: Colors.green),
+                ],
+              ),
+              SizedBox(height: 8),
+              Text(
+                quote.serviceType.replaceAll('_', ' ').toUpperCase(),
+                style: TextStyle(
+                  color: Colors.blue,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: 8),
               Container(
                 padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -336,34 +342,26 @@ class _CustomerQuotesScreenState extends State<CustomerQuotesScreen>
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Final Price:',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        Text(
-                          'LKR ${quote.finalPrice?.toStringAsFixed(2) ?? 'N/A'}',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green[700],
-                          ),
-                        ),
-                      ],
+                    Text(
+                      'Final Price:',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                    ),
+                    Text(
+                      'LKR ${quote.finalPrice?.toStringAsFixed(2) ?? 'N/A'}',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[700],
+                      ),
                     ),
                     if (quote.workerNote != null &&
                         quote.workerNote!.isNotEmpty) ...[
                       SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Note: ${quote.workerNote}',
-                          style:
-                              TextStyle(fontSize: 12, color: Colors.grey[700]),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      Text(
+                        'Note: ${quote.workerNote}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                       ),
                     ],
                   ],
@@ -371,20 +369,8 @@ class _CustomerQuotesScreenState extends State<CustomerQuotesScreen>
               ),
               SizedBox(height: 12),
               Text(
-                'Service Details:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 4),
-              Text(
                 quote.problemDescription,
                 maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Location: ${quote.address}',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               SizedBox(height: 16),
@@ -417,7 +403,6 @@ class _CustomerQuotesScreenState extends State<CustomerQuotesScreen>
                 ],
               ),
               SizedBox(height: 8),
-              // ADDED: View full details button
               Center(
                 child: TextButton.icon(
                   onPressed: () {
@@ -548,6 +533,7 @@ class _CustomerQuotesScreenState extends State<CustomerQuotesScreen>
     }
   }
 
+  // MODIFIED: Navigate to Accepted bookings tab after accepting invoice
   Future<void> _acceptInvoice(QuoteModel quote) async {
     bool? confirm = await showDialog<bool>(
       context: context,
@@ -592,10 +578,80 @@ class _CustomerQuotesScreenState extends State<CustomerQuotesScreen>
 
     if (confirm == true) {
       try {
+        // Show loading indicator
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Creating booking...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
         String bookingId =
             await QuoteService.acceptInvoice(quoteId: quote.quoteId);
-        _showSuccessSnackBar('Booking started successfully! ID: $bookingId');
+
+        // Close loading dialog
+        Navigator.pop(context);
+
+        // Show success dialog with navigation button
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green),
+                SizedBox(width: 8),
+                Text('Booking Created!'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Your booking has been created successfully!'),
+                SizedBox(height: 12),
+                Text('Booking ID: $bookingId',
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+              ],
+            ),
+            actions: [
+              ElevatedButton.icon(
+                onPressed: () {
+                  // Close dialog
+                  Navigator.pop(context);
+                  // Navigate to CustomerDashboard with Bookings tab -> Accepted filter
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CustomerDashboard(initialIndex: 1),
+                    ),
+                    (route) => false,
+                  );
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                icon: Icon(Icons.calendar_today),
+                label:
+                    Text('View Booking', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
       } catch (e) {
+        // Close loading dialog if open
+        Navigator.pop(context);
         _showErrorSnackBar('Failed to accept invoice: ${e.toString()}');
       }
     }
