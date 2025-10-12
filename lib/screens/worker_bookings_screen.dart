@@ -9,6 +9,7 @@ import '../services/booking_service.dart';
 import '../services/chat_service.dart';
 import 'chat_screen.dart';
 import 'worker_quotes_screen.dart';
+import 'booking_detail_worker_screen.dart';
 
 class WorkerBookingsScreen extends StatefulWidget {
   @override
@@ -516,7 +517,12 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
   }
 
   void _viewBookingDetails(BookingModel booking) {
-    _showInfoSnackBar('Booking details: ${booking.bookingId}');
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BookingDetailWorkerScreen(booking: booking),
+      ),
+    );
   }
 
   void _showSuccessSnackBar(String message) {
