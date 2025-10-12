@@ -11,6 +11,7 @@ import '../constants/service_constants.dart';
 import 'customer_bookings_screen.dart';
 import 'customer_dashboard.dart';
 import '../services/quote_service.dart';
+import '../utils/whatsapp_helper.dart';
 
 class EnhancedWorkerSelectionScreen extends StatefulWidget {
   final String serviceType;
@@ -601,6 +602,8 @@ class _EnhancedWorkerSelectionScreenState
     );
   }
 
+// REPLACE YOUR ENTIRE _buildWorkerCard METHOD WITH THIS:
+
   Widget _buildWorkerCard(WorkerModel worker) {
     return Card(
       margin: EdgeInsets.only(bottom: 16),
@@ -718,7 +721,8 @@ class _EnhancedWorkerSelectionScreenState
 
             SizedBox(height: 16),
 
-            // Action Buttons
+            // ============ MODIFIED SECTION: Action Buttons ============
+            // First Row: Details and Reviews buttons
             Row(
               children: [
                 Expanded(
@@ -749,35 +753,66 @@ class _EnhancedWorkerSelectionScreenState
               ],
             ),
 
-            SizedBox(height: 12),
+            SizedBox(height: 8),
 
-            // Select Worker Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _selectWorker(worker),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+            // Second Row: WhatsApp Call button + Select Worker button
+            Row(
+              children: [
+                // WhatsApp Call Button
+                Container(
+                  width: 50,
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      WhatsAppHelper.showCallConfirmationDialog(
+                        context: context,
+                        phoneNumber: worker.contact.phoneNumber,
+                        workerName: worker.workerName,
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Icon(Icons.phone, size: 20),
                   ),
                 ),
-                child: Text(
-                  'Select Worker',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                SizedBox(width: 8),
+                // Select Worker Button (Takes remaining space)
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _selectWorker(worker),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      'Select Worker',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
+            // ============ END MODIFIED SECTION ============
           ],
         ),
       ),
     );
   }
+
+// Note: Keep all other methods (_showWorkerDetailsDialog, _showReviewsDialog, _selectWorker, etc.) unchanged
 
   void _showWorkerDetailsDialog(WorkerModel worker) {
     showDialog(

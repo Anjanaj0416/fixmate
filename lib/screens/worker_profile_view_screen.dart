@@ -6,6 +6,7 @@ import '../models/worker_model.dart';
 import '../models/review_model.dart';
 import '../services/rating_service.dart';
 import 'package:intl/intl.dart';
+import '../utils/whatsapp_helper.dart';
 
 class WorkerProfileViewScreen extends StatefulWidget {
   final String workerId;
@@ -157,6 +158,28 @@ class _WorkerProfileViewScreenState extends State<WorkerProfileViewScreen> {
           ),
         ),
       ),
+      // ============ ADD THIS: WhatsApp Call Floating Action Button ============
+      floatingActionButton: _worker!.contact.phoneNumber.isNotEmpty
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                WhatsAppHelper.showCallConfirmationDialog(
+                  context: context,
+                  phoneNumber: _worker!.contact.phoneNumber,
+                  workerName: _worker!.workerName,
+                );
+              },
+              backgroundColor: Colors.green,
+              icon: Icon(Icons.phone, color: Colors.white),
+              label: Text(
+                'Call via WhatsApp',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            )
+          : null,
+      // ============ END OF ADDITION ============
     );
   }
 
