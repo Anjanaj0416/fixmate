@@ -1,6 +1,37 @@
 // lib/models/worker_model.dart
-// FIXED VERSION - Handles both old and new data structures
+// UPDATED VERSION - Added Portfolio support
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+// Add this new class for portfolio items
+class PortfolioItem {
+  final String imageUrl;
+  final String note;
+  final DateTime uploadedAt;
+
+  PortfolioItem({
+    required this.imageUrl,
+    required this.note,
+    required this.uploadedAt,
+  });
+
+  factory PortfolioItem.fromMap(Map<String, dynamic> data) {
+    return PortfolioItem(
+      imageUrl: data['image_url'] ?? '',
+      note: data['note'] ?? '',
+      uploadedAt: data['uploaded_at'] is Timestamp
+          ? (data['uploaded_at'] as Timestamp).toDate()
+          : DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'image_url': imageUrl,
+      'note': note,
+      'uploaded_at': Timestamp.fromDate(uploadedAt),
+    };
+  }
+}
 
 class WorkerModel {
   final String? workerId;
@@ -24,6 +55,7 @@ class WorkerModel {
   final DateTime? lastActive;
   final bool verified;
   final String? profilePictureUrl;
+  final List<PortfolioItem> portfolio; // NEW: Portfolio items
 
   WorkerModel({
     this.workerId,
@@ -47,24 +79,31 @@ class WorkerModel {
     this.lastActive,
     this.verified = false,
     this.profilePictureUrl,
+    this.portfolio = const [], // NEW: Initialize portfolio
   });
 
   factory WorkerModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-    // FIXED: Handle contact data at root level OR nested
+    // Handle contact data
     Map<String, dynamic> contactData;
     if (data.containsKey('contact') && data['contact'] is Map) {
-      // New structure: nested contact object
       contactData = data['contact'] as Map<String, dynamic>;
     } else {
-      // Old structure: contact fields at root level
       contactData = {
         'phone_number': data['phone_number'] ?? '',
         'email': data['email'] ?? '',
         'whatsapp_available': data['whatsapp_available'] ?? false,
         'website': data['website'],
       };
+    }
+
+    // NEW: Parse portfolio items
+    List<PortfolioItem> portfolioItems = [];
+    if (data.containsKey('portfolio') && data['portfolio'] is List) {
+      portfolioItems = (data['portfolio'] as List)
+          .map((item) => PortfolioItem.fromMap(item as Map<String, dynamic>))
+          .toList();
     }
 
     return WorkerModel(
@@ -82,14 +121,18 @@ class WorkerModel {
       successRate: (data['success_rate'] ?? 0.0).toDouble(),
       pricing: WorkerPricing.fromMap(data['pricing'] ?? {}),
       availability: WorkerAvailability.fromMap(data['availability'] ?? {}),
-      capabilities: WorkerCapabilities.fromMap(data['capabilities'] ?? []),
+      capabilities: WorkerCapabilities.fromMap(data['capabilities'] ?? {}),
       contact: WorkerContact.fromMap(contactData),
       profile: WorkerProfile.fromMap(data['profile'] ?? {}),
-      createdAt: data['created_at']?.toDate(),
-      lastActive: data['last_active']?.toDate(),
+      createdAt: data['created_at'] != null
+          ? (data['created_at'] as Timestamp).toDate()
+          : null,
+      lastActive: data['last_active'] != null
+          ? (data['last_active'] as Timestamp).toDate()
+          : null,
       verified: data['verified'] ?? false,
-      profilePictureUrl:
-          data['profile_picture_url'] ?? data['profilePictureUrl'],
+      profilePictureUrl: data['profile_picture_url'],
+      portfolio: portfolioItems, // NEW: Add portfolio
     );
   }
 
@@ -112,12 +155,71 @@ class WorkerModel {
       'capabilities': capabilities.toMap(),
       'contact': contact.toMap(),
       'profile': profile.toMap(),
-      'created_at': createdAt ?? FieldValue.serverTimestamp(),
-      'last_active': lastActive ?? FieldValue.serverTimestamp(),
+      'created_at': createdAt != null
+          ? Timestamp.fromDate(createdAt!)
+          : FieldValue.serverTimestamp(),
+      'last_active': lastActive != null
+          ? Timestamp.fromDate(lastActive!)
+          : FieldValue.serverTimestamp(),
       'verified': verified,
       'profile_picture_url': profilePictureUrl,
+      'portfolio':
+          portfolio.map((item) => item.toMap()).toList(), // NEW: Add portfolio
     };
   }
+
+  WorkerModel copyWith({
+    String? workerId,
+    String? workerName,
+    String? firstName,
+    String? lastName,
+    String? serviceType,
+    String? serviceCategory,
+    String? businessName,
+    WorkerLocation? location,
+    double? rating,
+    int? experienceYears,
+    int? jobsCompleted,
+    double? successRate,
+    WorkerPricing? pricing,
+    WorkerAvailability? availability,
+    WorkerCapabilities? capabilities,
+    WorkerContact? contact,
+    WorkerProfile? profile,
+    DateTime? createdAt,
+    DateTime? lastActive,
+    bool? verified,
+    String? profilePictureUrl,
+    List<PortfolioItem>? portfolio, // NEW
+  }) {
+    return WorkerModel(
+      workerId: workerId ?? this.workerId,
+      workerName: workerName ?? this.workerName,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      serviceType: serviceType ?? this.serviceType,
+      serviceCategory: serviceCategory ?? this.serviceCategory,
+      businessName: businessName ?? this.businessName,
+      location: location ?? this.location,
+      rating: rating ?? this.rating,
+      experienceYears: experienceYears ?? this.experienceYears,
+      jobsCompleted: jobsCompleted ?? this.jobsCompleted,
+      successRate: successRate ?? this.successRate,
+      pricing: pricing ?? this.pricing,
+      availability: availability ?? this.availability,
+      capabilities: capabilities ?? this.capabilities,
+      contact: contact ?? this.contact,
+      profile: profile ?? this.profile,
+      createdAt: createdAt ?? this.createdAt,
+      lastActive: lastActive ?? this.lastActive,
+      verified: verified ?? this.verified,
+      profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
+      portfolio: portfolio ?? this.portfolio, // NEW
+    );
+  }
+
+  String get city => location.city;
+  double get dailyWageLkr => pricing.dailyWageLkr;
 }
 
 class WorkerLocation {

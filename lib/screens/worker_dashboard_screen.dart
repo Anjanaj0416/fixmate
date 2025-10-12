@@ -1,6 +1,6 @@
 // lib/screens/worker_dashboard_screen.dart
 // ENHANCED VERSION - Beautiful UI with welcome header, no app bar
-// All existing functionality preserved
+// All existing functionality preserved + Portfolio feature added
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,6 +14,7 @@ import '../services/rating_service.dart';
 import 'worker_notifications_screen.dart';
 import 'customer_dashboard.dart';
 import 'worker_reviews_screen.dart';
+import 'worker_portfolio_screen.dart'; // NEW: Portfolio screen import
 
 class WorkerDashboardScreen extends StatefulWidget {
   @override
@@ -214,56 +215,61 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
     }
   }
 
-  // PARTIAL UPDATE for lib/screens/worker_dashboard_screen.dart
-// This is the UPDATED _switchToCustomerAccount method
-// Replace the existing method in your worker_dashboard_screen.dart file
-
   Future<void> _switchToCustomerAccount() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    try {
-      // Show loading dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => Center(
-          child: Card(
-            margin: EdgeInsets.all(32),
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(color: Color(0xFF9C27B0)),
-                  SizedBox(height: 16),
-                  Text('Checking customer account...'),
-                ],
-              ),
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Card(
+          margin: EdgeInsets.all(24),
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF2196F3)),
+                SizedBox(height: 16),
+                Text('Switching account...'),
+              ],
             ),
           ),
         ),
-      );
+      ),
+    );
 
+    try {
       // Check if customer account exists
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('User profile not found'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+
+      // Check if customer profile exists
       DocumentSnapshot customerDoc = await FirebaseFirestore.instance
           .collection('customers')
           .doc(user.uid)
           .get();
 
-      Navigator.pop(context); // Close loading dialog
-
       if (customerDoc.exists) {
-        // Customer account exists - update accountType to 'both' and switch
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .update({
-          'accountType': 'both',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        // Directly switch to customer dashboard
+        // Customer account exists, navigate to dashboard
+        Navigator.pop(context); // Close loading
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -271,26 +277,12 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
           ),
         );
       } else {
-        // Customer account does NOT exist - create one automatically
+        // Customer account doesn't exist, create it automatically
         print('📝 Creating customer account automatically...');
 
-        // Get user data
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
+        String customerId =
+            'CS_${DateTime.now().millisecondsSinceEpoch}_${_generateRandomSuffix()}';
 
-        if (!userDoc.exists) {
-          throw Exception('User document not found');
-        }
-
-        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
-
-        // Generate customer ID
-        String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-        String customerId = 'CUST_${timestamp}_${_generateRandomSuffix()}';
-
-        // Create customer document
         await FirebaseFirestore.instance
             .collection('customers')
             .doc(user.uid)
@@ -331,6 +323,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
         print('✅ Customer account created automatically');
 
         // Show success and navigate
+        Navigator.pop(context); // Close loading
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Customer account created successfully!'),
@@ -360,7 +353,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
     }
   }
 
-// Helper method to generate random suffix
+  // Helper method to generate random suffix
   String _generateRandomSuffix() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final random = DateTime.now().millisecondsSinceEpoch;
@@ -380,9 +373,10 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
             onPressed: () => Navigator.pop(context, false),
             child: Text('Cancel'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Sign Out', style: TextStyle(color: Colors.red)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Sign Out', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -390,7 +384,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
 
     if (confirm == true) {
       await FirebaseAuth.instance.signOut();
-      Navigator.pushReplacementNamed(context, '/welcome');
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     }
   }
 
@@ -407,7 +401,15 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
             ),
           ),
           child: Center(
-            child: CircularProgressIndicator(color: Color(0xFFFF9800)),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: Color(0xFFFF9800)),
+                SizedBox(height: 16),
+                Text('Loading dashboard...',
+                    style: TextStyle(color: Colors.grey[600])),
+              ],
+            ),
           ),
         ),
       );
@@ -424,29 +426,38 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
             ),
           ),
           child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
-                SizedBox(height: 16),
-                Text(
-                  'Worker profile not found',
-                  style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                ),
-                SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _loadWorkerData,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFFFF9800),
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: Color(0xFFFF9800)),
+                  SizedBox(height: 16),
+                  Text(
+                    'Worker profile not found',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
-                  child: Text('Retry'),
-                ),
-              ],
+                  SizedBox(height: 8),
+                  Text(
+                    'Please complete your registration',
+                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  ),
+                  SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _loadWorkerData,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFFF9800),
+                      foregroundColor: Colors.white,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text('Retry'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -689,25 +700,18 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
                       Text(
                         _worker!.workerName,
                         style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF2C3E50),
                         ),
                       ),
                       SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.work, size: 16, color: Color(0xFFFF9800)),
-                          SizedBox(width: 4),
-                          Text(
-                            _worker!.serviceType,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[700],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        _worker!.serviceType.replaceAll('_', ' '),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
                       ),
                       SizedBox(height: 4),
                       Row(
@@ -718,7 +722,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
                           Text(
                             _worker!.location.city,
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 13,
                               color: Colors.grey[600],
                             ),
                           ),
@@ -727,8 +731,6 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
                     ],
                   ),
                 ),
-                Icon(Icons.arrow_forward_ios,
-                    color: Color(0xFFFF9800), size: 20),
               ],
             ),
           ),
@@ -739,14 +741,14 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
 
   Widget _buildAvailabilityCard() {
     return Card(
-      elevation: 3,
+      elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: _isAvailable
-                ? [Color(0xFFE8F5E9), Color(0xFFC8E6C9)]
-                : [Color(0xFFFFEBEE), Color(0xFFFFCDD2)],
+                ? [Colors.green[50]!, Colors.green[100]!]
+                : [Colors.red[50]!, Colors.red[100]!],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -757,40 +759,35 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ScaleTransition(
-                    scale: _scaleAnimation,
-                    child: Container(
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: _isAvailable ? Colors.green : Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        _isAvailable ? Icons.check_circle : Icons.cancel,
-                        color: Colors.white,
-                        size: 24,
-                      ),
+                  Text(
+                    'Availability Status',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  SizedBox(height: 4),
+                  Row(
                     children: [
-                      Text(
-                        'Availability Status',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.w500,
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: _isAvailable ? Colors.green : Colors.red,
+                          shape: BoxShape.circle,
                         ),
                       ),
-                      SizedBox(height: 4),
+                      SizedBox(width: 8),
                       Text(
-                        _isAvailable ? 'Available' : 'Unavailable',
+                        _isAvailable
+                            ? 'Available for bookings'
+                            : 'Not available',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: _isAvailable
                               ? Colors.green[800]
@@ -966,11 +963,23 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
           ),
         ),
         SizedBox(height: 12),
+        // NEW: Portfolio Card
+        _buildActionCard(
+          icon: Icons.photo_library,
+          title: 'My Portfolio',
+          subtitle: 'Showcase your work with photos and notes',
+          color: Color(0xFF9C27B0),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => WorkerPortfolioScreen()),
+          ),
+        ),
+        SizedBox(height: 12),
         _buildActionCard(
           icon: Icons.swap_horiz,
           title: 'Switch to Customer',
           subtitle: 'Access your customer account',
-          color: Color(0xFF9C27B0),
+          color: Color(0xFFFF5722),
           onTap: _switchToCustomerAccount,
         ),
       ],

@@ -118,6 +118,54 @@ class StorageService {
       // Don't throw error, just log it
     }
   }
+  // lib/services/storage_service.dart
+// ADD THIS METHOD to your existing storage_service.dart file
+
+  /// Upload worker portfolio photo to Firebase Storage
+  /// Returns the download URL
+  static Future<String> uploadPortfolioPhoto({
+    required XFile imageFile,
+  }) async {
+    try {
+      User? user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('User not authenticated');
+      }
+
+      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      String extension = path.extension(imageFile.path);
+      String fileName = 'portfolio_${timestamp}$extension';
+
+      Reference storageRef = _storage
+          .ref()
+          .child('portfolio_photos')
+          .child(user.uid)
+          .child(fileName);
+
+      final bytes = await imageFile.readAsBytes();
+
+      print('📤 Uploading portfolio photo (${bytes.length} bytes)...');
+      print('📍 Path: portfolio_photos/${user.uid}/$fileName');
+
+      UploadTask uploadTask = storageRef.putData(
+        bytes,
+        SettableMetadata(
+          contentType: _getContentType(extension),
+        ),
+      );
+
+      TaskSnapshot snapshot = await uploadTask;
+      String downloadUrl = await snapshot.ref.getDownloadURL();
+
+      print('✅ Portfolio photo uploaded successfully!');
+      print('🔗 Download URL: $downloadUrl');
+
+      return downloadUrl;
+    } catch (e) {
+      print('❌ Error uploading portfolio photo: $e');
+      rethrow;
+    }
+  }
 
   /// Get content type based on file extension
   static String _getContentType(String extension) {

@@ -1,11 +1,28 @@
 rules_version = '2';
-
-// Firebase Storage Rules for Emulator
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow all access in emulator (development only)
+    
+    // Issue photos - authenticated users can upload, everyone can read
+    match /issue_photos/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Profile pictures - authenticated users can upload their own, everyone can read
+    match /profile_pictures/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Portfolio photos - NEW: Workers can upload, everyone can read
+    match /portfolio_photos/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Default deny all
     match /{allPaths=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
