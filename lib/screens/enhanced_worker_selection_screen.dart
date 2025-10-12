@@ -1332,16 +1332,20 @@ class _EnhancedWorkerSelectionScreenState
         false;
   }
 
+  // MODIFIED: Changed booking flow to quote flow
+// Only modify the _selectWorker method - replace the existing method with this:
+
   Future<void> _selectWorker(WorkerModel worker) async {
+    // Show confirmation dialog for QUOTE REQUEST (not booking)
     bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Confirm Selection'),
+        title: Text('Send Quote Request?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Are you sure you want to select:'),
+            Text('You are about to send a quote request to:'),
             SizedBox(height: 12),
             Text(
               worker.workerName,
@@ -1366,6 +1370,41 @@ class _EnhancedWorkerSelectionScreenState
               'for your ${widget.serviceType.replaceAll('_', ' ')} service?',
               style: TextStyle(color: Colors.grey[600]),
             ),
+            SizedBox(height: 12),
+            // Information box about quote process
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '💡 Quote Request Process:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[700],
+                      fontSize: 12,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '• Worker will review your request',
+                    style: TextStyle(fontSize: 11, color: Colors.blue[700]),
+                  ),
+                  Text(
+                    '• You\'ll receive a quote with pricing',
+                    style: TextStyle(fontSize: 11, color: Colors.blue[700]),
+                  ),
+                  Text(
+                    '• You can accept or decline the quote',
+                    style: TextStyle(fontSize: 11, color: Colors.blue[700]),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
         actions: [
@@ -1376,14 +1415,197 @@ class _EnhancedWorkerSelectionScreenState
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-            child: Text('Confirm', style: TextStyle(color: Colors.white)),
+            child: Text('Send Quote Request',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
 
+    // If confirmed, call _createQuote instead of _createBooking
     if (confirmed == true) {
-      await _createBooking(worker);
+      await _createQuote(
+          worker); // CHANGED: Call quote method instead of booking
+    }
+  }
+
+// MODIFIED: Updated loading dialog message
+  Future<void> _createQuote(WorkerModel worker) async {
+    try {
+      print('\n========== QUOTE CREATION START ==========');
+
+      // Show loading dialog with quote-specific message
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(color: Colors.blue),
+              SizedBox(width: 16),
+              Text('Sending quote request...'), // CHANGED: Updated message
+            ],
+          ),
+        ),
+      );
+
+      // Get current user
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('User not authenticated');
+
+      // Get customer data
+      DocumentSnapshot customerDoc = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .get();
+
+      if (!customerDoc.exists) throw Exception('Customer profile not found');
+
+      Map<String, dynamic> customerData =
+          customerDoc.data() as Map<String, dynamic>;
+
+      String customerId = customerData['customer_id'] ?? user.uid;
+      String customerName = customerData['customer_name'] ??
+          '${customerData['first_name'] ?? ''} ${customerData['last_name'] ?? ''}'
+              .trim();
+      String customerPhone = customerData['phone_number'] ?? '';
+      String customerEmail = customerData['email'] ?? user.email ?? '';
+
+      // Get worker_id from WorkerModel
+      String? nullableWorkerId = worker.workerId;
+
+      if (nullableWorkerId == null || nullableWorkerId.isEmpty) {
+        throw Exception('Worker ID is missing');
+      }
+
+      String workerId = nullableWorkerId;
+
+      print('📋 Quote details:');
+      print('   Customer ID: $customerId');
+      print('   Worker ID: $workerId');
+      print('   Service: ${widget.serviceType}');
+
+      // Verify workerId format
+      if (!workerId.startsWith('HM_')) {
+        throw Exception(
+            'Invalid worker_id format: $workerId (expected HM_XXXX format)');
+      }
+
+      // Create quote using QuoteService
+      String quoteId = await QuoteService.createQuote(
+        customerId: customerId,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        customerEmail: customerEmail,
+        workerId: workerId,
+        workerName: worker.workerName,
+        workerPhone: worker.contact.phoneNumber,
+        serviceType: widget.serviceType,
+        subService: widget.subService,
+        issueType: widget.issueType,
+        problemDescription: widget.problemDescription,
+        problemImageUrls: widget.problemImageUrls,
+        location: widget.location,
+        address: widget.address,
+        urgency: widget.urgency,
+        budgetRange: widget.budgetRange,
+        scheduledDate: widget.scheduledDate,
+        scheduledTime: widget.scheduledTime,
+      );
+
+      print('✅ Quote created successfully!');
+      print('   Quote ID: $quoteId');
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      // Show success dialog with "View Quotes" button
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.blue, size: 32),
+              SizedBox(width: 12),
+              Text('Quote Request Sent!'), // CHANGED: Updated title
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Your quote request has been sent successfully.'),
+              SizedBox(height: 12),
+              Text('Quote ID: $quoteId',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              Text('Worker: ${worker.workerName}'),
+              Text('Service: ${widget.serviceType.replaceAll('_', ' ')}'),
+              SizedBox(height: 12),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '📋 Next Steps:',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.blue[700]),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '1. The worker will review your quote',
+                      style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                    ),
+                    Text(
+                      '2. You\'ll get notified when they respond',
+                      style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                    ),
+                    Text(
+                      '3. Check the Quotes tab in Bookings',
+                      style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                // Navigate to Customer Dashboard with Bookings tab (Quotes)
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CustomerDashboard(initialIndex: 1),
+                  ),
+                  (route) => false,
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+              child: Text('View Quotes',
+                  style:
+                      TextStyle(color: Colors.white)), // CHANGED: Button text
+            ),
+          ],
+        ),
+      );
+
+      print('✅ Quote dialog shown');
+      print('========== QUOTE CREATION END ==========\n');
+    } catch (e) {
+      // Close loading dialog if open
+      Navigator.pop(context);
+
+      print('❌ Error creating quote: $e');
+      print('========== QUOTE CREATION END ==========\n');
+      _showErrorSnackBar('Failed to create quote: ${e.toString()}');
     }
   }
 
