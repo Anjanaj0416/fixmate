@@ -1,16 +1,18 @@
 // lib/services/quote_service.dart
-// NEW FILE - Quote Service for managing quotes and invoices
+// FIXED VERSION - No Firestore indexes required!
+// Queries fetch data and sort in memory
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/quote_model.dart';
 import '../models/booking_model.dart';
+import '../services/booking_service.dart';
 
 class QuoteService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // ==================== CREATE QUOTE ====================
 
-  /// Create a new quote and send to worker
+  /// Create a new quote request from customer to worker
   static Future<String> createQuote({
     required String customerId,
     required String customerName,
@@ -37,11 +39,10 @@ class QuoteService {
       print('Worker: $workerName ($workerId)');
       print('Service: $serviceType');
 
-      // Generate quote ID
-      String quoteId = _firestore.collection('quotes').doc().id;
-      print('Generated quote ID: $quoteId');
+      // Create quote document
+      DocumentReference quoteRef = _firestore.collection('quotes').doc();
+      String quoteId = quoteRef.id;
 
-      // Create quote model
       QuoteModel quote = QuoteModel(
         quoteId: quoteId,
         customerId: customerId,
@@ -66,32 +67,28 @@ class QuoteService {
         createdAt: DateTime.now(),
       );
 
-      // Save quote to Firestore
-      await _firestore
-          .collection('quotes')
-          .doc(quoteId)
-          .set(quote.toFirestore());
+      await quoteRef.set(quote.toFirestore());
 
+      print('Generated quote ID: $quoteId');
       print('✅ Quote created successfully!');
       print('   Quote ID: $quoteId');
-      print('   Status: pending');
+      print('   Status: ${quote.status.toString().split('.').last}');
 
-      // Send notification to worker about new quote
+      // Notify worker
       await _notifyWorkerNewQuote(workerId, quoteId, customerName, serviceType);
+      print('✅ Worker notification sent: New quote request');
 
       print('========== CREATE QUOTE END ==========\n');
-
       return quoteId;
     } catch (e) {
       print('❌ Error creating quote: $e');
-      print('========== CREATE QUOTE END ==========\n');
       throw Exception('Failed to create quote: ${e.toString()}');
     }
   }
 
   // ==================== WORKER ACTIONS ====================
 
-  /// Worker accepts the quote and provides final price & note
+  /// Worker accepts the quote and provides final price + note
   static Future<void> acceptQuote({
     required String quoteId,
     required double finalPrice,
@@ -100,36 +97,30 @@ class QuoteService {
     try {
       print('\n========== ACCEPT QUOTE ==========');
       print('Quote ID: $quoteId');
-      print('Final Price: $finalPrice');
+      print('Final Price: LKR $finalPrice');
 
-      // Get quote data
-      DocumentSnapshot quoteDoc =
-          await _firestore.collection('quotes').doc(quoteId).get();
-
-      if (!quoteDoc.exists) {
-        throw Exception('Quote not found');
-      }
-
-      Map<String, dynamic> quoteData = quoteDoc.data() as Map<String, dynamic>;
-
-      // Update quote status
       await _firestore.collection('quotes').doc(quoteId).update({
-        'status': 'accepted',
+        'status': QuoteStatus.accepted.toString().split('.').last,
         'final_price': finalPrice,
         'worker_note': workerNote,
         'accepted_at': FieldValue.serverTimestamp(),
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      print('✅ Quote accepted successfully');
+      // Get quote data for notification
+      DocumentSnapshot quoteDoc =
+          await _firestore.collection('quotes').doc(quoteId).get();
+      Map<String, dynamic> quoteData = quoteDoc.data() as Map<String, dynamic>;
 
-      // Send notification to customer
+      // Notify customer
       await _notifyCustomerQuoteAccepted(
         quoteData['customer_id'],
         quoteId,
         quoteData['worker_name'],
+        finalPrice,
       );
 
+      print('✅ Quote accepted and invoice created');
       print('========== ACCEPT QUOTE END ==========\n');
     } catch (e) {
       print('❌ Error accepting quote: $e');
@@ -138,39 +129,30 @@ class QuoteService {
   }
 
   /// Worker declines the quote
-  static Future<void> declineQuote({
-    required String quoteId,
-  }) async {
+  static Future<void> declineQuote({required String quoteId}) async {
     try {
       print('\n========== DECLINE QUOTE ==========');
       print('Quote ID: $quoteId');
 
-      // Get quote data
+      // Get quote data before declining
       DocumentSnapshot quoteDoc =
           await _firestore.collection('quotes').doc(quoteId).get();
-
-      if (!quoteDoc.exists) {
-        throw Exception('Quote not found');
-      }
-
       Map<String, dynamic> quoteData = quoteDoc.data() as Map<String, dynamic>;
 
-      // Update quote status
       await _firestore.collection('quotes').doc(quoteId).update({
-        'status': 'declined',
+        'status': QuoteStatus.declined.toString().split('.').last,
         'declined_at': FieldValue.serverTimestamp(),
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      print('✅ Quote declined successfully');
-
-      // Send notification to customer
+      // Notify customer
       await _notifyCustomerQuoteDeclined(
         quoteData['customer_id'],
         quoteId,
         quoteData['worker_name'],
       );
 
+      print('✅ Quote declined');
       print('========== DECLINE QUOTE END ==========\n');
     } catch (e) {
       print('❌ Error declining quote: $e');
@@ -180,15 +162,50 @@ class QuoteService {
 
   // ==================== CUSTOMER ACTIONS ====================
 
-  /// Customer deletes the quote
-  static Future<void> deleteQuote({
-    required String quoteId,
-  }) async {
+  /// Customer cancels the quote (invoice)
+  static Future<void> cancelQuote({required String quoteId}) async {
+    try {
+      print('\n========== CANCEL QUOTE ==========');
+      print('Quote ID: $quoteId');
+
+      // Get quote data before cancelling
+      DocumentSnapshot quoteDoc =
+          await _firestore.collection('quotes').doc(quoteId).get();
+      Map<String, dynamic> quoteData = quoteDoc.data() as Map<String, dynamic>;
+
+      await _firestore.collection('quotes').doc(quoteId).update({
+        'status': QuoteStatus.cancelled.toString().split('.').last,
+        'cancelled_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      // Notify worker
+      await _notifyWorkerInvoiceCancelled(
+        quoteData['worker_id'],
+        quoteId,
+        quoteData['customer_name'],
+      );
+
+      print('✅ Quote cancelled');
+      print('========== CANCEL QUOTE END ==========\n');
+    } catch (e) {
+      print('❌ Error cancelling quote: $e');
+      throw Exception('Failed to cancel quote: ${e.toString()}');
+    }
+  }
+
+  /// Alias for cancelQuote - used by customer to cancel invoices
+  static Future<void> cancelInvoice({required String quoteId}) async {
+    return cancelQuote(quoteId: quoteId);
+  }
+
+  /// Customer deletes a pending quote
+  static Future<void> deleteQuote({required String quoteId}) async {
     try {
       print('\n========== DELETE QUOTE ==========');
       print('Quote ID: $quoteId');
 
-      // Get quote data for worker notification
+      // Get quote data
       DocumentSnapshot quoteDoc =
           await _firestore.collection('quotes').doc(quoteId).get();
 
@@ -259,35 +276,34 @@ class QuoteService {
         budgetRange: quote.budgetRange,
         scheduledDate: quote.scheduledDate,
         scheduledTime: quote.scheduledTime,
-        status: BookingStatus.accepted,
+        status: BookingStatus.requested,
         finalPrice: quote.finalPrice,
         workerNotes: quote.workerNote,
         createdAt: DateTime.now(),
-        acceptedAt: DateTime.now(),
       );
 
-      // Save booking to Firestore
+      // Save booking
       await _firestore
           .collection('bookings')
           .doc(bookingId)
           .set(booking.toFirestore());
 
-      // Update quote to mark it as converted to booking
+      // Update quote status to show it's been converted to booking
       await _firestore.collection('quotes').doc(quoteId).update({
         'booking_id': bookingId,
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      print('✅ Invoice accepted and booking created');
-      print('   Booking ID: $bookingId');
-
-      // Send notification to worker
+      // Notify worker
       await _notifyWorkerInvoiceAccepted(
         quote.workerId,
+        quoteId,
         bookingId,
         quote.customerName,
       );
 
+      print('✅ Invoice accepted and booking created');
+      print('   Booking ID: $bookingId');
       print('========== ACCEPT INVOICE END ==========\n');
 
       return bookingId;
@@ -297,48 +313,7 @@ class QuoteService {
     }
   }
 
-  /// Customer cancels the invoice
-  static Future<void> cancelInvoice({
-    required String quoteId,
-  }) async {
-    try {
-      print('\n========== CANCEL INVOICE ==========');
-      print('Quote ID: $quoteId');
-
-      // Get quote data
-      DocumentSnapshot quoteDoc =
-          await _firestore.collection('quotes').doc(quoteId).get();
-
-      if (!quoteDoc.exists) {
-        throw Exception('Quote not found');
-      }
-
-      Map<String, dynamic> quoteData = quoteDoc.data() as Map<String, dynamic>;
-
-      // Update quote status to cancelled
-      await _firestore.collection('quotes').doc(quoteId).update({
-        'status': 'cancelled',
-        'cancelled_at': FieldValue.serverTimestamp(),
-        'updated_at': FieldValue.serverTimestamp(),
-      });
-
-      print('✅ Invoice cancelled successfully');
-
-      // Send notification to worker
-      await _notifyWorkerInvoiceCancelled(
-        quoteData['worker_id'],
-        quoteId,
-        quoteData['customer_name'],
-      );
-
-      print('========== CANCEL INVOICE END ==========\n');
-    } catch (e) {
-      print('❌ Error cancelling invoice: $e');
-      throw Exception('Failed to cancel invoice: ${e.toString()}');
-    }
-  }
-
-  // ==================== NOTIFICATION METHODS ====================
+  // ==================== NOTIFICATIONS ====================
 
   static Future<void> _notifyWorkerNewQuote(
     String workerId,
@@ -351,15 +326,13 @@ class QuoteService {
         'recipient_type': 'worker',
         'recipient_id': workerId,
         'type': 'new_quote',
-        'title': 'New Quote Request 💼',
+        'title': 'New Quote Request 📋',
         'message':
-            'You have a new $serviceType quote request from $customerName',
+            '$customerName requested a quote for ${serviceType.replaceAll('_', ' ')}',
         'quote_id': quoteId,
         'created_at': FieldValue.serverTimestamp(),
         'read': false,
       });
-
-      print('✅ Worker notification sent: New quote request');
     } catch (e) {
       print('⚠️  Failed to send worker notification: $e');
     }
@@ -369,20 +342,20 @@ class QuoteService {
     String customerId,
     String quoteId,
     String workerName,
+    double finalPrice,
   ) async {
     try {
       await _firestore.collection('notifications').add({
         'recipient_type': 'customer',
         'recipient_id': customerId,
         'type': 'quote_accepted',
-        'title': 'Quote Accepted ✓',
-        'message': '$workerName has accepted your quote and sent an invoice!',
+        'title': 'Quote Accepted ✅',
+        'message':
+            '$workerName accepted your quote! Final price: LKR $finalPrice',
         'quote_id': quoteId,
         'created_at': FieldValue.serverTimestamp(),
         'read': false,
       });
-
-      print('✅ Customer notification sent: Quote accepted');
     } catch (e) {
       print('⚠️  Failed to send customer notification: $e');
     }
@@ -404,8 +377,6 @@ class QuoteService {
         'created_at': FieldValue.serverTimestamp(),
         'read': false,
       });
-
-      print('✅ Customer notification sent: Quote declined');
     } catch (e) {
       print('⚠️  Failed to send customer notification: $e');
     }
@@ -413,6 +384,7 @@ class QuoteService {
 
   static Future<void> _notifyWorkerInvoiceAccepted(
     String workerId,
+    String quoteId,
     String bookingId,
     String customerName,
   ) async {
@@ -422,13 +394,12 @@ class QuoteService {
         'recipient_id': workerId,
         'type': 'invoice_accepted',
         'title': 'Invoice Accepted ✓',
-        'message': '$customerName has accepted your invoice - booking started!',
+        'message': '$customerName accepted your invoice — booking started',
+        'quote_id': quoteId,
         'booking_id': bookingId,
         'created_at': FieldValue.serverTimestamp(),
         'read': false,
       });
-
-      print('✅ Worker notification sent: Invoice accepted');
     } catch (e) {
       print('⚠️  Failed to send worker notification: $e');
     }
@@ -450,35 +421,49 @@ class QuoteService {
         'created_at': FieldValue.serverTimestamp(),
         'read': false,
       });
-
-      print('✅ Worker notification sent: Invoice cancelled');
     } catch (e) {
       print('⚠️  Failed to send worker notification: $e');
     }
   }
 
-  // ==================== FETCH QUOTES ====================
+  // ==================== FETCH QUOTES (FIXED - NO INDEX REQUIRED!) ====================
 
-  /// Get all quotes for a customer
+  /// ✅ FIXED: Get all quotes for a customer - NO INDEX REQUIRED!
+  /// Fetches data without orderBy and sorts in memory
   static Stream<List<QuoteModel>> getCustomerQuotes(String customerId) {
     return _firestore
         .collection('quotes')
         .where('customer_id', isEqualTo: customerId)
-        .orderBy('created_at', descending: true)
+        // ✅ REMOVED: .orderBy('created_at', descending: true) - This caused index error!
         .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => QuoteModel.fromFirestore(doc)).toList());
+        .map((snapshot) {
+      List<QuoteModel> quotes =
+          snapshot.docs.map((doc) => QuoteModel.fromFirestore(doc)).toList();
+
+      // ✅ SORT IN MEMORY instead of using Firestore orderBy
+      quotes.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      return quotes;
+    });
   }
 
-  /// Get all quotes for a worker
+  /// ✅ FIXED: Get all quotes for a worker - NO INDEX REQUIRED!
+  /// Fetches data without orderBy and sorts in memory
   static Stream<List<QuoteModel>> getWorkerQuotes(String workerId) {
     return _firestore
         .collection('quotes')
         .where('worker_id', isEqualTo: workerId)
-        .orderBy('created_at', descending: true)
+        // ✅ REMOVED: .orderBy('created_at', descending: true) - This caused index error!
         .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => QuoteModel.fromFirestore(doc)).toList());
+        .map((snapshot) {
+      List<QuoteModel> quotes =
+          snapshot.docs.map((doc) => QuoteModel.fromFirestore(doc)).toList();
+
+      // ✅ SORT IN MEMORY instead of using Firestore orderBy
+      quotes.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      return quotes;
+    });
   }
 
   /// Get specific quote by ID
