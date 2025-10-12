@@ -1,0 +1,54 @@
+// firestore.rules
+// ADD THIS SECTION TO YOUR EXISTING firestore.rules FILE
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ... your existing rules ...
+
+    // ==================== QUOTES COLLECTION ====================
+    // Rules for the new quotes collection
+    match /quotes/{quoteId} {
+      
+      // Allow authenticated users to read quotes where they are either customer or worker
+      allow read: if request.auth != null && 
+        (resource.data.customer_id == request.auth.uid ||
+         resource.data.worker_id == request.auth.uid);
+      
+      // Allow authenticated customers to create quotes
+      allow create: if request.auth != null &&
+        request.resource.data.customer_id == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      
+      // Allow workers to update quotes (accept/decline)
+      // Workers can only update their own quotes
+      allow update: if request.auth != null && 
+        resource.data.worker_id == request.auth.uid &&
+        // Ensure worker can only change status, final_price, and worker_note
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'final_price', 'worker_note', 'updated_at', 
+                    'accepted_at', 'declined_at']);
+      
+      // Allow customers to update quotes (cancel invoice)
+      allow update: if request.auth != null && 
+        resource.data.customer_id == request.auth.uid &&
+        // Ensure customer can only change status to cancelled
+        request.resource.data.status == 'cancelled' &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'updated_at', 'cancelled_at']);
+      
+      // Allow customers to delete their own pending quotes
+      allow delete: if request.auth != null && 
+        resource.data.customer_id == request.auth.uid &&
+        resource.data.status == 'pending';
+    }
+
+    // ... rest of your existing rules ...
+  }
+}
+
+// ==================== NOTES ====================
+// 1. Add this section to your existing firestore.rules file
+// 2. Deploy using: firebase deploy --only firestore:rules
+// 3. Test in Firebase Console > Firestore > Rules Playground

@@ -1,6 +1,6 @@
 // lib/screens/customer_bookings_screen.dart
-// MODIFIED VERSION - Added ONLY gradient background (white → light blue)
-// All original functionality preserved exactly as-is
+// COMPLETE FIXED VERSION
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,20 +8,33 @@ import '../models/booking_model.dart';
 import '../services/booking_service.dart';
 import 'booking_detail_customer_screen.dart';
 import 'worker_profile_view_screen.dart';
+import 'customer_quotes_screen.dart';
 
 class CustomerBookingsScreen extends StatefulWidget {
   @override
   State<CustomerBookingsScreen> createState() => _CustomerBookingsScreenState();
 }
 
-class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
+// ✅ FIX 1: Add SingleTickerProviderStateMixin
+class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
+    with SingleTickerProviderStateMixin {
+  // ✅ ADDED THIS MIXIN
+
+  late TabController _tabController;
   String _selectedFilter = 'all';
   String? _customerId;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadCustomerId();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCustomerId() async {
@@ -42,7 +55,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     }
   }
 
-  // Delete booking function
   Future<void> _deleteBooking(BookingModel booking) async {
     if (booking.status != BookingStatus.requested) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -76,20 +88,17 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     if (confirm != true) return;
 
     try {
-      // Show loading
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => Center(child: CircularProgressIndicator()),
       );
 
-      // Delete the booking
       await FirebaseFirestore.instance
           .collection('bookings')
           .doc(booking.bookingId)
           .delete();
 
-      // Send notification to worker
       await FirebaseFirestore.instance.collection('notifications').add({
         'recipient_id': booking.workerId,
         'recipient_type': 'worker',
@@ -103,7 +112,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
         'read': false,
       });
 
-      // Close loading
       Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -113,9 +121,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
         ),
       );
     } catch (e) {
-      // Close loading
       Navigator.pop(context);
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to cancel booking: $e'),
@@ -132,22 +138,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
         appBar: AppBar(
           title: Text('My Bookings'),
           backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
         ),
-        body: Container(
-          // 🎨 GRADIENT BACKGROUND ADDED
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.white,
-                Color(0xFFE3F2FD), // Soft light blue
-              ],
-            ),
-          ),
-          child: Center(child: CircularProgressIndicator()),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -155,119 +147,138 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
       appBar: AppBar(
         title: Text('My Bookings'),
         backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+        elevation: 0,
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
+          tabs: [
+            Tab(text: 'Bookings'),
+            Tab(text: 'Quotes'),
+          ],
+        ),
       ),
       body: Container(
-        // 🎨 GRADIENT BACKGROUND ADDED
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Colors.white,
-              Color(0xFFE3F2FD), // Soft light blue
-            ],
+            colors: [Colors.white, Color(0xFFE3F2FD)],
           ),
         ),
-        child: Column(
+        child: TabBarView(
+          controller: _tabController,
           children: [
-            // Filter Tabs
-            Container(
-              color: Colors.grey[100],
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                child: Row(
-                  children: [
-                    _buildFilterChip('all', 'All', Icons.list),
-                    _buildFilterChip('requested', 'Requested', Icons.schedule),
-                    _buildFilterChip(
-                        'accepted', 'Accepted', Icons.check_circle),
-                    _buildFilterChip('in_progress', 'In Progress', Icons.work),
-                    _buildFilterChip('completed', 'Completed', Icons.done_all),
-                  ],
-                ),
-              ),
+            _buildBookingsTab(),
+            CustomerQuotesScreen(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBookingsTab() {
+    return Column(
+      children: [
+        Container(
+          padding: EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                // ✅ FIX 2: Corrected _buildFilterChip calls with all 3 parameters
+                _buildFilterChip('all', 'All', Icons.all_inclusive),
+                SizedBox(width: 8),
+                _buildFilterChip('requested', 'Pending', Icons.hourglass_empty),
+                SizedBox(width: 8),
+                _buildFilterChip(
+                    'accepted', 'Accepted', Icons.check_circle_outline),
+                SizedBox(width: 8),
+                _buildFilterChip(
+                    'in_progress', 'In Progress', Icons.work_outline),
+                SizedBox(width: 8),
+                _buildFilterChip('completed', 'Completed', Icons.done_all),
+              ],
             ),
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: _customerId == null
+                ? null
+                : FirebaseFirestore.instance
+                    .collection('bookings')
+                    .where('customer_id', isEqualTo: _customerId)
+                    .orderBy('created_at', descending: true)
+                    .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(child: CircularProgressIndicator());
+              }
 
-            // Bookings List
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: _getBookingsStream(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(child: CircularProgressIndicator());
-                  }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
 
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Text('Error loading bookings: ${snapshot.error}'),
-                    );
-                  }
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return _buildEmptyState();
+              }
 
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return _buildEmptyState();
-                  }
+              List<BookingModel> allBookings = snapshot.data!.docs
+                  .map((doc) => BookingModel.fromFirestore(doc))
+                  .toList();
 
-                  List<BookingModel> bookings = snapshot.data!.docs
-                      .map((doc) => BookingModel.fromFirestore(doc))
+              List<BookingModel> filteredBookings = _selectedFilter == 'all'
+                  ? allBookings
+                  : allBookings
+                      .where((booking) =>
+                          booking.status.toString().split('.').last ==
+                          _selectedFilter)
                       .toList();
 
-                  return ListView.builder(
-                    padding: EdgeInsets.all(16),
-                    itemCount: bookings.length,
-                    itemBuilder: (context, index) {
-                      return _buildBookingCard(bookings[index]);
-                    },
-                  );
+              if (filteredBookings.isEmpty) {
+                return _buildEmptyState();
+              }
+
+              return ListView.builder(
+                padding: EdgeInsets.all(16),
+                itemCount: filteredBookings.length,
+                itemBuilder: (context, index) {
+                  return _buildBookingCard(filteredBookings[index]);
                 },
-              ),
-            ),
-          ],
+              );
+            },
+          ),
         ),
-      ),
+      ],
     );
   }
 
+  // ✅ FIX 3: Complete _buildFilterChip method with correct signature
   Widget _buildFilterChip(String value, String label, IconData icon) {
     bool isSelected = _selectedFilter == value;
-    return Padding(
-      padding: EdgeInsets.only(right: 8),
-      child: FilterChip(
-        selected: isSelected,
-        label: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon,
-                size: 16, color: isSelected ? Colors.white : Colors.grey[700]),
-            SizedBox(width: 6),
-            Text(label),
-          ],
-        ),
-        onSelected: (selected) {
-          setState(() {
-            _selectedFilter = value;
-          });
-        },
-        selectedColor: Colors.blue,
-        labelStyle: TextStyle(
-          color: isSelected ? Colors.white : Colors.grey[700],
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-        ),
+    return FilterChip(
+      selected: isSelected,
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon,
+              size: 16, color: isSelected ? Colors.white : Colors.grey[700]),
+          SizedBox(width: 6),
+          Text(label),
+        ],
+      ),
+      onSelected: (selected) {
+        setState(() {
+          _selectedFilter = value;
+        });
+      },
+      selectedColor: Colors.blue,
+      labelStyle: TextStyle(
+        color: isSelected ? Colors.white : Colors.grey[700],
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
     );
-  }
-
-  Stream<QuerySnapshot> _getBookingsStream() {
-    Query query = FirebaseFirestore.instance
-        .collection('bookings')
-        .where('customer_id', isEqualTo: _customerId);
-
-    if (_selectedFilter != 'all') {
-      query = query.where('status', isEqualTo: _selectedFilter);
-    }
-
-    return query.orderBy('created_at', descending: true).snapshots();
   }
 
   Widget _buildEmptyState() {
@@ -325,7 +336,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Status Badge
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -367,15 +377,11 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                     ),
                 ],
               ),
-
               SizedBox(height: 12),
               Divider(),
               SizedBox(height: 12),
-
-              // Worker Info
               Row(
                 children: [
-                  // Worker Profile Photo
                   FutureBuilder<DocumentSnapshot>(
                     future: FirebaseFirestore.instance
                         .collection('workers')
@@ -405,9 +411,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                       );
                     },
                   ),
-
                   SizedBox(width: 12),
-
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,10 +447,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                   ),
                 ],
               ),
-
               SizedBox(height: 12),
-
-              // Problem Description
               if (booking.problemDescription.isNotEmpty) ...[
                 Text(
                   booking.problemDescription,
@@ -459,8 +460,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                 ),
                 SizedBox(height: 12),
               ],
-
-              // Location and Schedule
               Row(
                 children: [
                   Icon(Icons.location_on, size: 16, color: Colors.blue),
@@ -478,8 +477,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                   ),
                 ],
               ),
-
-              // Budget Range
               if (booking.budgetRange.isNotEmpty) ...[
                 SizedBox(height: 12),
                 Row(
@@ -497,12 +494,9 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                   ],
                 ),
               ],
-
-              // Action buttons at bottom
               SizedBox(height: 12),
               Row(
                 children: [
-                  // View Worker Profile Button
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _showWorkerProfile(booking.workerId),
@@ -515,8 +509,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                       ),
                     ),
                   ),
-
-                  // Show delete button only for requested bookings
                   if (booking.status == BookingStatus.requested) ...[
                     SizedBox(width: 8),
                     Expanded(

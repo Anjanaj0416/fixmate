@@ -9,6 +9,7 @@ import '../models/booking_model.dart';
 import '../services/booking_service.dart';
 import '../services/chat_service.dart';
 import 'chat_screen.dart';
+import 'worker_quotes_screen.dart';
 
 class WorkerBookingsScreen extends StatefulWidget {
   @override
@@ -24,7 +25,7 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _loadWorkerData();
   }
 
@@ -68,16 +69,12 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
           backgroundColor: Color(0xFFFF9800),
           elevation: 0,
         ),
-        // 🎨 ADDED: Gradient background during loading
         body: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                Colors.white,
-                Color(0xFFFFE5CC), // Soft light orange
-              ],
+              colors: [Colors.white, Color(0xFFFFE5CC)],
             ),
           ),
           child: Center(child: CircularProgressIndicator()),
@@ -96,6 +93,7 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
           indicatorColor: Colors.white,
           indicatorWeight: 3,
           tabs: [
+            Tab(text: 'Quotes'),
             Tab(text: 'New Requests'),
             Tab(text: 'Accepted'),
             Tab(text: 'In Progress'),
@@ -119,11 +117,13 @@ class _WorkerBookingsScreenState extends State<WorkerBookingsScreen>
         child: TabBarView(
           controller: _tabController,
           children: [
-            _buildBookingsList('requested'),
-            _buildBookingsList('accepted'),
-            _buildBookingsList('in_progress'),
-            _buildBookingsList('completed'),
-            _buildBookingsList('all'),
+            // ✅ FIXED: Added WorkerQuotesScreen() as FIRST child (6 children total now)
+            WorkerQuotesScreen(), // Tab 1: Quotes (NEW)
+            _buildBookingsList('requested'), // Tab 2: New Requests
+            _buildBookingsList('accepted'), // Tab 3: Accepted
+            _buildBookingsList('in_progress'), // Tab 4: In Progress
+            _buildBookingsList('completed'), // Tab 5: Completed
+            _buildBookingsList('all'), // Tab 6: All
           ],
         ),
       ),
