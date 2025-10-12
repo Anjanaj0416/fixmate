@@ -38,6 +38,7 @@ class QuoteModel {
   final DateTime? acceptedAt;
   final DateTime? declinedAt;
   final DateTime? cancelledAt;
+  final String? bookingId;
 
   QuoteModel({
     required this.quoteId,
@@ -67,6 +68,7 @@ class QuoteModel {
     this.acceptedAt,
     this.declinedAt,
     this.cancelledAt,
+    this.bookingId,
   });
 
   factory QuoteModel.fromFirestore(DocumentSnapshot doc) {
@@ -111,6 +113,7 @@ class QuoteModel {
       cancelledAt: data['cancelled_at'] != null
           ? (data['cancelled_at'] as Timestamp).toDate()
           : null,
+      bookingId: data['booking_id'],
     );
   }
 
@@ -146,6 +149,7 @@ class QuoteModel {
           declinedAt != null ? Timestamp.fromDate(declinedAt!) : null,
       'cancelled_at':
           cancelledAt != null ? Timestamp.fromDate(cancelledAt!) : null,
+      'booking_id': bookingId,
     };
   }
 
@@ -177,6 +181,7 @@ class QuoteModel {
     DateTime? acceptedAt,
     DateTime? declinedAt,
     DateTime? cancelledAt,
+    String? bookingId,
   }) {
     return QuoteModel(
       quoteId: quoteId ?? this.quoteId,
@@ -206,6 +211,7 @@ class QuoteModel {
       acceptedAt: acceptedAt ?? this.acceptedAt,
       declinedAt: declinedAt ?? this.declinedAt,
       cancelledAt: cancelledAt ?? this.cancelledAt,
+      bookingId: bookingId ?? this.bookingId,
     );
   }
 }

@@ -232,9 +232,13 @@ class QuoteService {
   }
 
   /// Customer accepts the invoice and creates booking
-  static Future<String> acceptInvoice({
-    required String quoteId,
-  }) async {
+// lib/services/quote_service.dart
+// MODIFIED VERSION - Only the acceptInvoice method is modified
+// Replace only the acceptInvoice method in your existing file
+
+  /// Customer accepts the invoice and creates booking
+  /// MODIFIED: Creates booking with status "accepted" instead of "requested"
+  static Future<String> acceptInvoice({required String quoteId}) async {
     try {
       print('\n========== ACCEPT INVOICE ==========');
       print('Quote ID: $quoteId');
@@ -256,6 +260,7 @@ class QuoteService {
       // Create booking from accepted quote
       String bookingId = _firestore.collection('bookings').doc().id;
 
+      // MODIFIED: Create booking with status "accepted" instead of "requested"
       BookingModel booking = BookingModel(
         bookingId: bookingId,
         customerId: quote.customerId,
@@ -276,7 +281,8 @@ class QuoteService {
         budgetRange: quote.budgetRange,
         scheduledDate: quote.scheduledDate,
         scheduledTime: quote.scheduledTime,
-        status: BookingStatus.requested,
+        status: BookingStatus
+            .accepted, // MODIFIED: Changed from requested to accepted
         finalPrice: quote.finalPrice,
         workerNotes: quote.workerNote,
         createdAt: DateTime.now(),
@@ -302,7 +308,7 @@ class QuoteService {
         quote.customerName,
       );
 
-      print('✅ Invoice accepted and booking created');
+      print('✅ Invoice accepted and booking created with accepted status');
       print('   Booking ID: $bookingId');
       print('========== ACCEPT INVOICE END ==========\n');
 
@@ -312,7 +318,6 @@ class QuoteService {
       throw Exception('Failed to accept invoice: ${e.toString()}');
     }
   }
-
   // ==================== NOTIFICATIONS ====================
 
   static Future<void> _notifyWorkerNewQuote(
