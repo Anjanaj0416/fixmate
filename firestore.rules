@@ -4,6 +4,47 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /workers/{workerId} {
+      
+      // Allow anyone to read worker profiles (including online status)
+      allow read: if true;
+      
+      // Allow authenticated users to create their own worker profile
+      allow create: if request.auth != null && request.auth.uid == workerId;
+      
+      // Allow workers to update their own profile
+      allow update: if request.auth != null && 
+                      request.auth.uid == workerId &&
+                      // Ensure critical fields aren't changed maliciously
+                      (!request.resource.data.keys().hasAny(['worker_id', 'email']) ||
+                       request.resource.data.worker_id == resource.data.worker_id);
+      
+      // Allow workers to delete their own profile
+      allow delete: if request.auth != null && request.auth.uid == workerId;
+    }
+    
+    // Chat rooms - allow reading for participants
+    match /chat_rooms/{chatId} {
+      allow read: if request.auth != null && 
+                    (request.auth.uid == resource.data.customer_id || 
+                     request.auth.uid == resource.data.worker_id);
+      
+      allow write: if request.auth != null && 
+                     (request.auth.uid == resource.data.customer_id || 
+                      request.auth.uid == resource.data.worker_id);
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+    }
+    
+    // Customers collection
+    match /customers/{customerId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == customerId;
+    }
     
     // ... your existing rules ...
 

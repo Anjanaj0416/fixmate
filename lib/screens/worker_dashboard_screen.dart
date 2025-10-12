@@ -26,6 +26,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
   WorkerModel? _worker;
   bool _isLoading = true;
   bool _isAvailable = true;
+  bool _isOnline = false; // NEW: Online status
   Map<String, dynamic> _ratingStats = {};
   int _completedJobsCount = 0;
   int _unreadNotificationCount = 0;
@@ -67,7 +68,26 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
   void dispose() {
     _pulseController.dispose();
     _slideController.dispose();
+    _setOfflineStatus();
     super.dispose();
+  }
+
+  // NEW: Set offline status when leaving
+  Future<void> _setOfflineStatus() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('workers')
+            .doc(user.uid)
+            .update({
+          'is_online': false,
+          'last_seen': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      print('Error setting offline status: $e');
+    }
   }
 
   Future<void> _loadNotificationCount() async {
@@ -110,6 +130,10 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
         _worker = WorkerModel.fromFirestore(workerDoc);
         _isAvailable = _worker!.availability.availableToday;
 
+        // NEW: Load online status
+        Map<String, dynamic> data = workerDoc.data() as Map<String, dynamic>;
+        _isOnline = data['is_online'] ?? false;
+
         _ratingStats = await RatingService.getWorkerRatingStats(
           _worker!.workerId!,
         );
@@ -132,6 +156,11 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
         print('✅ Found worker by email');
         _worker = WorkerModel.fromFirestore(workerQuery.docs.first);
         _isAvailable = _worker!.availability.availableToday;
+
+        // NEW: Load online status
+        Map<String, dynamic> data =
+            workerQuery.docs.first.data() as Map<String, dynamic>;
+        _isOnline = data['is_online'] ?? false;
 
         _ratingStats = await RatingService.getWorkerRatingStats(
           _worker!.workerId!,
@@ -212,6 +241,57 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
       );
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  // NEW: Toggle Online/Offline Status
+  Future<void> _toggleOnlineStatus() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      bool newOnlineStatus = !_isOnline;
+
+      await FirebaseFirestore.instance
+          .collection('workers')
+          .doc(user.uid)
+          .update({
+        'is_online': newOnlineStatus,
+        'last_seen': FieldValue.serverTimestamp(),
+      });
+
+      setState(() => _isOnline = newOnlineStatus);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: newOnlineStatus ? Colors.green : Colors.grey,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              SizedBox(width: 8),
+              Text(newOnlineStatus
+                  ? 'You are now Online'
+                  : 'You are now Offline'),
+            ],
+          ),
+          backgroundColor: newOnlineStatus ? Colors.green : Colors.grey[700],
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      print('❌ Error toggling online status: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update online status'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -491,11 +571,14 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
                     SizedBox(height: 20),
                     _buildProfileHeader(),
                     SizedBox(height: 16),
+                    _buildOnlineStatusCard(),
+                    SizedBox(height: 16),
                     _buildAvailabilityCard(),
                     SizedBox(height: 16),
                     _buildStatsCard(),
                     SizedBox(height: 24),
                     _buildQuickActions(),
+                    SizedBox(height: 16),
                   ],
                 ),
               ),
@@ -740,30 +823,103 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
   }
 
   Widget _buildAvailabilityCard() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: _isAvailable
-                ? [Colors.green[50]!, Colors.green[100]!]
-                : [Colors.red[50]!, Colors.red[100]!],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: _isAvailable
+              ? [Colors.green[50]!, Colors.green[100]!]
+              : [Colors.red[50]!, Colors.red[100]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Availability Status',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: _isAvailable ? Colors.green : Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      _isAvailable ? 'Available for bookings' : 'Not available',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color:
+                            _isAvailable ? Colors.green[800] : Colors.red[800],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Switch(
+              value: _isAvailable,
+              onChanged: (value) => _toggleAvailability(),
+              activeColor: Colors.green,
+              activeTrackColor: Colors.green[200],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // NEW: Online Status Card
+  Widget _buildOnlineStatusCard() {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: _isOnline
+              ? [Color(0xFFE8F5E9), Color(0xFFC8E6C9)]
+              : [Colors.grey[200]!, Colors.grey[300]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Availability Status',
+                    'Online Status',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[700],
@@ -774,38 +930,59 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
                   Row(
                     children: [
                       Container(
-                        width: 8,
-                        height: 8,
+                        width: 10,
+                        height: 10,
                         decoration: BoxDecoration(
-                          color: _isAvailable ? Colors.green : Colors.red,
+                          color: _isOnline ? Colors.green : Colors.grey,
                           shape: BoxShape.circle,
+                          boxShadow: _isOnline
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.green.withOpacity(0.5),
+                                    blurRadius: 8,
+                                    spreadRadius: 2,
+                                  ),
+                                ]
+                              : [],
                         ),
                       ),
                       SizedBox(width: 8),
-                      Text(
-                        _isAvailable
-                            ? 'Available for bookings'
-                            : 'Not available',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: _isAvailable
-                              ? Colors.green[800]
-                              : Colors.red[800],
+                      Expanded(
+                        child: Text(
+                          _isOnline ? 'Online' : 'Offline',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: _isOnline
+                                ? Colors.green[800]
+                                : Colors.grey[700],
+                          ),
                         ),
                       ),
                     ],
                   ),
+                  if (_isOnline)
+                    Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Visible to customers in chat',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green[700],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
                 ],
               ),
-              Switch(
-                value: _isAvailable,
-                onChanged: (value) => _toggleAvailability(),
-                activeColor: Colors.green,
-                activeTrackColor: Colors.green[200],
-              ),
-            ],
-          ),
+            ),
+            Switch(
+              value: _isOnline,
+              onChanged: (value) => _toggleOnlineStatus(),
+              activeColor: Colors.green,
+              activeTrackColor: Colors.green[200],
+            ),
+          ],
         ),
       ),
     );
