@@ -1,6 +1,6 @@
 // test/mocks/mock_services.dart
-// FIXED VERSION - All Mock Services with missing methods added
-// Contains all required mock methods to fix compilation errors
+// UPDATED VERSION - Added MockQuoteService, MockBookingService, MockChatService, MockNotificationService
+// Contains all required mock methods including new booking/quote/communication services
 
 import 'dart:math';
 
@@ -95,7 +95,6 @@ class MockAuthService {
 
   Future<void> sendPasswordResetEmail({required String email}) async {
     await Future.delayed(Duration(milliseconds: 100));
-    // Don't throw error for non-existent emails (security best practice)
   }
 
   Future<void> sendEmailVerification() async {
@@ -274,7 +273,7 @@ class MockFirestoreService {
 }
 
 // ============================================================================
-// 3. Mock Storage Service - FIXED: Added clearStorage method
+// 3. Mock Storage Service
 // ============================================================================
 
 class MockStorageService {
@@ -302,7 +301,6 @@ class MockStorageService {
     return _files[filePath];
   }
 
-  // FIXED: Added clearStorage method
   void clearStorage() {
     _files.clear();
   }
@@ -313,7 +311,7 @@ class MockStorageService {
 }
 
 // ============================================================================
-// 4. Mock ML Service - FIXED: Added predictMultipleServices method
+// 4. Mock ML Service
 // ============================================================================
 
 class MockMLService {
@@ -322,7 +320,6 @@ class MockMLService {
   }) async {
     await Future.delayed(Duration(milliseconds: 200));
 
-    // Simple keyword matching
     final lowerDescription = description.toLowerCase();
 
     if (lowerDescription.contains('leak') ||
@@ -346,7 +343,6 @@ class MockMLService {
     return {'service_type': 'General', 'confidence': 0.50};
   }
 
-  // FIXED: Added predictMultipleServices method for handling multiple issues
   Future<List<Map<String, dynamic>>> predictMultipleServices({
     required String description,
   }) async {
@@ -355,7 +351,6 @@ class MockMLService {
     List<Map<String, dynamic>> predictions = [];
     final lowerDescription = description.toLowerCase();
 
-    // Check for AC issues
     if (lowerDescription.contains('ac') ||
         lowerDescription.contains('air condition') ||
         lowerDescription.contains('cooling') ||
@@ -366,7 +361,6 @@ class MockMLService {
       });
     }
 
-    // Check for plumbing issues
     if (lowerDescription.contains('leak') ||
         lowerDescription.contains('pipe') ||
         lowerDescription.contains('water') ||
@@ -377,7 +371,6 @@ class MockMLService {
       });
     }
 
-    // Check for electrical issues
     if (lowerDescription.contains('electric') ||
         lowerDescription.contains('wiring') ||
         lowerDescription.contains('wire') ||
@@ -388,7 +381,6 @@ class MockMLService {
       });
     }
 
-    // If no specific service detected, return general
     if (predictions.isEmpty) {
       predictions.add({
         'service_type': 'General',
@@ -486,7 +478,7 @@ class MockMLService {
 }
 
 // ============================================================================
-// 5. Mock OpenAI Service - FIXED: Added analyzeTextDescription method
+// 5. Mock OpenAI Service
 // ============================================================================
 
 class MockOpenAIService {
@@ -512,7 +504,6 @@ class MockOpenAIService {
     return 'Image quality acceptable. Analyzing...';
   }
 
-  // FIXED: Added analyzeTextDescription method
   Future<String> analyzeTextDescription({
     required String description,
   }) async {
@@ -520,13 +511,11 @@ class MockOpenAIService {
 
     final lowerDescription = description.toLowerCase();
 
-    // Handle vague queries
     if (lowerDescription.contains('fix my house') ||
         lowerDescription.contains('help') && lowerDescription.length < 20) {
       return 'What specifically needs fixing? (plumbing, electrical, carpentry, etc.)';
     }
 
-    // Handle specific queries
     if (lowerDescription.contains('leak') ||
         lowerDescription.contains('pipe')) {
       return 'It looks like you have a plumbing issue. I can help you find qualified plumbers in your area.';
@@ -550,7 +539,7 @@ class MockOpenAIService {
 }
 
 // ============================================================================
-// Mock Account Lockout Service - FIXED: Added getLockoutData alias
+// Mock Account Lockout Service
 // ============================================================================
 
 class MockAccountLockoutService {
@@ -588,7 +577,6 @@ class MockAccountLockoutService {
     };
   }
 
-  // FIXED: Added getLockoutData as alias for getLockoutInfo
   Map<String, dynamic>? getLockoutData(String email) {
     return getLockoutInfo(email);
   }
@@ -600,7 +588,7 @@ class MockAccountLockoutService {
 }
 
 // ============================================================================
-// Mock OTP Service - FIXED: Changed to positional parameters
+// Mock OTP Service
 // ============================================================================
 
 class MockOTPService {
@@ -608,7 +596,6 @@ class MockOTPService {
   final Map<String, DateTime> _otpExpiry = {};
   final Map<String, int> _otpAttempts = {};
 
-  // FIXED: Using positional parameters instead of named
   Future<String> generateOTP(String phone) async {
     await Future.delayed(Duration(milliseconds: 100));
 
@@ -620,18 +607,15 @@ class MockOTPService {
     return otp;
   }
 
-  // FIXED: Using positional parameters instead of named
   Future<bool> verifyOTP(String phone, String otp) async {
     await Future.delayed(Duration(milliseconds: 50));
 
     if (!_otpCodes.containsKey(phone)) return false;
 
-    // Check expiry
     if (DateTime.now().isAfter(_otpExpiry[phone]!)) {
       return false;
     }
 
-    // Check attempts
     if (_otpAttempts[phone]! >= 5) {
       return false;
     }
@@ -647,7 +631,6 @@ class MockOTPService {
     return false;
   }
 
-  // FIXED: Added isExpired as alias for isOTPExpired
   bool isExpired(String phone) {
     return isOTPExpired(phone);
   }
@@ -657,7 +640,6 @@ class MockOTPService {
     return DateTime.now().isAfter(_otpExpiry[phone]!);
   }
 
-  // FIXED: Added getAttempts as alias for getOTPAttempts
   int getAttempts(String phone) {
     return getOTPAttempts(phone);
   }
@@ -670,5 +652,669 @@ class MockOTPService {
     _otpCodes.clear();
     _otpExpiry.clear();
     _otpAttempts.clear();
+  }
+}
+
+// ============================================================================
+// NEW: Mock Quote Service
+// ============================================================================
+
+class MockQuoteService {
+  final Map<String, Map<String, dynamic>> _quotes = {};
+  final Map<String, List<String>> _customerQuotes =
+      {}; // customer_id -> quote_ids
+  int _quoteCounter = 1;
+
+  Future<String> createQuoteRequest({
+    required String customerId,
+    required String customerName,
+    required String workerId,
+    required String problemDescription,
+    required DateTime scheduledDate,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    if (problemDescription.isEmpty) {
+      throw Exception('Please provide problem description');
+    }
+
+    // Check for duplicate pending quotes
+    if (_customerQuotes.containsKey(customerId)) {
+      final customerQuotesList = _customerQuotes[customerId]!;
+      for (var quoteId in customerQuotesList) {
+        final quote = _quotes[quoteId]!;
+        if (quote['worker_id'] == workerId && quote['status'] == 'pending') {
+          throw Exception('You already have a pending quote with this worker');
+        }
+      }
+    }
+
+    final quoteId = 'Q_${_quoteCounter++}';
+    _quotes[quoteId] = {
+      'quote_id': quoteId,
+      'customer_id': customerId,
+      'customer_name': customerName,
+      'worker_id': workerId,
+      'problem_description': problemDescription,
+      'scheduled_date': scheduledDate,
+      'status': 'pending',
+      'created_at': DateTime.now(),
+    };
+
+    if (!_customerQuotes.containsKey(customerId)) {
+      _customerQuotes[customerId] = [];
+    }
+    _customerQuotes[customerId]!.add(quoteId);
+
+    return quoteId;
+  }
+
+  Future<void> createPendingQuote({
+    required String quoteId,
+    required String workerId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    _quotes[quoteId] = {
+      'quote_id': quoteId,
+      'worker_id': workerId,
+      'status': 'pending',
+      'created_at': DateTime.now(),
+    };
+  }
+
+  Future<void> sendCustomQuote({
+    required String quoteId,
+    required double price,
+    required String timeline,
+    required String notes,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    if (!_quotes.containsKey(quoteId)) {
+      throw Exception('Quote not found');
+    }
+
+    _quotes[quoteId]!['price'] = price;
+    _quotes[quoteId]!['timeline'] = timeline;
+    _quotes[quoteId]!['notes'] = notes;
+    _quotes[quoteId]!['status'] = 'sent';
+    _quotes[quoteId]!['expires_at'] = DateTime.now().add(Duration(hours: 48));
+  }
+
+  Future<void> createSentQuote({
+    required String quoteId,
+    required String customerId,
+    required String workerId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    _quotes[quoteId] = {
+      'quote_id': quoteId,
+      'customer_id': customerId,
+      'worker_id': workerId,
+      'status': 'sent',
+      'price': 5000.0,
+      'created_at': DateTime.now(),
+      'expires_at': DateTime.now().add(Duration(hours: 48)),
+    };
+  }
+
+  Future<String> acceptQuote({required String quoteId}) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    if (!_quotes.containsKey(quoteId)) {
+      throw Exception('Quote not found');
+    }
+
+    final quote = _quotes[quoteId]!;
+
+    // Check if quote expired
+    if (quote['expires_at'] != null &&
+        DateTime.now().isAfter(quote['expires_at'] as DateTime)) {
+      quote['status'] = 'expired';
+      throw Exception('This quote expired. Request new quote');
+    }
+
+    // Check worker availability (simplified check)
+    // In real implementation, would query Firestore
+    final workerId = quote['worker_id'];
+    // Simulate availability check - you could enhance this
+
+    quote['status'] = 'accepted';
+    quote['accepted_at'] = DateTime.now();
+
+    // Create booking
+    final bookingId = 'B_${DateTime.now().millisecondsSinceEpoch}';
+    quote['booking_id'] = bookingId;
+
+    return bookingId;
+  }
+
+  Future<void> declineQuote({required String quoteId}) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_quotes.containsKey(quoteId)) {
+      throw Exception('Quote not found');
+    }
+
+    _quotes[quoteId]!['status'] = 'declined';
+    _quotes[quoteId]!['declined_at'] = DateTime.now();
+  }
+
+  Future<void> createExpiredQuote({
+    required String quoteId,
+    required String customerId,
+    required int hoursAgo,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    _quotes[quoteId] = {
+      'quote_id': quoteId,
+      'customer_id': customerId,
+      'status': 'expired',
+      'created_at': DateTime.now().subtract(Duration(hours: hoursAgo)),
+      'expires_at': DateTime.now().subtract(Duration(hours: hoursAgo - 48)),
+    };
+  }
+
+  void clearAll() {
+    _quotes.clear();
+    _customerQuotes.clear();
+    _quoteCounter = 1;
+  }
+}
+
+// ============================================================================
+// NEW: Mock Booking Service
+// ============================================================================
+
+class MockBookingService {
+  final Map<String, Map<String, dynamic>> _bookings = {};
+  int _bookingCounter = 1;
+
+  Future<String> createDirectBooking({
+    required String customerId,
+    required String workerId,
+    required DateTime scheduledDate,
+    required double defaultRate,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    // Validate future date
+    if (scheduledDate.isBefore(DateTime.now())) {
+      throw Exception('Please select a future date');
+    }
+
+    final bookingId = 'B_${_bookingCounter++}';
+    _bookings[bookingId] = {
+      'booking_id': bookingId,
+      'customer_id': customerId,
+      'worker_id': workerId,
+      'scheduled_date': scheduledDate,
+      'price': defaultRate,
+      'status': 'requested',
+      'created_at': DateTime.now(),
+    };
+
+    return bookingId;
+  }
+
+  Future<void> createBooking({
+    required String bookingId,
+    required String customerId,
+    String? workerId,
+    required String status,
+    DateTime? completedAt,
+    String? specialInstructions,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    _bookings[bookingId] = {
+      'booking_id': bookingId,
+      'customer_id': customerId,
+      'worker_id': workerId ?? 'worker_default',
+      'customer_name': 'Test Customer',
+      'worker_name': 'Test Worker',
+      'problem_description': 'Test problem',
+      'scheduled_date': DateTime.now().add(Duration(days: 1)),
+      'location': 'Colombo',
+      'status': status,
+      'created_at': DateTime.now(),
+      'service_type': 'Plumbing',
+      'final_price': 3500.0,
+    };
+
+    if (completedAt != null) {
+      _bookings[bookingId]!['completed_at'] = completedAt;
+    }
+
+    if (specialInstructions != null) {
+      _bookings[bookingId]!['special_instructions'] = specialInstructions;
+    }
+  }
+
+  Future<void> updateBookingStatus({
+    required String bookingId,
+    required String status,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_bookings.containsKey(bookingId)) {
+      throw Exception('Booking not found');
+    }
+
+    _bookings[bookingId]!['status'] = status;
+    _bookings[bookingId]!['${status}_at'] = DateTime.now();
+  }
+
+  Future<void> cancelBooking({required String bookingId}) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_bookings.containsKey(bookingId)) {
+      throw Exception('Booking not found');
+    }
+
+    final booking = _bookings[bookingId]!;
+
+    if (booking['status'] != 'requested') {
+      throw Exception(
+          'Contact worker to cancel. Phone: ${booking['worker_phone'] ?? '+94771234567'}');
+    }
+
+    booking['status'] = 'cancelled';
+    booking['cancelled_at'] = DateTime.now();
+  }
+
+  Future<bool> canCancelBooking({required String bookingId}) async {
+    await Future.delayed(Duration(milliseconds: 30));
+
+    if (!_bookings.containsKey(bookingId)) {
+      return false;
+    }
+
+    final booking = _bookings[bookingId]!;
+    return booking['status'] == 'requested';
+  }
+
+  Future<List<Map<String, dynamic>>> getWorkerBookingRequests({
+    required String workerId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    return _bookings.values
+        .where((b) => b['worker_id'] == workerId && b['status'] == 'requested')
+        .toList();
+  }
+
+  Future<void> acceptBooking({required String bookingId}) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_bookings.containsKey(bookingId)) {
+      throw Exception('Booking not found');
+    }
+
+    _bookings[bookingId]!['status'] = 'accepted';
+    _bookings[bookingId]!['accepted_at'] = DateTime.now();
+  }
+
+  Future<void> declineBooking({
+    required String bookingId,
+    required String reason,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_bookings.containsKey(bookingId)) {
+      throw Exception('Booking not found');
+    }
+
+    _bookings[bookingId]!['status'] = 'declined';
+    _bookings[bookingId]!['decline_reason'] = reason;
+    _bookings[bookingId]!['declined_at'] = DateTime.now();
+  }
+
+  Future<void> completeBooking({required String bookingId}) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_bookings.containsKey(bookingId)) {
+      throw Exception('Booking not found');
+    }
+
+    _bookings[bookingId]!['status'] = 'completed';
+    _bookings[bookingId]!['completed_at'] = DateTime.now();
+  }
+
+  Future<List<Map<String, dynamic>>> getBookingHistory({
+    required String userId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    final history = _bookings.values
+        .where((b) => b['customer_id'] == userId && b['status'] == 'completed')
+        .toList();
+
+    history.sort((a, b) {
+      final aTime = a['completed_at'] as DateTime;
+      final bTime = b['completed_at'] as DateTime;
+      return bTime.compareTo(aTime);
+    });
+
+    return history.map((b) => {...b, 'can_rebook': true}).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getBookingHistoryPaginated({
+    required String userId,
+    required int page,
+    required int pageSize,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    final allHistory = _bookings.values
+        .where((b) => b['customer_id'] == userId && b['status'] == 'completed')
+        .toList();
+
+    allHistory.sort((a, b) {
+      final aTime = a['completed_at'] as DateTime;
+      final bTime = b['completed_at'] as DateTime;
+      return bTime.compareTo(aTime);
+    });
+
+    final startIndex = (page - 1) * pageSize;
+    final endIndex = startIndex + pageSize;
+
+    if (startIndex >= allHistory.length) {
+      return [];
+    }
+
+    final paginatedResults = allHistory.sublist(
+      startIndex,
+      endIndex > allHistory.length ? allHistory.length : endIndex,
+    );
+
+    return paginatedResults;
+  }
+
+  Future<Map<String, dynamic>> getBookingListView({
+    required String bookingId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_bookings.containsKey(bookingId)) {
+      throw Exception('Booking not found');
+    }
+
+    final booking = _bookings[bookingId]!;
+    final instructions = booking['special_instructions'] as String?;
+
+    return {
+      'booking_id': bookingId,
+      'instructions_preview': instructions != null && instructions.length > 100
+          ? instructions.substring(0, 100)
+          : instructions ?? '',
+      'has_read_more': instructions != null && instructions.length > 100,
+    };
+  }
+
+  Future<String> createEmergencyBooking({
+    required String customerId,
+    required String workerId,
+    required double defaultRate,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    final bookingId = 'B_emergency_${_bookingCounter++}';
+    _bookings[bookingId] = {
+      'booking_id': bookingId,
+      'customer_id': customerId,
+      'worker_id': workerId,
+      'urgency': 'emergency',
+      'status': 'requested',
+      'price': defaultRate,
+      'created_at': DateTime.now(),
+    };
+
+    return bookingId;
+  }
+
+  Future<Map<String, dynamic>> initiateCall({
+    required String workerId,
+    required String customerId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    // Simulate fetching worker phone
+    // In real implementation, would query Firestore
+    final workerPhone = '+94771234567';
+
+    if (workerPhone.isEmpty ||
+        workerPhone == 'invalid' ||
+        workerPhone.length < 10) {
+      throw Exception('Phone number not available. Please use chat');
+    }
+
+    return {
+      'action': 'dial',
+      'phone_number': workerPhone,
+    };
+  }
+
+  void clearAll() {
+    _bookings.clear();
+    _bookingCounter = 1;
+  }
+}
+
+// ============================================================================
+// NEW: Mock Chat Service
+// ============================================================================
+
+class MockChatService {
+  final Map<String, List<Map<String, dynamic>>> _chatMessages = {};
+  final Map<String, Map<String, dynamic>> _messageDetails = {};
+  bool _isOnline = true;
+  int _messageCounter = 1;
+
+  Future<String> sendMessage({
+    required String bookingId,
+    required String senderId,
+    required String message,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    final messageId = 'msg_${_messageCounter++}';
+
+    final messageData = {
+      'message_id': messageId,
+      'booking_id': bookingId,
+      'sender_id': senderId,
+      'text': message,
+      'timestamp': DateTime.now(),
+      'status': _isOnline ? 'sent' : 'sending',
+    };
+
+    if (!_chatMessages.containsKey(bookingId)) {
+      _chatMessages[bookingId] = [];
+    }
+
+    _chatMessages[bookingId]!.add(messageData);
+    _messageDetails[messageId] = messageData;
+
+    return messageId;
+  }
+
+  Future<List<Map<String, dynamic>>> getMessages({
+    required String bookingId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_chatMessages.containsKey(bookingId)) {
+      return [];
+    }
+
+    return _chatMessages[bookingId]!
+        .map((m) => {...m, 'status': 'read'})
+        .toList();
+  }
+
+  Future<String> getMessageStatus({required String messageId}) async {
+    await Future.delayed(Duration(milliseconds: 30));
+
+    if (!_messageDetails.containsKey(messageId)) {
+      return 'unknown';
+    }
+
+    return _messageDetails[messageId]!['status'];
+  }
+
+  Future<int> getUnreadCount({
+    required String bookingId,
+    required String userId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 30));
+
+    if (!_chatMessages.containsKey(bookingId)) {
+      return 0;
+    }
+
+    return _chatMessages[bookingId]!
+        .where((m) => m['sender_id'] != userId && m['status'] != 'read')
+        .length;
+  }
+
+  Future<void> setNetworkStatus({required bool offline}) async {
+    await Future.delayed(Duration(milliseconds: 10));
+    _isOnline = !offline;
+
+    // Auto-resend queued messages when back online
+    if (_isOnline) {
+      for (var messageId in _messageDetails.keys) {
+        if (_messageDetails[messageId]!['status'] == 'sending') {
+          _messageDetails[messageId]!['status'] = 'sent';
+        }
+      }
+    }
+  }
+
+  void clearAll() {
+    _chatMessages.clear();
+    _messageDetails.clear();
+    _messageCounter = 1;
+    _isOnline = true;
+  }
+}
+
+// ============================================================================
+// NEW: Mock Notification Service
+// ============================================================================
+
+class MockNotificationService {
+  final Map<String, List<Map<String, dynamic>>> _notifications = {};
+  final Map<String, bool> _pushEnabled = {};
+
+  Future<void> sendNotification({
+    required String userId,
+    required String type,
+    required String bookingId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_notifications.containsKey(userId)) {
+      _notifications[userId] = [];
+    }
+
+    final isPushEnabled = _pushEnabled[userId] ?? true;
+
+    final notification = {
+      'notification_id': 'notif_${DateTime.now().millisecondsSinceEpoch}',
+      'user_id': userId,
+      'type': type,
+      'booking_id': bookingId,
+      'sent_at': DateTime.now(),
+      'is_push': isPushEnabled,
+      'is_in_app': true,
+      'target_screen': _getTargetScreen(type),
+      'action': _getAction(type),
+    };
+
+    if (type == 'booking_request' && bookingId.contains('emergency')) {
+      notification['urgency'] = 'emergency';
+      notification['priority'] = 'high';
+    }
+
+    _notifications[userId]!.add(notification);
+  }
+
+  String _getTargetScreen(String type) {
+    switch (type) {
+      case 'new_message':
+        return 'chat';
+      case 'booking_accepted':
+      case 'booking_completed':
+        return 'booking_details';
+      case 'quote_received':
+        return 'quote_details';
+      default:
+        return 'home';
+    }
+  }
+
+  String? _getAction(String type) {
+    if (type == 'booking_completed') {
+      return 'rate_worker';
+    }
+    return null;
+  }
+
+  Future<List<Map<String, dynamic>>> getNotifications({
+    required String userId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 30));
+
+    if (!_notifications.containsKey(userId)) {
+      return [];
+    }
+
+    return _notifications[userId]!;
+  }
+
+  Future<List<Map<String, dynamic>>> getPushNotifications({
+    required String userId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 30));
+
+    if (!_notifications.containsKey(userId)) {
+      return [];
+    }
+
+    return _notifications[userId]!.where((n) => n['is_push'] == true).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getInAppNotifications({
+    required String userId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 30));
+
+    if (!_notifications.containsKey(userId)) {
+      return [];
+    }
+
+    return _notifications[userId]!
+        .where((n) => n['is_in_app'] == true)
+        .toList();
+  }
+
+  Future<void> enableNotifications({required String userId}) async {
+    await Future.delayed(Duration(milliseconds: 30));
+    _pushEnabled[userId] = true;
+  }
+
+  Future<void> disablePushNotifications({required String userId}) async {
+    await Future.delayed(Duration(milliseconds: 30));
+    _pushEnabled[userId] = false;
+  }
+
+  void clearAll() {
+    _notifications.clear();
+    _pushEnabled.clear();
   }
 }
