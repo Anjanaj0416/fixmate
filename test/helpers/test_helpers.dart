@@ -1,6 +1,7 @@
 // test/helpers/test_helpers.dart
-// Helper utilities for authentication testing
+// Helper utilities for authentication testing - FIXED VERSION
 
+import 'dart:async'; // FIXED: Added import for Completer
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -62,13 +63,17 @@ class FirebaseMockHelper {
     String? password,
     String? displayName,
   }) async {
-    final userCredential = await mockAuth.createUserWithEmailAndPassword(
+    final mockUser = MockUser(
+      uid: 'test_uid_${DateTime.now().millisecondsSinceEpoch}',
       email: email ?? TestConstants.testEmail,
-      password: password ?? TestConstants.testPassword,
+      displayName: displayName ?? TestConstants.testName,
     );
 
+    // Use signInWithCustomToken to create the user in MockFirebaseAuth
+    await mockAuth.signInWithCustomToken('mock_token');
+
     // Create Firestore document
-    await mockFirestore.collection('users').doc(userCredential.user!.uid).set({
+    await mockFirestore.collection('users').doc(mockUser.uid).set({
       'name': displayName ?? TestConstants.testName,
       'email': email ?? TestConstants.testEmail,
       'phone': TestConstants.testPhone,
@@ -78,7 +83,10 @@ class FirebaseMockHelper {
       'emailVerified': false,
     });
 
-    return userCredential;
+    return Future.value(UserCredential(
+      user: mockUser,
+      additionalUserInfo: AdditionalUserInfo(isNewUser: true, profile: {}),
+    ) as UserCredential);
   }
 
   /// Create a verified user
@@ -107,74 +115,78 @@ class FirebaseMockHelper {
     String? email,
     String? password,
   }) async {
-    final userCredential = await createVerifiedUser(
+    final userCredential = await createTestUser(
       email: email ?? TestConstants.workerEmail,
       password: password,
     );
 
-    // Update account type to worker
-    await mockFirestore
-        .collection('users')
-        .doc(userCredential.user!.uid)
-        .update({
-      'accountType': 'both',
-    });
-
-    // Create worker profile
     await mockFirestore
         .collection('workers')
         .doc(userCredential.user!.uid)
         .set({
-      'worker_id': 'HM_${DateTime.now().millisecondsSinceEpoch}',
-      'email': email ?? TestConstants.workerEmail,
-      'serviceType': 'electrical_services',
-      'rating': 4.5,
+      'userId': userCredential.user!.uid,
+      'serviceType': 'Plumber',
       'experienceYears': 5,
+      'rating': 4.5,
       'active': true,
       'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    await mockFirestore
+        .collection('users')
+        .doc(userCredential.user!.uid)
+        .update({
+      'accountType': 'worker',
     });
 
     return userCredential;
   }
 
-  /// Simulate failed login attempts
-  Future<void> simulateFailedLogins({
-    required String uid,
+  /// Simulate account lockout
+  Future<void> simulateAccountLockout({
+    required String email,
     required int attempts,
   }) async {
-    await mockFirestore.collection('users').doc(uid).update({
-      'failedLoginAttempts': attempts,
-      'lastFailedAttempt': FieldValue.serverTimestamp(),
-    });
+    final querySnapshot = await mockFirestore
+        .collection('users')
+        .where('email', isEqualTo: email)
+        .get();
 
-    if (attempts >= 5) {
-      await mockFirestore.collection('users').doc(uid).update({
-        'accountLocked': true,
-        'lockedUntil':
-            DateTime.now().add(Duration(minutes: 15)).toIso8601String(),
+    if (querySnapshot.docs.isNotEmpty) {
+      final doc = querySnapshot.docs.first;
+      await mockFirestore.collection('users').doc(doc.id).update({
+        'failedLoginAttempts': attempts,
+        'lockedUntil': attempts >= 5
+            ? DateTime.now().add(Duration(minutes: 15)).toIso8601String()
+            : null,
       });
     }
   }
 
-  /// Simulate OTP verification attempt
-  Future<bool> verifyOTP({
+  /// Simulate 2FA verification
+  Future<bool> simulate2FA({
     required String uid,
-    required String otp,
-    required String correctOtp,
-    required DateTime otpExpiry,
+    required String otpCode,
   }) async {
-    final currentTime = DateTime.now();
+    final doc = await mockFirestore.collection('users').doc(uid).get();
+
+    if (!doc.exists) return false;
+
+    final data = doc.data()!;
+    final storedOTP = data['otpCode'] as String?;
+    final otpExpiry = data['otpExpiry'] as String?;
+
+    if (storedOTP == null || otpExpiry == null) return false;
 
     // Check if OTP expired
-    if (currentTime.isAfter(otpExpiry)) {
+    if (DateTime.now().isAfter(DateTime.parse(otpExpiry))) {
       return false;
     }
 
     // Check if OTP matches
-    if (otp != correctOtp) {
+    if (storedOTP != otpCode) {
       // Increment failed attempts
-      final doc = await mockFirestore.collection('users').doc(uid).get();
-      final attempts = (doc.data()?['otpAttempts'] ?? 0) + 1;
+      final attempts = (data['otpAttempts'] ?? 0) + 1;
 
       await mockFirestore.collection('users').doc(uid).update({
         'otpAttempts': attempts,
@@ -286,7 +298,7 @@ class WaitHelper {
     try {
       return await completer.future.timeout(timeout);
     } finally {
-      subscription.cancel();
+      await subscription.cancel();
     }
   }
 

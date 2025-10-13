@@ -1,508 +1,415 @@
 // test/mocks/mock_services.dart
-// Mock services for authentication testing
-// Simulates your actual services without Firebase connection
+// FIXED VERSION - Compatible with firebase_auth 5.7.0 and cloud_firestore 5.6.12
 
-import 'package:mockito/mockito.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'dart:async';
 
-// ==================== MOCK AUTH SERVICE ====================
-
-class MockAuthService extends Mock {
-  // Sign in with email and password
-  Future<UserCredential?> signInWithEmailAndPassword({
-    required String email,
-    required String password,
-  }) async {
-    // Simulate authentication delay
-    await Future.delayed(Duration(milliseconds: 500));
-
-    // Mock successful authentication
-    return MockUserCredential(
-      user: MockUser(
-        uid: 'mock_uid_${DateTime.now().millisecondsSinceEpoch}',
-        email: email,
-        emailVerified: true,
-      ),
-    );
-  }
-
-  // Create account
-  Future<UserCredential?> createUserWithEmailAndPassword({
-    required String email,
-    required String password,
-  }) async {
-    await Future.delayed(Duration(milliseconds: 500));
-
-    return MockUserCredential(
-      user: MockUser(
-        uid: 'mock_uid_${DateTime.now().millisecondsSinceEpoch}',
-        email: email,
-        emailVerified: false,
-      ),
-    );
-  }
-
-  // Send password reset email
-  Future<void> sendPasswordResetEmail({required String email}) async {
-    await Future.delayed(Duration(milliseconds: 300));
-    // Mock email sent
-  }
-
-  // Sign out
-  Future<void> signOut() async {
-    await Future.delayed(Duration(milliseconds: 200));
-  }
-
-  // Get current user
-  MockUser? get currentUser => null;
-}
-
-// ==================== MOCK USER ====================
-
-class MockUser extends Mock implements User {
+/// Mock User implementation
+class MockUser implements User {
+  @override
   final String uid;
+
+  @override
   final String? email;
+
+  @override
   final String? displayName;
-  final String? photoURL;
-  final bool emailVerified;
+
+  @override
   final String? phoneNumber;
+
+  @override
+  final String? photoURL;
+
+  @override
+  bool emailVerified;
 
   MockUser({
     required this.uid,
     this.email,
     this.displayName,
+    this.phoneNumber,
     this.photoURL,
     this.emailVerified = false,
-    this.phoneNumber,
   });
 
+  // FIXED: Updated signature to match firebase_auth 5.7.0
   @override
-  Future<void> reload() async {
-    await Future.delayed(Duration(milliseconds: 100));
+  Future<void> sendEmailVerification(
+      [ActionCodeSettings? actionCodeSettings]) async {
+    emailVerified = true;
   }
 
   @override
-  Future<void> sendEmailVerification() async {
-    await Future.delayed(Duration(milliseconds: 200));
+  Future<void> delete() async {}
+
+  @override
+  Future<String> getIdToken([bool forceRefresh = false]) async => 'mock_token';
+
+  @override
+  Future<IdTokenResult> getIdTokenResult([bool forceRefresh = false]) async {
+    throw UnimplementedError();
   }
 
   @override
-  Future<void> updatePassword(String newPassword) async {
-    await Future.delayed(Duration(milliseconds: 300));
+  Future<UserCredential> linkWithCredential(AuthCredential credential) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ConfirmationResult> linkWithPhoneNumber(String phoneNumber,
+      [RecaptchaVerifier? verifier]) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserCredential> linkWithProvider(AuthProvider provider) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserCredential> reauthenticateWithCredential(
+      AuthCredential credential) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserCredential> reauthenticateWithProvider(
+      AuthProvider provider) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> reload() async {}
+
+  @override
+  Future<void> updateDisplayName(String? displayName) async {
+    // this.displayName = displayName; // Can't assign to final
   }
 
   @override
   Future<void> updateEmail(String newEmail) async {
-    await Future.delayed(Duration(milliseconds: 300));
+    // this.email = newEmail; // Can't assign to final
   }
 
   @override
-  Future<void> delete() async {
-    await Future.delayed(Duration(milliseconds: 300));
+  Future<void> updatePassword(String newPassword) async {}
+
+  @override
+  Future<void> updatePhoneNumber(PhoneAuthCredential phoneCredential) async {}
+
+  @override
+  Future<void> updatePhotoURL(String? photoURL) async {
+    // this.photoURL = photoURL; // Can't assign to final
   }
+
+  @override
+  Future<User> unlink(String providerId) async => this;
+
+  @override
+  Future<void> verifyBeforeUpdateEmail(String newEmail,
+      [ActionCodeSettings? actionCodeSettings]) async {}
+
+  @override
+  bool get isAnonymous => false;
+
+  @override
+  UserMetadata get metadata => throw UnimplementedError();
+
+  @override
+  List<UserInfo> get providerData => [];
+
+  @override
+  String? get refreshToken => null;
+
+  @override
+  String? get tenantId => null;
+
+  @override
+  MultiFactor get multiFactor => throw UnimplementedError();
 }
 
-// ==================== MOCK USER CREDENTIAL ====================
-
-class MockUserCredential extends Mock implements UserCredential {
+/// Mock UserCredential implementation
+class MockUserCredential implements UserCredential {
   @override
   final User? user;
 
-  MockUserCredential({this.user});
+  @override
+  final AdditionalUserInfo? additionalUserInfo;
+
+  @override
+  final AuthCredential? credential;
+
+  MockUserCredential({
+    this.user,
+    this.additionalUserInfo,
+    this.credential,
+  });
 }
 
-// ==================== MOCK GOOGLE AUTH SERVICE ====================
+/// Mock Auth Service
+class MockAuthService {
+  final Map<String, MockUser> _users = {};
+  MockUser? _currentUser;
 
-class MockGoogleAuthService extends Mock {
-  Future<UserCredential?> signInWithGoogle() async {
-    await Future.delayed(Duration(milliseconds: 800));
+  MockUser? get currentUser => _currentUser;
 
-    return MockUserCredential(
-      user: MockUser(
-        uid: 'google_mock_uid_${DateTime.now().millisecondsSinceEpoch}',
-        email: 'testuser@gmail.com',
-        displayName: 'Test User',
-        photoURL: 'https://example.com/photo.jpg',
-        emailVerified: true,
-      ),
+  Future<MockUserCredential?> createUserWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    if (_users.containsKey(email)) {
+      throw FirebaseAuthException(
+        code: 'email-already-in-use',
+        message: 'The email address is already in use.',
+      );
+    }
+
+    final user = MockUser(
+      uid: 'uid_${DateTime.now().millisecondsSinceEpoch}',
+      email: email,
+      emailVerified: false,
     );
+
+    _users[email] = user;
+    _currentUser = user;
+
+    return MockUserCredential(user: user);
+  }
+
+  Future<MockUserCredential> signInWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    if (!_users.containsKey(email)) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No user found with this email.',
+      );
+    }
+
+    final user = _users[email]!;
+    _currentUser = user;
+
+    return MockUserCredential(user: user);
   }
 
   Future<void> signOut() async {
-    await Future.delayed(Duration(milliseconds: 200));
+    _currentUser = null;
+  }
+
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    // Simulate sending reset email
+    await Future.delayed(Duration(milliseconds: 100));
+  }
+
+  Stream<MockUser?> authStateChanges() {
+    return Stream.value(_currentUser);
   }
 }
 
-// ==================== MOCK FIRESTORE SERVICE ====================
+/// Mock DocumentSnapshot implementation
+class MockDocumentSnapshot implements DocumentSnapshot {
+  final String _id;
+  final Map<String, dynamic>? _data;
+  final bool _exists;
 
-class MockFirestoreService extends Mock {
-  final Map<String, Map<String, dynamic>> _mockData = {};
+  MockDocumentSnapshot({
+    required String id,
+    Map<String, dynamic>? data,
+    bool exists = true,
+  })  : _id = id,
+        _data = data,
+        _exists = exists;
 
-  // Get document
-  Future<MockDocumentSnapshot> getDocument({
-    required String collection,
-    required String documentId,
-  }) async {
-    await Future.delayed(Duration(milliseconds: 100));
+  @override
+  String get id => _id;
 
-    final key = '$collection/$documentId';
-    return MockDocumentSnapshot(
-      exists: _mockData.containsKey(key),
-      data: _mockData[key],
-      id: documentId,
-    );
-  }
+  @override
+  bool get exists => _exists;
 
-  // Set document
+  // FIXED: Changed from property to method to match cloud_firestore 5.6.12
+  @override
+  Map<String, dynamic>? data() => _data;
+
+  // FIXED: Changed parameter type from String to Object
+  @override
+  dynamic get(Object field) => _data?[field];
+
+  @override
+  dynamic operator [](Object field) => _data?[field];
+
+  @override
+  DocumentReference get reference => throw UnimplementedError();
+
+  @override
+  SnapshotMetadata get metadata => throw UnimplementedError();
+}
+
+/// Mock Firestore Service
+class MockFirestoreService {
+  final Map<String, Map<String, Map<String, dynamic>>> _data = {};
+
   Future<void> setDocument({
     required String collection,
     required String documentId,
     required Map<String, dynamic> data,
   }) async {
-    await Future.delayed(Duration(milliseconds: 150));
-
-    final key = '$collection/$documentId';
-    _mockData[key] = data;
+    if (!_data.containsKey(collection)) {
+      _data[collection] = {};
+    }
+    _data[collection]![documentId] = Map<String, dynamic>.from(data);
   }
 
-  // Update document
+  Future<MockDocumentSnapshot> getDocument({
+    required String collection,
+    required String documentId,
+  }) async {
+    final collectionData = _data[collection];
+    if (collectionData == null || !collectionData.containsKey(documentId)) {
+      return MockDocumentSnapshot(id: documentId, exists: false);
+    }
+
+    return MockDocumentSnapshot(
+      id: documentId,
+      data: collectionData[documentId],
+      exists: true,
+    );
+  }
+
   Future<void> updateDocument({
     required String collection,
     required String documentId,
     required Map<String, dynamic> data,
   }) async {
-    await Future.delayed(Duration(milliseconds: 150));
-
-    final key = '$collection/$documentId';
-    if (_mockData.containsKey(key)) {
-      _mockData[key]!.addAll(data);
+    if (_data.containsKey(collection) &&
+        _data[collection]!.containsKey(documentId)) {
+      _data[collection]![documentId]!.addAll(data);
     }
   }
 
-  // Delete document
   Future<void> deleteDocument({
     required String collection,
     required String documentId,
   }) async {
-    await Future.delayed(Duration(milliseconds: 150));
-
-    final key = '$collection/$documentId';
-    _mockData.remove(key);
+    _data[collection]?.remove(documentId);
   }
 
-  // Query documents
-  Future<List<MockDocumentSnapshot>> queryDocuments({
+  void clearData() {
+    _data.clear();
+  }
+
+  Future<List<MockDocumentSnapshot>> queryCollection({
     required String collection,
     String? whereField,
     dynamic whereValue,
   }) async {
-    await Future.delayed(Duration(milliseconds: 200));
+    final collectionData = _data[collection] ?? {};
 
-    final results = <MockDocumentSnapshot>[];
+    if (whereField == null) {
+      return collectionData.entries
+          .map((e) => MockDocumentSnapshot(id: e.key, data: e.value))
+          .toList();
+    }
 
-    _mockData.forEach((key, value) {
-      if (key.startsWith('$collection/')) {
-        if (whereField == null || value[whereField] == whereValue) {
-          final docId = key.split('/').last;
-          results.add(MockDocumentSnapshot(
-            exists: true,
-            data: value,
-            id: docId,
-          ));
-        }
-      }
-    });
-
-    return results;
-  }
-
-  // Clear all data (for testing cleanup)
-  void clearData() {
-    _mockData.clear();
+    return collectionData.entries
+        .where((e) => e.value[whereField] == whereValue)
+        .map((e) => MockDocumentSnapshot(id: e.key, data: e.value))
+        .toList();
   }
 }
 
-// ==================== MOCK DOCUMENT SNAPSHOT ====================
-
-class MockDocumentSnapshot extends Mock implements DocumentSnapshot {
-  @override
-  final bool exists;
-  final Map<String, dynamic>? _data;
-  @override
-  final String id;
-
-  MockDocumentSnapshot({
-    required this.exists,
-    Map<String, dynamic>? data,
-    required this.id,
-  }) : _data = data;
-
-  @override
-  Map<String, dynamic>? data() => _data;
-
-  @override
-  dynamic get(String field) => _data?[field];
-}
-
-// ==================== MOCK SMS SERVICE ====================
-
-class MockSMSService extends Mock {
-  final Map<String, String> _otpStorage = {};
-
-  // Send OTP
-  Future<String> sendOTP({required String phoneNumber}) async {
-    await Future.delayed(Duration(milliseconds: 500));
-
-    // Generate 6-digit OTP
-    final otp = (DateTime.now().millisecondsSinceEpoch % 1000000)
-        .toString()
-        .padLeft(6, '0');
-
-    _otpStorage[phoneNumber] = otp;
-
-    print('📱 Mock OTP sent to $phoneNumber: $otp');
-    return otp;
-  }
-
-  // Verify OTP
-  Future<bool> verifyOTP({
-    required String phoneNumber,
-    required String otp,
-  }) async {
-    await Future.delayed(Duration(milliseconds: 300));
-
-    final storedOtp = _otpStorage[phoneNumber];
-    return storedOtp == otp;
-  }
-
-  // Get stored OTP (for testing only)
-  String? getStoredOTP(String phoneNumber) => _otpStorage[phoneNumber];
-
-  // Clear OTP storage
-  void clearOTPs() => _otpStorage.clear();
-}
-
-// ==================== MOCK EMAIL SERVICE ====================
-
-class MockEmailService extends Mock {
-  final List<MockEmail> _sentEmails = [];
-
-  // Send verification email
-  Future<void> sendVerificationEmail({
-    required String email,
-    required String verificationLink,
-  }) async {
-    await Future.delayed(Duration(milliseconds: 400));
-
-    _sentEmails.add(MockEmail(
-      to: email,
-      subject: 'Verify Your Email',
-      body: 'Click here to verify: $verificationLink',
-      type: EmailType.verification,
-      sentAt: DateTime.now(),
-    ));
-
-    print('📧 Mock verification email sent to $email');
-  }
-
-  // Send password reset email
-  Future<void> sendPasswordResetEmail({
-    required String email,
-    required String resetLink,
-  }) async {
-    await Future.delayed(Duration(milliseconds: 400));
-
-    _sentEmails.add(MockEmail(
-      to: email,
-      subject: 'Reset Your Password',
-      body: 'Click here to reset: $resetLink',
-      type: EmailType.passwordReset,
-      sentAt: DateTime.now(),
-    ));
-
-    print('📧 Mock password reset email sent to $email');
-  }
-
-  // Get sent emails (for testing verification)
-  List<MockEmail> getSentEmails({String? recipient, EmailType? type}) {
-    return _sentEmails.where((email) {
-      if (recipient != null && email.to != recipient) return false;
-      if (type != null && email.type != type) return false;
-      return true;
-    }).toList();
-  }
-
-  // Clear sent emails
-  void clearSentEmails() => _sentEmails.clear();
-}
-
-// ==================== MOCK EMAIL ====================
-
-class MockEmail {
-  final String to;
-  final String subject;
-  final String body;
-  final EmailType type;
-  final DateTime sentAt;
-
-  MockEmail({
-    required this.to,
-    required this.subject,
-    required this.body,
-    required this.type,
-    required this.sentAt,
-  });
-}
-
-enum EmailType {
-  verification,
-  passwordReset,
-  accountLockout,
-  twoFactorAuth,
-}
-
-// ==================== MOCK ACCOUNT LOCKOUT SERVICE ====================
-
+/// Mock Account Lockout Service
 class MockAccountLockoutService {
-  final Map<String, LockoutData> _lockoutData = {};
+  final Map<String, int> _failedAttempts = {};
+  final Map<String, DateTime> _lockouts = {};
 
-  // Record failed login attempt
-  Future<void> recordFailedLogin(String email) async {
-    final data = _lockoutData[email] ?? LockoutData();
-    data.attempts++;
-    data.lastAttempt = DateTime.now();
+  bool isLocked(String email) {
+    if (!_lockouts.containsKey(email)) return false;
 
-    if (data.attempts >= 5) {
-      data.isLocked = true;
-      data.lockedUntil = DateTime.now().add(Duration(minutes: 15));
+    final lockoutTime = _lockouts[email]!;
+    if (DateTime.now().isAfter(lockoutTime)) {
+      _lockouts.remove(email);
+      _failedAttempts.remove(email);
+      return false;
     }
-
-    _lockoutData[email] = data;
+    return true;
   }
 
-  // Check if account is locked
-  bool isAccountLocked(String email) {
-    final data = _lockoutData[email];
-    if (data == null) return false;
+  void recordFailedAttempt(String email) {
+    _failedAttempts[email] = (_failedAttempts[email] ?? 0) + 1;
 
-    if (data.isLocked && data.lockedUntil != null) {
-      if (DateTime.now().isBefore(data.lockedUntil!)) {
-        return true;
-      } else {
-        // Lockout expired, reset
-        data.isLocked = false;
-        data.attempts = 0;
-      }
+    if (_failedAttempts[email]! >= 5) {
+      _lockouts[email] = DateTime.now().add(Duration(minutes: 15));
     }
-
-    return false;
   }
 
-  // Reset failed attempts
-  void resetFailedAttempts(String email) {
-    _lockoutData[email] = LockoutData();
+  void clearLockout(String email) {
+    _failedAttempts.remove(email);
+    _lockouts.remove(email);
   }
 
-  // Get lockout data
-  LockoutData? getLockoutData(String email) => _lockoutData[email];
+  void clearAllLockouts() {
+    _failedAttempts.clear();
+    _lockouts.clear();
+  }
 
-  // Clear all lockout data
-  void clearAllLockouts() => _lockoutData.clear();
+  int getFailedAttempts(String email) {
+    return _failedAttempts[email] ?? 0;
+  }
 }
 
-class LockoutData {
-  int attempts = 0;
-  DateTime? lastAttempt;
-  bool isLocked = false;
-  DateTime? lockedUntil;
-}
-
-// ==================== MOCK OTP SERVICE ====================
-
+/// Mock OTP Service
 class MockOTPService {
-  final Map<String, OTPData> _otpData = {};
+  final Map<String, String> _otpCodes = {};
+  final Map<String, DateTime> _otpExpiry = {};
+  final Map<String, int> _otpAttempts = {};
 
-  // Generate and send OTP
-  Future<String> generateOTP(String phoneNumber) async {
-    await Future.delayed(Duration(milliseconds: 500));
-
+  String generateOTP(String phone) {
     final otp = (DateTime.now().millisecondsSinceEpoch % 1000000)
         .toString()
         .padLeft(6, '0');
-
-    _otpData[phoneNumber] = OTPData(
-      otp: otp,
-      generatedAt: DateTime.now(),
-      attempts: 0,
-      isLocked: false,
-    );
-
-    print('🔐 Mock OTP generated for $phoneNumber: $otp');
+    _otpCodes[phone] = otp;
+    _otpExpiry[phone] = DateTime.now().add(Duration(minutes: 10));
+    _otpAttempts[phone] = 0;
     return otp;
   }
 
-  // Verify OTP
-  Future<bool> verifyOTP(String phoneNumber, String otp) async {
-    await Future.delayed(Duration(milliseconds: 300));
+  bool verifyOTP(String phone, String otp) {
+    if (!_otpCodes.containsKey(phone)) return false;
 
-    final data = _otpData[phoneNumber];
-    if (data == null) return false;
-
-    // Check if locked
-    if (data.isLocked) {
-      print('🚫 Account locked due to too many OTP attempts');
+    // Check expiry
+    if (DateTime.now().isAfter(_otpExpiry[phone]!)) {
       return false;
     }
 
-    // Check if expired (10 minutes)
-    if (DateTime.now().difference(data.generatedAt).inMinutes > 10) {
-      print('⏰ OTP expired');
+    // Check attempts
+    _otpAttempts[phone] = (_otpAttempts[phone] ?? 0) + 1;
+    if (_otpAttempts[phone]! > 5) {
       return false;
     }
 
-    // Check OTP
-    if (data.otp == otp) {
-      print('✅ OTP verified successfully');
-      _otpData.remove(phoneNumber);
-      return true;
-    } else {
-      data.attempts++;
-      if (data.attempts >= 5) {
-        data.isLocked = true;
-        print('🚫 Account locked after 5 failed OTP attempts');
-      }
-      return false;
-    }
+    return _otpCodes[phone] == otp;
   }
 
-  // Check if OTP is expired
-  bool isOTPExpired(String phoneNumber) {
-    final data = _otpData[phoneNumber];
-    if (data == null) return true;
-
-    return DateTime.now().difference(data.generatedAt).inMinutes > 10;
+  bool isExpired(String phone) {
+    if (!_otpExpiry.containsKey(phone)) return true;
+    return DateTime.now().isAfter(_otpExpiry[phone]!);
   }
 
-  // Get OTP data (for testing)
-  OTPData? getOTPData(String phoneNumber) => _otpData[phoneNumber];
+  void clearOTP(String phone) {
+    _otpCodes.remove(phone);
+    _otpExpiry.remove(phone);
+    _otpAttempts.remove(phone);
+  }
 
-  // Clear OTP data
-  void clearOTPData() => _otpData.clear();
-}
+  void clearOTPData() {
+    _otpCodes.clear();
+    _otpExpiry.clear();
+    _otpAttempts.clear();
+  }
 
-class OTPData {
-  final String otp;
-  final DateTime generatedAt;
-  int attempts;
-  bool isLocked;
-
-  OTPData({
-    required this.otp,
-    required this.generatedAt,
-    this.attempts = 0,
-    this.isLocked = false,
-  });
+  int getAttempts(String phone) {
+    return _otpAttempts[phone] ?? 0;
+  }
 }
