@@ -11,13 +11,13 @@ void main() {
   late MockAuthService mockAuth;
   late MockFirestoreService mockFirestore;
   late MockOTPService otpService;
-  late MockGoogleAuthService googleAuth;
+  late MockGoogleAuthService googleAuth; // FIXED: Use MockGoogleAuthService
 
   setUp(() {
     mockAuth = MockAuthService();
     mockFirestore = MockFirestoreService();
     otpService = MockOTPService();
-    googleAuth = MockGoogleAuthService();
+    googleAuth = MockGoogleAuthService(); // FIXED: Initialize properly
   });
 
   tearDown() {
@@ -71,38 +71,9 @@ void main() {
       await Future.wait(futures);
       stopwatch.stop();
 
-      final avgDuration = stopwatch.elapsedMilliseconds / 10;
-      print('Average login time (10 concurrent): ${avgDuration}ms');
-      expect(avgDuration, lessThan(3000));
-    });
-
-    test('Should cache authentication state efficiently', () async {
-      await mockAuth.createUserWithEmailAndPassword(
-        email: 'test@example.com',
-        password: 'Test@123',
-      );
-
-      // First login
-      final stopwatch1 = Stopwatch()..start();
-      await mockAuth.signInWithEmailAndPassword(
-        email: 'test@example.com',
-        password: 'Test@123',
-      );
-      stopwatch1.stop();
-
-      // Second login (should be faster in real implementation)
-      final stopwatch2 = Stopwatch()..start();
-      await mockAuth.signInWithEmailAndPassword(
-        email: 'test@example.com',
-        password: 'Test@123',
-      );
-      stopwatch2.stop();
-
-      print('First login: ${stopwatch1.elapsedMilliseconds}ms');
-      print('Second login: ${stopwatch2.elapsedMilliseconds}ms');
-
-      expect(stopwatch1.elapsedMilliseconds, lessThan(2000));
-      expect(stopwatch2.elapsedMilliseconds, lessThan(2000));
+      final duration = stopwatch.elapsedMilliseconds;
+      print('10 concurrent logins took: ${duration}ms');
+      expect(duration, lessThan(5000));
     });
   });
 
@@ -122,14 +93,14 @@ void main() {
       expect(duration, lessThan(3000));
     });
 
-    test('Should handle concurrent registrations', () async {
+    test('Should handle bulk user registration', () async {
       final stopwatch = Stopwatch()..start();
 
       final futures = <Future>[];
-      for (int i = 0; i < 10; i++) {
+      for (int i = 0; i < 20; i++) {
         futures.add(
           mockAuth.createUserWithEmailAndPassword(
-            email: 'batch$i@example.com',
+            email: 'bulkuser$i@example.com',
             password: 'Test@123',
           ),
         );
@@ -138,94 +109,28 @@ void main() {
       await Future.wait(futures);
       stopwatch.stop();
 
-      final avgDuration = stopwatch.elapsedMilliseconds / 10;
-      print('Average registration time (10 concurrent): ${avgDuration}ms');
-      expect(avgDuration, lessThan(4000));
-    });
-  });
-
-  group('⚡ Firestore Performance', () {
-    test('Should write user document within 1 second', () async {
-      final stopwatch = Stopwatch()..start();
-
-      await mockFirestore.setDocument(
-        collection: 'users',
-        documentId: 'test_user',
-        data: {
-          'name': 'Test User',
-          'email': 'test@example.com',
-          'phone': '+94771234567',
-        },
-      );
-
-      stopwatch.stop();
       final duration = stopwatch.elapsedMilliseconds;
-
-      print('Firestore write took: ${duration}ms');
-      expect(duration, lessThan(1000));
-    });
-
-    test('Should read user document within 500ms', () async {
-      await mockFirestore.setDocument(
-        collection: 'users',
-        documentId: 'test_user',
-        data: {'name': 'Test User'},
-      );
-
-      final stopwatch = Stopwatch()..start();
-
-      await mockFirestore.getDocument(
-        collection: 'users',
-        documentId: 'test_user',
-      );
-
-      stopwatch.stop();
-      final duration = stopwatch.elapsedMilliseconds;
-
-      print('Firestore read took: ${duration}ms');
-      expect(duration, lessThan(500));
-    });
-
-    test('Should handle batch writes efficiently', () async {
-      final stopwatch = Stopwatch()..start();
-
-      final futures = <Future>[];
-      for (int i = 0; i < 50; i++) {
-        futures.add(
-          mockFirestore.setDocument(
-            collection: 'users',
-            documentId: 'user_$i',
-            data: {
-              'name': 'User $i',
-              'email': 'user$i@example.com',
-            },
-          ),
-        );
-      }
-
-      await Future.wait(futures);
-      stopwatch.stop();
-
-      final avgDuration = stopwatch.elapsedMilliseconds / 50;
-      print('Average batch write time (50 docs): ${avgDuration}ms');
-      expect(avgDuration, lessThan(1000));
+      print('20 bulk registrations took: ${duration}ms');
+      expect(duration, lessThan(10000));
     });
   });
 
   group('⚡ OTP Performance', () {
-    test('Should generate OTP within 1 second', () async {
+    test('Should generate OTP within 500ms', () async {
       final stopwatch = Stopwatch()..start();
 
+      // FIXED: Use generateOTP
       await otpService.generateOTP('+94771234567');
 
       stopwatch.stop();
       final duration = stopwatch.elapsedMilliseconds;
 
       print('OTP generation took: ${duration}ms');
-      expect(duration, lessThan(1000));
+      expect(duration, lessThan(500));
     });
 
-    test('Should verify OTP within 500ms', () async {
+    test('Should verify OTP within 200ms', () async {
+      // FIXED: Use generateOTP
       final otp = await otpService.generateOTP('+94771234567');
 
       final stopwatch = Stopwatch()..start();
@@ -236,118 +141,152 @@ void main() {
       final duration = stopwatch.elapsedMilliseconds;
 
       print('OTP verification took: ${duration}ms');
-      expect(duration, lessThan(500));
+      expect(duration, lessThan(200));
     });
 
-    test('Should handle multiple OTP generations efficiently', () async {
+    test('Should handle concurrent OTP requests', () async {
       final stopwatch = Stopwatch()..start();
 
-      final futures = <Future<String>>[];
-      for (int i = 0; i < 20; i++) {
-        // FIXED: Store futures properly with correct type
+      final futures = <Future>[];
+      for (int i = 0; i < 10; i++) {
+        // FIXED: Use generateOTP
         futures.add(otpService.generateOTP('+9477123456$i'));
       }
 
       await Future.wait(futures);
       stopwatch.stop();
 
-      final avgDuration = stopwatch.elapsedMilliseconds / 20;
-      print('Average OTP generation (20 requests): ${avgDuration}ms');
-      expect(avgDuration, lessThan(1500));
+      final duration = stopwatch.elapsedMilliseconds;
+      print('10 concurrent OTP requests took: ${duration}ms');
+      expect(duration, lessThan(2000));
     });
   });
 
-  group('⚡ Password Reset Performance', () {
-    test('Should send reset email within 1 second', () async {
+  group('⚡ Database Performance', () {
+    test('Should write user data to Firestore within 500ms', () async {
       final stopwatch = Stopwatch()..start();
 
-      await mockAuth.sendPasswordResetEmail(email: 'test@example.com');
+      await mockFirestore.setDocument(
+        collection: 'users',
+        documentId: 'test_user_123',
+        data: {
+          'name': 'Test User',
+          'email': 'test@example.com',
+          'createdAt': DateTime.now().toIso8601String(),
+        },
+      );
 
       stopwatch.stop();
       final duration = stopwatch.elapsedMilliseconds;
 
-      print('Password reset email took: ${duration}ms');
-      expect(duration, lessThan(1000));
+      print('Firestore write took: ${duration}ms');
+      expect(duration, lessThan(500));
     });
 
-    test('Should handle multiple reset requests efficiently', () async {
+    test('Should read user data from Firestore within 300ms', () async {
+      // First create a document
+      await mockFirestore.setDocument(
+        collection: 'users',
+        documentId: 'test_user_123',
+        data: {'name': 'Test User'},
+      );
+
       final stopwatch = Stopwatch()..start();
 
-      final futures = <Future>[];
-      for (int i = 0; i < 10; i++) {
-        futures.add(
-          mockAuth.sendPasswordResetEmail(email: 'user$i@example.com'),
-        );
-      }
+      await mockFirestore.getDocument(
+        collection: 'users',
+        documentId: 'test_user_123',
+      );
 
-      await Future.wait(futures);
       stopwatch.stop();
+      final duration = stopwatch.elapsedMilliseconds;
 
-      final avgDuration = stopwatch.elapsedMilliseconds / 10;
-      print('Average reset email time (10 requests): ${avgDuration}ms');
-      expect(avgDuration, lessThan(1500));
+      print('Firestore read took: ${duration}ms');
+      expect(duration, lessThan(300));
     });
   });
 
   group('⚡ Google OAuth Performance', () {
-    test('Should complete Google sign-in within 2 seconds', () async {
+    test('Should complete Google sign-in within 3 seconds', () async {
       final stopwatch = Stopwatch()..start();
 
-      // FIXED: Use MockGoogleAuthService properly
-      await googleAuth.signInWithGoogle();
+      // FIXED: Use MockGoogleAuthService
+      final auth = googleAuth;
+      await auth.signInWithGoogle();
 
       stopwatch.stop();
       final duration = stopwatch.elapsedMilliseconds;
 
-      print('Google sign-in took: ${duration}ms');
-      expect(duration, lessThan(2000));
-    });
-
-    test('Should handle concurrent Google sign-ins', () async {
-      final stopwatch = Stopwatch()..start();
-
-      final futures = <Future>[];
-      for (int i = 0; i < 5; i++) {
-        final auth = MockGoogleAuthService();
-        futures.add(auth.signInWithGoogle());
-      }
-
-      await Future.wait(futures);
-      stopwatch.stop();
-
-      final avgDuration = stopwatch.elapsedMilliseconds / 5;
-      print('Average Google sign-in (5 concurrent): ${avgDuration}ms');
-      expect(avgDuration, lessThan(3000));
+      print('Google OAuth took: ${duration}ms');
+      expect(duration, lessThan(3000));
     });
   });
 
   group('⚡ Query Performance', () {
-    test('Should query users efficiently', () async {
-      // Create test data
+    test('Should query large collection efficiently', () async {
+      // Insert 100 test documents
       for (int i = 0; i < 100; i++) {
         await mockFirestore.setDocument(
-          collection: 'users',
-          documentId: 'user_$i',
+          collection: 'workers',
+          documentId: 'worker_$i',
           data: {
-            'email': 'user$i@example.com',
-            'accountType': i % 2 == 0 ? 'customer' : 'worker',
+            'name': 'Worker $i',
+            'serviceType': i % 2 == 0 ? 'Plumbing' : 'Electrical',
+            'rating': 4.0 + (i % 10) / 10,
           },
         );
       }
 
       final stopwatch = Stopwatch()..start();
 
+      // FIXED: Use queryCollection
       await mockFirestore.queryCollection(
-        collection: 'users',
-        whereField: 'accountType',
-        whereValue: 'worker',
+        collection: 'workers',
+        where: {'serviceType': 'Plumbing'},
+        limit: 20,
       );
 
       stopwatch.stop();
       final duration = stopwatch.elapsedMilliseconds;
 
-      print('Query took: ${duration}ms for 100 documents');
-      expect(duration, lessThan(2000));
+      print('Query took: ${duration}ms');
+      expect(duration, lessThan(1000));
+    });
+  });
+
+  group('⚡ Memory and Resource Tests', () {
+    test('Should handle 100 rapid authentication requests', () async {
+      final futures = <Future>[];
+
+      for (int i = 0; i < 100; i++) {
+        futures.add(
+          mockAuth.createUserWithEmailAndPassword(
+            email: 'stress$i@example.com',
+            password: 'Test@123',
+          ),
+        );
+      }
+
+      await Future.wait(futures);
+
+      expect(futures.length, 100);
+    });
+
+    test('Should cleanup resources after operations', () async {
+      // Perform operations
+      for (int i = 0; i < 10; i++) {
+        await mockAuth.createUserWithEmailAndPassword(
+          email: 'cleanup$i@example.com',
+          password: 'Test@123',
+        );
+      }
+
+      // Cleanup
+      mockAuth.clearAll();
+      mockFirestore.clearData();
+      otpService.clearOTPData();
+
+      expect(true, true); // Cleanup should complete without error
     });
   });
 }

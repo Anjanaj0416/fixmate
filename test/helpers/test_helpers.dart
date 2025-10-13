@@ -1,5 +1,5 @@
 // test/helpers/test_helpers.dart
-// Helper utilities for test cases
+// FIXED VERSION - Helper utilities for test cases
 
 import 'package:flutter/foundation.dart';
 
@@ -17,6 +17,7 @@ class TestLogger {
     print('📝 $message');
   }
 
+  // FIXED: Updated signature to match usage
   static void logTestPass(String testId, String message) {
     print('${'─' * 80}');
     print('✅ TEST PASSED: $testId');
@@ -59,8 +60,8 @@ class TestLogger {
   }
 }
 
-/// Test Validation Helpers
-class TestValidators {
+/// FIXED: Added ValidationHelper class with all required methods
+class ValidationHelper {
   /// Validate email format
   static bool isValidEmail(String email) {
     final emailRegex = RegExp(
@@ -70,20 +71,51 @@ class TestValidators {
   }
 
   /// Validate password strength
-  static bool isValidPassword(String password) {
-    // At least 6 characters, contains letter and number
+  static bool isStrongPassword(String password) {
+    // At least 6 characters, contains letter, number, and special char
     if (password.length < 6) return false;
 
     final hasLetter = RegExp(r'[a-zA-Z]').hasMatch(password);
     final hasDigit = RegExp(r'\d').hasMatch(password);
+    final hasSpecial = RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password);
 
-    return hasLetter && hasDigit;
+    return hasLetter && hasDigit && hasSpecial;
   }
 
   /// Validate phone number (Sri Lankan format)
-  static bool isValidPhoneNumber(String phone) {
+  static bool isValidPhone(String phone) {
     final phoneRegex = RegExp(r'^\+94\d{9}$');
     return phoneRegex.hasMatch(phone);
+  }
+
+  /// Check for XSS patterns
+  static bool containsXSS(String input) {
+    final xssPatterns = [
+      RegExp(r'<script.*?>.*?</script>', caseSensitive: false),
+      RegExp(r'javascript:', caseSensitive: false),
+      RegExp(r'onerror=', caseSensitive: false),
+      RegExp(r'onload=', caseSensitive: false),
+      RegExp(r'<img.*?onerror', caseSensitive: false),
+      RegExp(r'<svg.*?onload', caseSensitive: false),
+    ];
+
+    for (var pattern in xssPatterns) {
+      if (pattern.hasMatch(input)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Sanitize input for XSS
+  static String sanitizeForXSS(String input) {
+    String sanitized = input
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#x27;')
+        .replaceAll('/', '&#x2F;');
+    return sanitized;
   }
 
   /// Validate worker ID format (HM_XXXX)
@@ -107,6 +139,50 @@ class TestValidators {
   static bool isValidImageSize(int sizeInBytes) {
     const maxSize = 10 * 1024 * 1024; // 10 MB
     return sizeInBytes <= maxSize;
+  }
+}
+
+/// Test Validation Helpers (legacy - keeping for compatibility)
+class TestValidators {
+  /// Validate email format
+  static bool isValidEmail(String email) {
+    return ValidationHelper.isValidEmail(email);
+  }
+
+  /// Validate password strength
+  static bool isValidPassword(String password) {
+    // At least 6 characters, contains letter and number
+    if (password.length < 6) return false;
+
+    final hasLetter = RegExp(r'[a-zA-Z]').hasMatch(password);
+    final hasDigit = RegExp(r'\d').hasMatch(password);
+
+    return hasLetter && hasDigit;
+  }
+
+  /// Validate phone number (Sri Lankan format)
+  static bool isValidPhoneNumber(String phone) {
+    return ValidationHelper.isValidPhone(phone);
+  }
+
+  /// Validate worker ID format (HM_XXXX)
+  static bool isValidWorkerId(String workerId) {
+    return ValidationHelper.isValidWorkerId(workerId);
+  }
+
+  /// Validate daily rate range
+  static bool isValidDailyRate(double rate) {
+    return ValidationHelper.isValidDailyRate(rate);
+  }
+
+  /// Validate image file format
+  static bool isValidImageFormat(String format) {
+    return ValidationHelper.isValidImageFormat(format);
+  }
+
+  /// Validate image file size (max 10MB)
+  static bool isValidImageSize(int sizeInBytes) {
+    return ValidationHelper.isValidImageSize(sizeInBytes);
   }
 }
 
