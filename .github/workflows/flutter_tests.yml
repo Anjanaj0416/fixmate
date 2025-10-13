@@ -1,0 +1,264 @@
+# .github/workflows/flutter_tests.yml
+# GitHub Actions workflow for automated testing
+
+name: 🧪 Authentication Tests
+
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    # Allow manual trigger
+
+jobs:
+  # ==================== UNIT & WIDGET TESTS ====================
+  test:
+    name: 🔬 Run Tests
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        flutter-version: ['3.16.0', 'stable']
+      fail-fast: false
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🔧 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ matrix.flutter-version }}
+          channel: 'stable'
+          cache: true
+      
+      - name: 📦 Install dependencies
+        run: flutter pub get
+      
+      - name: 🔍 Verify setup
+        run: |
+          flutter --version
+          flutter doctor -v
+      
+      - name: 🧪 Run all tests
+        run: flutter test --reporter expanded
+      
+      - name: 📊 Generate coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.flutter-version == 'stable'
+        run: flutter test --coverage
+      
+      - name: 📈 Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.flutter-version == 'stable'
+        uses: codecov/codecov-action@v3
+        with:
+          file: coverage/lcov.info
+          flags: unittests
+          name: codecov-flutter
+          fail_ci_if_error: false
+
+  # ==================== INTEGRATION TESTS ====================
+  integration_test:
+    name: 🔗 Integration Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🔧 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+          channel: 'stable'
+          cache: true
+      
+      - name: 📦 Install dependencies
+        run: flutter pub get
+      
+      - name: 🧪 Run integration tests
+        run: flutter test test/integration_test/auth_test.dart --reporter expanded
+
+  # ==================== SPECIFIC TEST CASES ====================
+  test_auth_core:
+    name: 🔐 Core Authentication Tests (FT-001 to FT-007)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🔧 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+          cache: true
+      
+      - name: 📦 Install dependencies
+        run: flutter pub get
+      
+      - name: 🔐 FT-001: User Account Creation
+        run: flutter test --name "FT-001"
+      
+      - name: 🔐 FT-002: Email/Password Login
+        run: flutter test --name "FT-002"
+      
+      - name: 🔐 FT-003: Google OAuth Login
+        run: flutter test --name "FT-003"
+      
+      - name: 🔐 FT-004: Password Reset
+        run: flutter test --name "FT-004"
+      
+      - name: 🔐 FT-005: Account Type Selection
+        run: flutter test --name "FT-005"
+      
+      - name: 🔐 FT-006: Switch to Professional
+        run: flutter test --name "FT-006"
+      
+      - name: 🔐 FT-007: Two-Factor Authentication
+        run: flutter test --name "FT-007"
+
+  test_validation:
+    name: 🔖 Validation & Security Tests (FT-036 to FT-045)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🔧 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+          cache: true
+      
+      - name: 📦 Install dependencies
+        run: flutter pub get
+      
+      - name: 🔖 FT-036: Invalid Email Format
+        run: flutter test --name "FT-036"
+      
+      - name: 🔖 FT-037: Weak Password
+        run: flutter test --name "FT-037"
+      
+      - name: 🔖 FT-038: Duplicate Email
+        run: flutter test --name "FT-038"
+      
+      - name: 🔖 FT-039: Account Lockout
+        run: flutter test --name "FT-039"
+      
+      - name: 🔖 FT-040: Unverified Email
+        run: flutter test --name "FT-040"
+      
+      - name: 🔖 FT-041: Invalid Password Reset
+        run: flutter test --name "FT-041"
+      
+      - name: 🔖 FT-042: OAuth Cancellation
+        run: flutter test --name "FT-042"
+      
+      - name: 🔖 FT-043: Expired OTP
+        run: flutter test --name "FT-043"
+      
+      - name: 🔖 FT-044: OTP Attempts
+        run: flutter test --name "FT-044"
+      
+      - name: 🔖 FT-045: Switch Back to Customer
+        run: flutter test --name "FT-045"
+
+  # ==================== TEST REPORT ====================
+  report:
+    name: 📄 Generate Test Report
+    needs: [test, integration_test, test_auth_core, test_validation]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🔧 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+          cache: true
+      
+      - name: 📦 Install dependencies
+        run: flutter pub get
+      
+      - name: 📊 Generate test report
+        run: |
+          echo "# 🧪 Test Execution Report" > test_report.md
+          echo "" >> test_report.md
+          echo "**Date:** $(date)" >> test_report.md
+          echo "" >> test_report.md
+          echo "## Test Results" >> test_report.md
+          echo "" >> test_report.md
+          flutter test --reporter json > test_results.json || true
+          echo "Test execution completed" >> test_report.md
+      
+      - name: 📤 Upload test report
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-report
+          path: |
+            test_report.md
+            test_results.json
+          retention-days: 30
+
+  # ==================== CODE QUALITY ====================
+  analyze:
+    name: 🔍 Code Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🔧 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+          cache: true
+      
+      - name: 📦 Install dependencies
+        run: flutter pub get
+      
+      - name: 🔍 Analyze code
+        run: flutter analyze
+      
+      - name: 🎨 Check formatting
+        run: flutter format --set-exit-if-changed .
+      
+      - name: 📏 Run custom lints
+        run: |
+          echo "Running custom lints..."
+          # Add custom lint commands here
+
+  # ==================== NOTIFICATION ====================
+  notify:
+    name: 📢 Notify Results
+    needs: [test, integration_test, test_auth_core, test_validation, analyze]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: 📊 Check test results
+        run: |
+          echo "Test suite execution completed"
+          echo "Core Tests: ${{ needs.test.result }}"
+          echo "Integration Tests: ${{ needs.integration_test.result }}"
+          echo "Auth Tests: ${{ needs.test_auth_core.result }}"
+          echo "Validation Tests: ${{ needs.test_validation.result }}"
+          echo "Code Analysis: ${{ needs.analyze.result }}"
+
+# ==================== CONFIGURATION ====================
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.16.0'
