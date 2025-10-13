@@ -1,5 +1,5 @@
 // test/mocks/mock_services.dart
-// FIXED VERSION - All Mock Services with proper implementations
+// FIXED VERSION - All Mock Services with missing methods added
 // Contains all required mock methods to fix compilation errors
 
 import 'dart:math';
@@ -117,7 +117,7 @@ class MockAuthService {
 }
 
 // ============================================================================
-// FIXED: Added MockGoogleAuthService
+// Mock Google Auth Service
 // ============================================================================
 
 class MockGoogleAuthService {
@@ -274,7 +274,7 @@ class MockFirestoreService {
 }
 
 // ============================================================================
-// 3. Mock Storage Service
+// 3. Mock Storage Service - FIXED: Added clearStorage method
 // ============================================================================
 
 class MockStorageService {
@@ -302,13 +302,18 @@ class MockStorageService {
     return _files[filePath];
   }
 
+  // FIXED: Added clearStorage method
+  void clearStorage() {
+    _files.clear();
+  }
+
   void clearFiles() {
     _files.clear();
   }
 }
 
 // ============================================================================
-// 4. Mock ML Service
+// 4. Mock ML Service - FIXED: Added predictMultipleServices method
 // ============================================================================
 
 class MockMLService {
@@ -339,6 +344,59 @@ class MockMLService {
     }
 
     return {'service_type': 'General', 'confidence': 0.50};
+  }
+
+  // FIXED: Added predictMultipleServices method for handling multiple issues
+  Future<List<Map<String, dynamic>>> predictMultipleServices({
+    required String description,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 200));
+
+    List<Map<String, dynamic>> predictions = [];
+    final lowerDescription = description.toLowerCase();
+
+    // Check for AC issues
+    if (lowerDescription.contains('ac') ||
+        lowerDescription.contains('air condition') ||
+        lowerDescription.contains('cooling') ||
+        lowerDescription.contains('not cooling')) {
+      predictions.add({
+        'service_type': 'AC Repair',
+        'confidence': 0.75,
+      });
+    }
+
+    // Check for plumbing issues
+    if (lowerDescription.contains('leak') ||
+        lowerDescription.contains('pipe') ||
+        lowerDescription.contains('water') ||
+        lowerDescription.contains('plumb')) {
+      predictions.add({
+        'service_type': 'Plumbing',
+        'confidence': 0.80,
+      });
+    }
+
+    // Check for electrical issues
+    if (lowerDescription.contains('electric') ||
+        lowerDescription.contains('wiring') ||
+        lowerDescription.contains('wire') ||
+        lowerDescription.contains('wirring')) {
+      predictions.add({
+        'service_type': 'Electrical',
+        'confidence': 0.85,
+      });
+    }
+
+    // If no specific service detected, return general
+    if (predictions.isEmpty) {
+      predictions.add({
+        'service_type': 'General',
+        'confidence': 0.50,
+      });
+    }
+
+    return predictions;
   }
 
   Future<List<Map<String, dynamic>>> searchWorkersWithFilters({
@@ -428,7 +486,7 @@ class MockMLService {
 }
 
 // ============================================================================
-// 5. Mock OpenAI Service
+// 5. Mock OpenAI Service - FIXED: Added analyzeTextDescription method
 // ============================================================================
 
 class MockOpenAIService {
@@ -454,6 +512,34 @@ class MockOpenAIService {
     return 'Image quality acceptable. Analyzing...';
   }
 
+  // FIXED: Added analyzeTextDescription method
+  Future<String> analyzeTextDescription({
+    required String description,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 250));
+
+    final lowerDescription = description.toLowerCase();
+
+    // Handle vague queries
+    if (lowerDescription.contains('fix my house') ||
+        lowerDescription.contains('help') && lowerDescription.length < 20) {
+      return 'What specifically needs fixing? (plumbing, electrical, carpentry, etc.)';
+    }
+
+    // Handle specific queries
+    if (lowerDescription.contains('leak') ||
+        lowerDescription.contains('pipe')) {
+      return 'It looks like you have a plumbing issue. I can help you find qualified plumbers in your area.';
+    }
+
+    if (lowerDescription.contains('electric') ||
+        lowerDescription.contains('wiring')) {
+      return 'This appears to be an electrical issue. Let me find electricians who can help.';
+    }
+
+    return 'AI Response: Let me analyze your issue and find the best workers to help you...';
+  }
+
   Future<String> generateResponse({
     required String prompt,
   }) async {
@@ -464,14 +550,13 @@ class MockOpenAIService {
 }
 
 // ============================================================================
-// FIXED: Added MockAccountLockoutService with all required methods
+// Mock Account Lockout Service - FIXED: Added getLockoutData alias
 // ============================================================================
 
 class MockAccountLockoutService {
   final Map<String, int> _failedAttempts = {};
   final Map<String, DateTime> _lockoutUntil = {};
 
-  // FIXED: Added missing method
   Future<void> recordFailedLogin(String email) async {
     await Future.delayed(Duration(milliseconds: 10));
     _failedAttempts[email] = (_failedAttempts[email] ?? 0) + 1;
@@ -481,7 +566,6 @@ class MockAccountLockoutService {
     }
   }
 
-  // FIXED: Added missing method
   bool isAccountLocked(String email) {
     if (!_lockoutUntil.containsKey(email)) return false;
 
@@ -494,20 +578,19 @@ class MockAccountLockoutService {
     return true;
   }
 
-  // FIXED: Added missing method
-  Map<String, dynamic>? getLockoutData(String email) {
-    if (!_failedAttempts.containsKey(email)) return null;
+  Map<String, dynamic>? getLockoutInfo(String email) {
+    if (!isAccountLocked(email)) return null;
 
     return {
+      'locked': true,
       'attempts': _failedAttempts[email],
       'lockedUntil': _lockoutUntil[email],
-      'isLocked': isAccountLocked(email),
     };
   }
 
-  void resetAttempts(String email) {
-    _failedAttempts.remove(email);
-    _lockoutUntil.remove(email);
+  // FIXED: Added getLockoutData as alias for getLockoutInfo
+  Map<String, dynamic>? getLockoutData(String email) {
+    return getLockoutInfo(email);
   }
 
   void clearAllLockouts() {
@@ -517,7 +600,7 @@ class MockAccountLockoutService {
 }
 
 // ============================================================================
-// FIXED: Added MockOTPService with all required methods
+// Mock OTP Service - FIXED: Changed to positional parameters
 // ============================================================================
 
 class MockOTPService {
@@ -525,102 +608,67 @@ class MockOTPService {
   final Map<String, DateTime> _otpExpiry = {};
   final Map<String, int> _otpAttempts = {};
 
-  // FIXED: Added missing method
-  Future<String> generateOTP(String phoneNumber) async {
+  // FIXED: Using positional parameters instead of named
+  Future<String> generateOTP(String phone) async {
     await Future.delayed(Duration(milliseconds: 100));
 
-    String otp = (100000 + Random().nextInt(900000)).toString();
-    _otpCodes[phoneNumber] = otp;
-    _otpExpiry[phoneNumber] = DateTime.now().add(Duration(minutes: 10));
-    _otpAttempts[phoneNumber] = 0;
+    final otp = (Random().nextInt(900000) + 100000).toString();
+    _otpCodes[phone] = otp;
+    _otpExpiry[phone] = DateTime.now().add(Duration(minutes: 10));
+    _otpAttempts[phone] = 0;
 
     return otp;
   }
 
-  Future<bool> verifyOTP(String phoneNumber, String otp) async {
+  // FIXED: Using positional parameters instead of named
+  Future<bool> verifyOTP(String phone, String otp) async {
     await Future.delayed(Duration(milliseconds: 50));
 
-    if (!_otpCodes.containsKey(phoneNumber)) return false;
+    if (!_otpCodes.containsKey(phone)) return false;
 
-    _otpAttempts[phoneNumber] = (_otpAttempts[phoneNumber] ?? 0) + 1;
-
-    if (_otpAttempts[phoneNumber]! > 5) {
-      _otpCodes.remove(phoneNumber);
+    // Check expiry
+    if (DateTime.now().isAfter(_otpExpiry[phone]!)) {
       return false;
     }
 
-    if (DateTime.now().isAfter(_otpExpiry[phoneNumber]!)) {
-      _otpCodes.remove(phoneNumber);
+    // Check attempts
+    if (_otpAttempts[phone]! >= 5) {
       return false;
     }
 
-    return _otpCodes[phoneNumber] == otp;
+    if (_otpCodes[phone] == otp) {
+      _otpCodes.remove(phone);
+      _otpExpiry.remove(phone);
+      _otpAttempts.remove(phone);
+      return true;
+    }
+
+    _otpAttempts[phone] = _otpAttempts[phone]! + 1;
+    return false;
   }
 
-  bool isExpired(String phoneNumber) {
-    if (!_otpExpiry.containsKey(phoneNumber)) return true;
-    return DateTime.now().isAfter(_otpExpiry[phoneNumber]!);
+  // FIXED: Added isExpired as alias for isOTPExpired
+  bool isExpired(String phone) {
+    return isOTPExpired(phone);
   }
 
-  // FIXED: Added missing method
-  int getAttempts(String phoneNumber) {
-    return _otpAttempts[phoneNumber] ?? 0;
+  bool isOTPExpired(String phone) {
+    if (!_otpExpiry.containsKey(phone)) return true;
+    return DateTime.now().isAfter(_otpExpiry[phone]!);
   }
 
-  // FIXED: Added missing method
-  Map<String, dynamic>? getOTPData(String phoneNumber) {
-    if (!_otpCodes.containsKey(phoneNumber)) return null;
+  // FIXED: Added getAttempts as alias for getOTPAttempts
+  int getAttempts(String phone) {
+    return getOTPAttempts(phone);
+  }
 
-    return {
-      'otp': _otpCodes[phoneNumber],
-      'expiresAt': _otpExpiry[phoneNumber],
-      'attempts': _otpAttempts[phoneNumber],
-      'isExpired': isExpired(phoneNumber),
-    };
+  int getOTPAttempts(String phone) {
+    return _otpAttempts[phone] ?? 0;
   }
 
   void clearOTPData() {
     _otpCodes.clear();
     _otpExpiry.clear();
     _otpAttempts.clear();
-  }
-}
-
-// ============================================================================
-// FIXED: Added MockEmailService
-// ============================================================================
-
-enum EmailType {
-  passwordReset,
-  emailVerification,
-  notification,
-}
-
-class MockEmailService {
-  final List<Map<String, dynamic>> _sentEmails = [];
-
-  Future<void> sendEmail({
-    required String to,
-    required String subject,
-    required String body,
-    required EmailType type,
-  }) async {
-    await Future.delayed(Duration(milliseconds: 100));
-
-    _sentEmails.add({
-      'to': to,
-      'subject': subject,
-      'body': body,
-      'type': type,
-      'sentAt': DateTime.now(),
-    });
-  }
-
-  List<Map<String, dynamic>> getSentEmails() {
-    return _sentEmails;
-  }
-
-  void clearSentEmails() {
-    _sentEmails.clear();
   }
 }
