@@ -1,10 +1,11 @@
 // test/mocks/mock_services.dart
 // FIXED VERSION - Compatible with firebase_auth 5.7.0 and cloud_firestore 5.6.12
+// Includes all missing methods and services
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Mock User implementation
+/// Mock User implementation with ALL required methods
 class MockUser implements User {
   @override
   final String uid;
@@ -33,13 +34,14 @@ class MockUser implements User {
     this.emailVerified = false,
   });
 
-  // FIXED: Updated signature to match firebase_auth 5.7.0
+  // Email verification
   @override
   Future<void> sendEmailVerification(
       [ActionCodeSettings? actionCodeSettings]) async {
     emailVerified = true;
   }
 
+  // Basic operations
   @override
   Future<void> delete() async {}
 
@@ -51,6 +53,10 @@ class MockUser implements User {
     throw UnimplementedError();
   }
 
+  @override
+  Future<void> reload() async {}
+
+  // Linking methods
   @override
   Future<UserCredential> linkWithCredential(AuthCredential credential) async {
     throw UnimplementedError();
@@ -67,6 +73,18 @@ class MockUser implements User {
     throw UnimplementedError();
   }
 
+  // NEW: Web-specific linking methods (firebase_auth 5.7.0)
+  @override
+  Future<UserCredential> linkWithPopup(AuthProvider provider) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> linkWithRedirect(AuthProvider provider) async {
+    throw UnimplementedError();
+  }
+
+  // Reauthentication methods
   @override
   Future<UserCredential> reauthenticateWithCredential(
       AuthCredential credential) async {
@@ -79,18 +97,23 @@ class MockUser implements User {
     throw UnimplementedError();
   }
 
+  // NEW: Web-specific reauthentication methods (firebase_auth 5.7.0)
   @override
-  Future<void> reload() async {}
-
-  @override
-  Future<void> updateDisplayName(String? displayName) async {
-    // this.displayName = displayName; // Can't assign to final
+  Future<UserCredential> reauthenticateWithPopup(AuthProvider provider) async {
+    throw UnimplementedError();
   }
 
   @override
-  Future<void> updateEmail(String newEmail) async {
-    // this.email = newEmail; // Can't assign to final
+  Future<void> reauthenticateWithRedirect(AuthProvider provider) async {
+    throw UnimplementedError();
   }
+
+  // Update methods
+  @override
+  Future<void> updateDisplayName(String? displayName) async {}
+
+  @override
+  Future<void> updateEmail(String newEmail) async {}
 
   @override
   Future<void> updatePassword(String newPassword) async {}
@@ -99,9 +122,11 @@ class MockUser implements User {
   Future<void> updatePhoneNumber(PhoneAuthCredential phoneCredential) async {}
 
   @override
-  Future<void> updatePhotoURL(String? photoURL) async {
-    // this.photoURL = photoURL; // Can't assign to final
-  }
+  Future<void> updatePhotoURL(String? photoURL) async {}
+
+  // NEW: Update profile method (firebase_auth 5.7.0)
+  @override
+  Future<void> updateProfile({String? displayName, String? photoURL}) async {}
 
   @override
   Future<User> unlink(String providerId) async => this;
@@ -199,7 +224,6 @@ class MockAuthService {
   }
 
   Future<void> sendPasswordResetEmail({required String email}) async {
-    // Simulate sending reset email
     await Future.delayed(Duration(milliseconds: 100));
   }
 
@@ -228,11 +252,9 @@ class MockDocumentSnapshot implements DocumentSnapshot {
   @override
   bool get exists => _exists;
 
-  // FIXED: Changed from property to method to match cloud_firestore 5.6.12
   @override
   Map<String, dynamic>? data() => _data;
 
-  // FIXED: Changed parameter type from String to Object
   @override
   dynamic get(Object field) => _data?[field];
 
@@ -319,97 +341,273 @@ class MockFirestoreService {
   }
 }
 
+/// Account Lockout Data
+class LockoutData {
+  int attempts;
+  DateTime? lockedUntil;
+
+  LockoutData({required this.attempts, this.lockedUntil});
+}
+
 /// Mock Account Lockout Service
 class MockAccountLockoutService {
-  final Map<String, int> _failedAttempts = {};
-  final Map<String, DateTime> _lockouts = {};
+  final Map<String, LockoutData> _lockouts = {};
 
-  bool isLocked(String email) {
+  bool isAccountLocked(String email) {
     if (!_lockouts.containsKey(email)) return false;
 
-    final lockoutTime = _lockouts[email]!;
-    if (DateTime.now().isAfter(lockoutTime)) {
+    final lockoutData = _lockouts[email]!;
+    if (lockoutData.lockedUntil == null) return false;
+
+    if (DateTime.now().isAfter(lockoutData.lockedUntil!)) {
       _lockouts.remove(email);
-      _failedAttempts.remove(email);
       return false;
     }
     return true;
   }
 
-  void recordFailedAttempt(String email) {
-    _failedAttempts[email] = (_failedAttempts[email] ?? 0) + 1;
+  Future<void> recordFailedLogin(String email) async {
+    if (!_lockouts.containsKey(email)) {
+      _lockouts[email] = LockoutData(attempts: 0);
+    }
 
-    if (_failedAttempts[email]! >= 5) {
-      _lockouts[email] = DateTime.now().add(Duration(minutes: 15));
+    _lockouts[email]!.attempts++;
+
+    if (_lockouts[email]!.attempts >= 5) {
+      _lockouts[email]!.lockedUntil = DateTime.now().add(Duration(minutes: 15));
     }
   }
 
+  LockoutData? getLockoutData(String email) {
+    return _lockouts[email];
+  }
+
   void clearLockout(String email) {
-    _failedAttempts.remove(email);
     _lockouts.remove(email);
   }
 
   void clearAllLockouts() {
-    _failedAttempts.clear();
     _lockouts.clear();
   }
 
   int getFailedAttempts(String email) {
-    return _failedAttempts[email] ?? 0;
+    return _lockouts[email]?.attempts ?? 0;
   }
 }
 
-/// Mock OTP Service
-class MockOTPService {
-  final Map<String, String> _otpCodes = {};
-  final Map<String, DateTime> _otpExpiry = {};
-  final Map<String, int> _otpAttempts = {};
+/// OTP Data
+class OTPData {
+  String code;
+  DateTime generatedAt;
+  int attempts;
+  bool isLocked;
 
-  String generateOTP(String phone) {
+  OTPData({
+    required this.code,
+    required this.generatedAt,
+    this.attempts = 0,
+    this.isLocked = false,
+  });
+}
+
+/// Mock OTP Service with ASYNC methods
+class MockOTPService {
+  final Map<String, OTPData> _otpData = {};
+
+  // FIXED: Made async to match usage in tests
+  Future<String> generateOTP(String phone) async {
     final otp = (DateTime.now().millisecondsSinceEpoch % 1000000)
         .toString()
         .padLeft(6, '0');
-    _otpCodes[phone] = otp;
-    _otpExpiry[phone] = DateTime.now().add(Duration(minutes: 10));
-    _otpAttempts[phone] = 0;
+
+    _otpData[phone] = OTPData(
+      code: otp,
+      generatedAt: DateTime.now(),
+      attempts: 0,
+      isLocked: false,
+    );
+
     return otp;
   }
 
-  bool verifyOTP(String phone, String otp) {
-    if (!_otpCodes.containsKey(phone)) return false;
+  Future<bool> verifyOTP(String phone, String otp) async {
+    if (!_otpData.containsKey(phone)) return false;
 
-    // Check expiry
-    if (DateTime.now().isAfter(_otpExpiry[phone]!)) {
+    final data = _otpData[phone]!;
+
+    if (data.isLocked) return false;
+
+    if (isOTPExpired(phone)) return false;
+
+    data.attempts++;
+
+    if (data.attempts > 5) {
+      data.isLocked = true;
       return false;
     }
 
-    // Check attempts
-    _otpAttempts[phone] = (_otpAttempts[phone] ?? 0) + 1;
-    if (_otpAttempts[phone]! > 5) {
-      return false;
-    }
-
-    return _otpCodes[phone] == otp;
+    return data.code == otp;
   }
 
-  bool isExpired(String phone) {
-    if (!_otpExpiry.containsKey(phone)) return true;
-    return DateTime.now().isAfter(_otpExpiry[phone]!);
+  bool isOTPExpired(String phone) {
+    if (!_otpData.containsKey(phone)) return true;
+
+    final data = _otpData[phone]!;
+    final expiryTime = data.generatedAt.add(Duration(minutes: 10));
+
+    return DateTime.now().isAfter(expiryTime);
+  }
+
+  bool isExpired(String phone) => isOTPExpired(phone);
+
+  OTPData? getOTPData(String phone) {
+    return _otpData[phone];
   }
 
   void clearOTP(String phone) {
-    _otpCodes.remove(phone);
-    _otpExpiry.remove(phone);
-    _otpAttempts.remove(phone);
+    _otpData.remove(phone);
   }
 
   void clearOTPData() {
-    _otpCodes.clear();
-    _otpExpiry.clear();
-    _otpAttempts.clear();
+    _otpData.clear();
   }
 
   int getAttempts(String phone) {
-    return _otpAttempts[phone] ?? 0;
+    return _otpData[phone]?.attempts ?? 0;
+  }
+}
+
+/// Email Type Enum
+enum EmailType {
+  verification,
+  passwordReset,
+  lockout,
+  twoFactor,
+  general,
+}
+
+/// Email Record
+class EmailRecord {
+  final String recipient;
+  final EmailType type;
+  final String subject;
+  final DateTime sentAt;
+
+  EmailRecord({
+    required this.recipient,
+    required this.type,
+    required this.subject,
+    required this.sentAt,
+  });
+}
+
+/// Mock Email Service
+class MockEmailService {
+  final List<EmailRecord> _sentEmails = [];
+
+  Future<void> sendVerificationEmail({
+    required String email,
+    required String verificationLink,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    _sentEmails.add(EmailRecord(
+      recipient: email,
+      type: EmailType.verification,
+      subject: 'Verify your email',
+      sentAt: DateTime.now(),
+    ));
+  }
+
+  Future<void> sendPasswordResetEmail({
+    required String email,
+    required String resetLink,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    _sentEmails.add(EmailRecord(
+      recipient: email,
+      type: EmailType.passwordReset,
+      subject: 'Reset your password',
+      sentAt: DateTime.now(),
+    ));
+  }
+
+  Future<void> sendLockoutNotification({
+    required String email,
+    required DateTime lockedUntil,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    _sentEmails.add(EmailRecord(
+      recipient: email,
+      type: EmailType.lockout,
+      subject: 'Account temporarily locked',
+      sentAt: DateTime.now(),
+    ));
+  }
+
+  List<EmailRecord> getSentEmails({String? recipient, EmailType? type}) {
+    var emails = _sentEmails;
+
+    if (recipient != null) {
+      emails = emails.where((e) => e.recipient == recipient).toList();
+    }
+
+    if (type != null) {
+      emails = emails.where((e) => e.type == type).toList();
+    }
+
+    return emails;
+  }
+
+  void clearSentEmails() {
+    _sentEmails.clear();
+  }
+}
+
+/// Mock Google Auth Service
+class MockGoogleAuthService {
+  bool _isSignedIn = false;
+  MockUser? _currentUser;
+
+  Future<MockUserCredential?> signInWithGoogle() async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    final user = MockUser(
+      uid: 'google_uid_${DateTime.now().millisecondsSinceEpoch}',
+      email: 'testuser@gmail.com',
+      displayName: 'Test User',
+      emailVerified: true,
+    );
+
+    _currentUser = user;
+    _isSignedIn = true;
+
+    return MockUserCredential(user: user);
+  }
+
+  Future<void> signOut() async {
+    _isSignedIn = false;
+    _currentUser = null;
+  }
+
+  bool get isSignedIn => _isSignedIn;
+  MockUser? get currentUser => _currentUser;
+}
+
+/// Validation helpers
+class ValidationHelper {
+  static bool isValidEmail(String email) {
+    if (email.length > 254) return false;
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+
+  static bool isStrongPassword(String password) {
+    return password.length >= 6;
+  }
+
+  static bool isValidPhone(String phone) {
+    return RegExp(r'^\+94\d{9}$').hasMatch(phone);
   }
 }
