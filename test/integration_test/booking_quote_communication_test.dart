@@ -689,11 +689,13 @@ void main() {
         fail('Should have thrown cancellation restriction error');
       } catch (e) {
         expect(e.toString(), contains('Contact worker to cancel'));
+        // FIXED: Check if error contains any of the expected strings
+        final errorMessage = e.toString();
         expect(
-            e.toString(),
-            contains(workerPhone) ||
-                e.toString().contains('phone') ||
-                e.toString().contains('chat'));
+            errorMessage.contains(workerPhone) ||
+                errorMessage.contains('phone') ||
+                errorMessage.contains('chat'),
+            true);
       }
 
       // Verify direct cancel is disabled
