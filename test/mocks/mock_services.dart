@@ -1,289 +1,151 @@
 // test/mocks/mock_services.dart
-// COMPLETELY FIXED VERSION - All validation and missing methods added
+// Complete Mock Services for All Test Cases
+// This file contains all mock implementations for testing
 
-import 'package:flutter_test/flutter_test.dart';
+import 'dart:async';
+import 'dart:math';
 
-class OTPData {
-  final String code;
-  final DateTime generatedAt;
-  DateTime expiresAt;
-  int attempts;
-  bool isLocked;
-  bool used;
+// ============================================================================
+// Mock User Credential & User Classes
+// ============================================================================
 
-  OTPData({
-    required this.code,
-    required this.generatedAt,
-    required this.expiresAt,
-    this.attempts = 0,
-    this.isLocked = false,
-    this.used = false,
+class MockUser {
+  final String uid;
+  final String? email;
+  final bool emailVerified;
+
+  MockUser({
+    required this.uid,
+    this.email,
+    this.emailVerified = false,
   });
 }
 
-/// FIXED: Enhanced OTP Service
-class MockOTPService {
-  final Map<String, OTPData> _otpData = {};
+class MockUserCredential {
+  final MockUser? user;
 
-  Future<String> generateOTP(String phoneNumber) async {
-    await Future.delayed(Duration(milliseconds: 2));
-
-    final otp = _generateSixDigitCode();
-    _otpData[phoneNumber] = OTPData(
-      code: otp,
-      generatedAt: DateTime.now(),
-      expiresAt: DateTime.now().add(Duration(minutes: 10)),
-      attempts: 0,
-      isLocked: false,
-      used: false,
-    );
-
-    return otp;
-  }
-
-  Future<bool> verifyOTP(String phoneNumber, String code) async {
-    await Future.delayed(Duration(milliseconds: 4));
-
-    if (!_otpData.containsKey(phoneNumber)) return false;
-
-    final data = _otpData[phoneNumber]!;
-
-    if (data.used) return false;
-    if (data.isLocked) return false;
-    if (DateTime.now().isAfter(data.expiresAt)) return false;
-
-    if (data.code != code) {
-      data.attempts++;
-      if (data.attempts >= 5) {
-        data.isLocked = true;
-      }
-      return false;
-    }
-
-    data.used = true;
-    return true;
-  }
-
-  bool isExpired(String phoneNumber) {
-    if (!_otpData.containsKey(phoneNumber)) return true;
-    final data = _otpData[phoneNumber]!;
-    return DateTime.now().isAfter(data.expiresAt);
-  }
-
-  int getAttempts(String phoneNumber) {
-    if (!_otpData.containsKey(phoneNumber)) return 0;
-    return _otpData[phoneNumber]!.attempts;
-  }
-
-  OTPData? getOTPData(String phoneNumber) {
-    return _otpData[phoneNumber];
-  }
-
-  void clearOTPData() {
-    _otpData.clear();
-  }
-
-  String _generateSixDigitCode() {
-    return '123456';
-  }
+  MockUserCredential({this.user});
 }
 
-/// FIXED: ValidationHelper with STRICT validation
-class ValidationHelper {
-  /// FIXED: Strict email validation - requires proper domain with TLD
-  static bool isValidEmail(String email) {
-    if (email.isEmpty) return false;
-    if (email.length > 254) return false;
+// ============================================================================
+// Mock Document Classes
+// ============================================================================
 
-    // Check for SQL injection patterns
-    final sqlPatterns = [
-      "'",
-      '--',
-      ';',
-      '/*',
-      '*/',
-      'DROP',
-      'SELECT',
-      'INSERT',
-      'UPDATE',
-      'DELETE'
-    ];
-    if (sqlPatterns.any(
-        (pattern) => email.toUpperCase().contains(pattern.toUpperCase()))) {
-      return false;
-    }
+class MockDocumentSnapshot {
+  final String id;
+  final Map<String, dynamic>? _data;
 
-    // Check for XSS patterns
-    if (containsXSS(email)) return false;
+  MockDocumentSnapshot({required this.id, Map<String, dynamic>? data})
+      : _data = data;
 
-    // Reject emails with double dots
-    if (email.contains('..')) return false;
+  bool get exists => _data != null;
 
-    // FIXED: Stricter regex - requires domain with TLD (at least 2 characters)
-    // This will reject "user@domain" and accept "user@domain.com"
-    final emailRegex = RegExp(
-        r'^[a-zA-Z0-9.!#$%&*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$');
-
-    return emailRegex.hasMatch(email);
-  }
-
-  /// FIXED: Strong password validation - properly rejects weak passwords
-  static bool isStrongPassword(String password) {
-    // Reject empty passwords
-    if (password.isEmpty) return false;
-
-    // Reject passwords shorter than 6 characters
-    if (password.length < 6) return false;
-
-    // FIXED: Explicitly reject common weak passwords
-    final weakPasswords = [
-      '123',
-      '1234',
-      '12345',
-      '123456',
-      'abc',
-      'abcd',
-      'abcde',
-      'abcdef',
-      'password',
-      'Password',
-      'PASSWORD',
-      '111111',
-      '000000',
-      'qwerty'
-    ];
-
-    if (weakPasswords.contains(password)) return false;
-
-    return true;
-  }
-
-  static bool isValidPhone(String phone) {
-    return RegExp(r'^\+94\d{9}$').hasMatch(phone);
-  }
-
-  static bool containsXSS(String input) {
-    final xssPatterns = [
-      '<script',
-      'javascript:',
-      'onerror=',
-      'onload=',
-      '<img',
-      '<svg',
-      '<iframe',
-      '<body',
-    ];
-
-    final lowerInput = input.toLowerCase();
-    return xssPatterns.any((pattern) => lowerInput.contains(pattern));
-  }
-
-  static String sanitizeForXSS(String input) {
-    return input
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#x27;')
-        .replaceAll('/', '&#x2F;');
-  }
+  Map<String, dynamic>? data() => _data;
 }
 
-/// Mock Authentication Service
+// ============================================================================
+// 1. Mock Authentication Service
+// ============================================================================
+
 class MockAuthService {
-  final Map<String, UserCredential> _users = {};
-  UserCredential? _currentUser;
+  final Map<String, MockUser> _users = {};
+  final Map<String, String> _passwords = {};
+  final Map<String, bool> _verifiedEmails = {};
+  MockUser? _currentUser;
 
-  UserCredential? get currentUser => _currentUser;
-
-  Future<UserCredential?> createUserWithEmailAndPassword({
+  Future<MockUserCredential?> createUserWithEmailAndPassword({
     required String email,
     required String password,
   }) async {
-    await Future.delayed(Duration(milliseconds: 10));
+    await Future.delayed(Duration(milliseconds: 100));
 
     if (_users.containsKey(email)) {
-      throw Exception('Email already in use');
+      throw Exception('Email already exists');
     }
 
-    final credential = UserCredential(
-      user: User(
-        uid: 'user_${DateTime.now().millisecondsSinceEpoch}',
-        email: email,
-      ),
-    );
+    final uid =
+        'user_${_users.length + 1}_${DateTime.now().millisecondsSinceEpoch}';
+    final user = MockUser(uid: uid, email: email, emailVerified: false);
 
-    _users[email] = credential;
-    _currentUser = credential;
+    _users[email] = user;
+    _passwords[email] = password;
+    _verifiedEmails[email] = false;
+    _currentUser = user;
 
-    return credential;
+    return MockUserCredential(user: user);
   }
 
-  Future<UserCredential> signInWithEmailAndPassword({
+  Future<MockUserCredential?> signInWithEmailAndPassword({
     required String email,
     required String password,
   }) async {
-    await Future.delayed(Duration(milliseconds: 10));
+    await Future.delayed(Duration(milliseconds: 100));
 
     if (!_users.containsKey(email)) {
-      throw Exception('Invalid credentials');
+      throw Exception('User not found');
+    }
+
+    if (_passwords[email] != password) {
+      throw Exception('Invalid password');
     }
 
     _currentUser = _users[email];
-    return _users[email]!;
+    return MockUserCredential(user: _users[email]);
+  }
+
+  Future<void> signOut() async {
+    await Future.delayed(Duration(milliseconds: 50));
+    _currentUser = null;
   }
 
   Future<void> sendPasswordResetEmail({required String email}) async {
     await Future.delayed(Duration(milliseconds: 100));
+
+    if (!_users.containsKey(email)) {
+      throw Exception('User not found');
+    }
   }
 
-  Future<void> signOut() async {
+  Future<void> sendEmailVerification() async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    if (_currentUser != null && _currentUser!.email != null) {
+      _verifiedEmails[_currentUser!.email!] = true;
+    }
+  }
+
+  MockUser? get currentUser => _currentUser;
+
+  void clearAll() {
+    _users.clear();
+    _passwords.clear();
+    _verifiedEmails.clear();
     _currentUser = null;
   }
 }
 
-class UserCredential {
-  final User? user;
+// ============================================================================
+// 2. Mock Firestore Service
+// ============================================================================
 
-  UserCredential({this.user});
-}
-
-class User {
-  final String uid;
-  final String? email;
-
-  User({required this.uid, this.email});
-}
-
-/// Mock Google Auth Service
-class MockGoogleAuthService {
-  Future<UserCredential?> signInWithGoogle() async {
-    await Future.delayed(Duration(milliseconds: 150));
-
-    return UserCredential(
-      user: User(
-        uid: 'google_user_${DateTime.now().millisecondsSinceEpoch}',
-        email: 'testuser@gmail.com',
-      ),
-    );
-  }
-}
-
-/// FIXED: Mock Firestore Service with queryCollection method
 class MockFirestoreService {
-  final Map<String, Map<String, Map<String, dynamic>>> _data = {};
+  final Map<String, Map<String, MockDocumentSnapshot>> _collections = {};
 
   Future<void> setDocument({
     required String collection,
     required String documentId,
     required Map<String, dynamic> data,
   }) async {
-    await Future.delayed(Duration(milliseconds: 1));
+    await Future.delayed(Duration(milliseconds: 50));
 
-    if (!_data.containsKey(collection)) {
-      _data[collection] = {};
+    if (!_collections.containsKey(collection)) {
+      _collections[collection] = {};
     }
 
-    _data[collection]![documentId] = Map.from(data);
+    _collections[collection]![documentId] = MockDocumentSnapshot(
+      id: documentId,
+      data: Map<String, dynamic>.from(data),
+    );
   }
 
   Future<void> updateDocument({
@@ -291,187 +153,604 @@ class MockFirestoreService {
     required String documentId,
     required Map<String, dynamic> data,
   }) async {
-    await Future.delayed(Duration(milliseconds: 1));
+    await Future.delayed(Duration(milliseconds: 50));
 
-    if (_data.containsKey(collection) &&
-        _data[collection]!.containsKey(documentId)) {
-      _data[collection]![documentId]!.addAll(data);
+    if (!_collections.containsKey(collection) ||
+        !_collections[collection]!.containsKey(documentId)) {
+      throw Exception('Document not found');
     }
+
+    final existingData = _collections[collection]![documentId]!.data()!;
+    final updatedData = Map<String, dynamic>.from(existingData);
+
+    // Handle nested field updates (e.g., 'profile.bio')
+    data.forEach((key, value) {
+      if (key.contains('.')) {
+        final parts = key.split('.');
+        Map<String, dynamic> current = updatedData;
+
+        for (int i = 0; i < parts.length - 1; i++) {
+          if (!current.containsKey(parts[i])) {
+            current[parts[i]] = {};
+          }
+          current = current[parts[i]] as Map<String, dynamic>;
+        }
+
+        current[parts.last] = value;
+      } else {
+        updatedData[key] = value;
+      }
+    });
+
+    _collections[collection]![documentId] = MockDocumentSnapshot(
+      id: documentId,
+      data: updatedData,
+    );
   }
 
-  Future<DocumentSnapshot> getDocument({
+  Future<MockDocumentSnapshot> getDocument({
     required String collection,
     required String documentId,
   }) async {
-    await Future.delayed(Duration(milliseconds: 1));
+    await Future.delayed(Duration(milliseconds: 30));
 
-    if (_data.containsKey(collection) &&
-        _data[collection]!.containsKey(documentId)) {
-      return DocumentSnapshot(
-        exists: true,
-        data: _data[collection]![documentId],
-      );
+    if (!_collections.containsKey(collection) ||
+        !_collections[collection]!.containsKey(documentId)) {
+      return MockDocumentSnapshot(id: documentId, data: null);
     }
 
-    return DocumentSnapshot(exists: false, data: null);
+    return _collections[collection]![documentId]!;
   }
 
-  /// FIXED: Added queryCollection method for performance tests
-  Future<List<DocumentSnapshot>> queryCollection({
+  Future<Map<String, dynamic>> getDocumentData({
     required String collection,
-    String? whereField,
-    dynamic whereValue,
+    required String documentId,
   }) async {
-    await Future.delayed(Duration(milliseconds: 2));
+    final doc = await getDocument(
+      collection: collection,
+      documentId: documentId,
+    );
 
-    if (!_data.containsKey(collection)) {
+    if (!doc.exists) {
+      throw Exception('Document not found');
+    }
+
+    return doc.data()!;
+  }
+
+  Future<List<MockDocumentSnapshot>> getCollection({
+    required String collection,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_collections.containsKey(collection)) {
       return [];
     }
 
-    final results = <DocumentSnapshot>[];
+    return _collections[collection]!.values.toList();
+  }
 
-    for (var entry in _data[collection]!.entries) {
-      final docId = entry.key;
-      final docData = entry.value;
+  Future<void> deleteDocument({
+    required String collection,
+    required String documentId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 30));
 
-      // If no filter, return all documents
-      if (whereField == null) {
-        results.add(DocumentSnapshot(
-          exists: true,
-          data: Map.from(docData),
-        ));
-        continue;
-      }
-
-      // Apply filter
-      if (docData.containsKey(whereField) &&
-          docData[whereField] == whereValue) {
-        results.add(DocumentSnapshot(
-          exists: true,
-          data: Map.from(docData),
-        ));
-      }
+    if (_collections.containsKey(collection)) {
+      _collections[collection]!.remove(documentId);
     }
-
-    return results;
   }
 
   void clearData() {
-    _data.clear();
+    _collections.clear();
   }
 }
 
-class DocumentSnapshot {
-  final bool exists;
-  final Map<String, dynamic>? _data;
+// ============================================================================
+// 3. Mock Storage Service
+// ============================================================================
 
-  DocumentSnapshot({required this.exists, Map<String, dynamic>? data})
-      : _data = data;
+class MockStorageService {
+  final Map<String, String> _storage = {};
+  int _uploadCounter = 0;
 
-  Map<String, dynamic>? data() => _data;
-}
+  Future<String> uploadFile({
+    required String filePath,
+    required dynamic fileData,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
 
-/// Account lockout service
-class MockAccountLockoutService {
-  final Map<String, LockoutData> _lockouts = {};
+    _uploadCounter++;
+    String url = 'https://storage.mock.fixmate.com/$filePath?v=$_uploadCounter';
+    _storage[filePath] = url;
 
-  Future<void> recordFailedLogin(String email) async {
-    if (!_lockouts.containsKey(email)) {
-      _lockouts[email] = LockoutData(
-        email: email,
-        attempts: 0,
-        lastAttempt: DateTime.now(),
-      );
-    }
-
-    final data = _lockouts[email]!;
-    data.attempts++;
-    data.lastAttempt = DateTime.now();
-
-    if (data.attempts >= 5) {
-      data.lockedUntil = DateTime.now().add(Duration(minutes: 15));
-    }
+    return url;
   }
 
-  bool isAccountLocked(String email) {
-    if (!_lockouts.containsKey(email)) return false;
+  Future<void> deleteFile(String filePath) async {
+    await Future.delayed(Duration(milliseconds: 50));
+    _storage.remove(filePath);
+  }
 
-    final data = _lockouts[email]!;
-    if (data.lockedUntil == null) return false;
+  String? getFileUrl(String filePath) {
+    return _storage[filePath];
+  }
 
-    if (DateTime.now().isBefore(data.lockedUntil!)) {
+  bool fileExists(String filePath) {
+    return _storage.containsKey(filePath);
+  }
+
+  void clearStorage() {
+    _storage.clear();
+    _uploadCounter = 0;
+  }
+
+  int get uploadCount => _uploadCounter;
+}
+
+// ============================================================================
+// 4. Mock ML Service
+// ============================================================================
+
+class MockMLService {
+  final Random _random = Random();
+
+  Future<Map<String, dynamic>> predictServiceType({
+    required String description,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 200));
+
+    String lowerDesc = description.toLowerCase();
+
+    // Plumbing detection
+    if (lowerDesc.contains('leak') ||
+        lowerDesc.contains('pipe') ||
+        lowerDesc.contains('sink') ||
+        lowerDesc.contains('plumb') ||
+        lowerDesc.contains('water') ||
+        lowerDesc.contains('drain')) {
+      return {
+        'service_type': 'Plumbing',
+        'confidence': 0.88 + _random.nextDouble() * 0.12,
+        'status': 'success',
+      };
+    }
+
+    // Electrical detection
+    if (lowerDesc.contains('electric') ||
+        lowerDesc.contains('elektrical') ||
+        lowerDesc.contains('wire') ||
+        lowerDesc.contains('wirring') ||
+        lowerDesc.contains('outlet') ||
+        lowerDesc.contains('circuit') ||
+        lowerDesc.contains('power') ||
+        lowerDesc.contains('switch')) {
+      return {
+        'service_type': 'Electrical',
+        'confidence': 0.85 + _random.nextDouble() * 0.15,
+        'status': 'success',
+      };
+    }
+
+    // AC Repair detection
+    if (lowerDesc.contains('ac') ||
+        lowerDesc.contains('cooling') ||
+        lowerDesc.contains('air condition') ||
+        lowerDesc.contains('hvac')) {
+      return {
+        'service_type': 'AC Repair',
+        'confidence': 0.90 + _random.nextDouble() * 0.10,
+        'status': 'success',
+      };
+    }
+
+    // Carpentry detection
+    if (lowerDesc.contains('wood') ||
+        lowerDesc.contains('door') ||
+        lowerDesc.contains('window') ||
+        lowerDesc.contains('furniture') ||
+        lowerDesc.contains('carpenter')) {
+      return {
+        'service_type': 'Carpentry',
+        'confidence': 0.82 + _random.nextDouble() * 0.18,
+        'status': 'success',
+      };
+    }
+
+    // Default
+    return {
+      'service_type': 'General Maintenance',
+      'confidence': 0.60 + _random.nextDouble() * 0.15,
+      'status': 'success',
+    };
+  }
+
+  Future<List<Map<String, dynamic>>> predictMultipleServices({
+    required String description,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 300));
+
+    List<Map<String, dynamic>> predictions = [];
+    String lowerDesc = description.toLowerCase();
+
+    if (lowerDesc.contains('ac') || lowerDesc.contains('cooling')) {
+      predictions.add({
+        'service_type': 'AC Repair',
+        'confidence': 0.75 + _random.nextDouble() * 0.10,
+      });
+    }
+
+    if (lowerDesc.contains('leak') || lowerDesc.contains('pipe')) {
+      predictions.add({
+        'service_type': 'Plumbing',
+        'confidence': 0.80 + _random.nextDouble() * 0.10,
+      });
+    }
+
+    if (lowerDesc.contains('electric') || lowerDesc.contains('wire')) {
+      predictions.add({
+        'service_type': 'Electrical',
+        'confidence': 0.78 + _random.nextDouble() * 0.12,
+      });
+    }
+
+    return predictions;
+  }
+
+  Future<List<Map<String, dynamic>>> findWorkers({
+    required String serviceType,
+    required String location,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 150));
+
+    return [
+      {
+        'worker_id': 'HM_1234',
+        'worker_name': 'John ${serviceType.split(' ')[0]}',
+        'service_type': serviceType,
+        'rating': 4.5,
+        'location': location,
+        'daily_rate': 3500,
+        'is_online': true,
+      },
+      {
+        'worker_id': 'HM_5678',
+        'worker_name': 'Jane Expert',
+        'service_type': serviceType,
+        'rating': 4.8,
+        'location': location,
+        'daily_rate': 4200,
+        'is_online': true,
+      },
+      {
+        'worker_id': 'HM_9012',
+        'worker_name': 'Mike Professional',
+        'service_type': serviceType,
+        'rating': 4.3,
+        'location': location,
+        'daily_rate': 3000,
+        'is_online': false,
+      },
+    ];
+  }
+
+  Future<List<Map<String, dynamic>>> findWorkersWithAnswers({
+    required String serviceType,
+    required Map<String, dynamic> answers,
+    required String location,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 200));
+
+    return [
+      {
+        'worker_id': 'HM_1234',
+        'worker_name': 'Expert ${serviceType.split(' ')[0]}',
+        'service_type': serviceType,
+        'rating': 4.7,
+        'location': location,
+        'specialization': answers['indoor_outdoor'] ?? 'General',
+        'daily_rate': 4000,
+      },
+    ];
+  }
+
+  Future<List<Map<String, dynamic>>> searchWorkersWithFilters({
+    required String serviceType,
+    required Map<String, dynamic> filters,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 250));
+
+    List<Map<String, dynamic>> workers = [
+      {
+        'worker_id': 'HM_2345',
+        'worker_name': 'Filtered Worker 1',
+        'service_type': serviceType,
+        'location': filters['location'],
+        'rating': 4.5,
+        'daily_rate': 3500,
+        'is_online': true,
+      },
+      {
+        'worker_id': 'HM_3456',
+        'worker_name': 'Filtered Worker 2',
+        'service_type': serviceType,
+        'location': filters['location'],
+        'rating': 4.8,
+        'daily_rate': 4500,
+        'is_online': true,
+      },
+    ];
+
+    // Apply filters
+    return workers.where((worker) {
+      if (filters.containsKey('minRating') &&
+          worker['rating'] < filters['minRating']) {
+        return false;
+      }
+      if (filters.containsKey('minPrice') &&
+          worker['daily_rate'] < filters['minPrice']) {
+        return false;
+      }
+      if (filters.containsKey('maxPrice') &&
+          worker['daily_rate'] > filters['maxPrice']) {
+        return false;
+      }
+      if (filters.containsKey('availability') &&
+          filters['availability'] == 'online' &&
+          !worker['is_online']) {
+        return false;
+      }
       return true;
-    }
-
-    data.attempts = 0;
-    data.lockedUntil = null;
-    return false;
+    }).toList();
   }
 
-  LockoutData? getLockoutData(String email) {
-    return _lockouts[email];
+  Future<Map<String, dynamic>> analyzeWithLocation({
+    required String description,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 300));
+
+    // Extract location
+    String? location;
+    if (description.toLowerCase().contains('negombo')) {
+      location = 'Negombo';
+    } else if (description.toLowerCase().contains('colombo')) {
+      location = 'Colombo';
+    } else if (description.toLowerCase().contains('kandy')) {
+      location = 'Kandy';
+    }
+
+    var prediction = await predictServiceType(description: description);
+    var workers = await findWorkers(
+      serviceType: prediction['service_type'],
+      location: location ?? 'Colombo',
+    );
+
+    // Add distance to workers
+    for (var worker in workers) {
+      worker['distance_km'] = 15.5 + (workers.indexOf(worker) * 5);
+    }
+
+    return {
+      'location': location ?? 'Unknown',
+      'service_type': prediction['service_type'],
+      'confidence': prediction['confidence'],
+      'workers': workers,
+    };
+  }
+
+  Future<List<Map<String, dynamic>>> generateQuestionnaire({
+    required String serviceType,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    if (serviceType == 'Electrical') {
+      return [
+        {'question': 'Indoor or outdoor wiring?', 'type': 'choice'},
+        {'question': 'Number of outlets needed?', 'type': 'number'},
+        {'question': 'Circuit breaker issues?', 'type': 'boolean'},
+        {'question': 'Voltage requirements?', 'type': 'choice'},
+      ];
+    } else if (serviceType == 'Plumbing') {
+      return [
+        {'question': 'Type of plumbing issue?', 'type': 'choice'},
+        {'question': 'Is it an emergency?', 'type': 'boolean'},
+        {'question': 'Location of the issue?', 'type': 'text'},
+        {'question': 'How long has the issue persisted?', 'type': 'choice'},
+      ];
+    } else if (serviceType == 'AC Repair') {
+      return [
+        {'question': 'Type of AC unit?', 'type': 'choice'},
+        {'question': 'Age of the unit?', 'type': 'number'},
+        {'question': 'Is it cooling at all?', 'type': 'boolean'},
+      ];
+    }
+
+    return [];
+  }
+
+  Future<Map<String, dynamic>> searchWorkersWithFallback({
+    required String description,
+    required String location,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 200));
+
+    // Check if rare service
+    if (description.toLowerCase().contains('violin') ||
+        description.toLowerCase().contains('rare') ||
+        description.toLowerCase().contains('unusual')) {
+      return {
+        'workers': [],
+        'message':
+            'No workers found. Try nearby areas or different service type',
+        'suggestions': [
+          'Expand search radius to 50km',
+          'Try "Musical Instrument Repair"',
+          'Browse all service categories',
+          'Contact customer support for assistance',
+        ],
+      };
+    }
+
+    // Otherwise return normal results
+    var workers = await findWorkers(
+      serviceType: 'General Maintenance',
+      location: location,
+    );
+
+    return {
+      'workers': workers,
+      'message': '',
+      'suggestions': [],
+    };
+  }
+}
+
+// ============================================================================
+// 5. Mock OpenAI Service
+// ============================================================================
+
+class MockOpenAIService {
+  Future<String> analyzeImage({
+    required String imageUrl,
+    String? prompt,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 500));
+
+    // Simulate AI analysis based on image URL
+    if (imageUrl.contains('pipe') || imageUrl.contains('broken')) {
+      return 'Plumbing issue detected - Broken water pipe. The pipe appears to have a crack causing water leakage. This is a common issue that can lead to water damage if not addressed quickly. Recommended action: Contact a licensed plumber for pipe repair or replacement. Estimated time: 2-3 hours.';
+    }
+
+    if (imageUrl.contains('electric') || imageUrl.contains('wire')) {
+      return 'Electrical issue detected - Exposed wiring or faulty outlet. This could be a safety hazard. Recommended action: Contact a licensed electrician immediately.';
+    }
+
+    if (imageUrl.contains('ac') || imageUrl.contains('cooling')) {
+      return 'AC unit issue detected - The air conditioning system appears to have a malfunction. Recommended action: Contact an HVAC technician for diagnosis and repair.';
+    }
+
+    return 'General maintenance issue detected. The image shows some wear and tear that may require professional attention. Please provide more details for accurate diagnosis.';
+  }
+
+  Future<String> analyzeImageQuality({
+    required String imageUrl,
+    required double qualityScore,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 400));
+
+    if (qualityScore < 0.3) {
+      return 'Image quality too low. Please upload a clearer photo for accurate analysis. Try taking a photo in better lighting and hold the camera steady.';
+    } else if (qualityScore < 0.6) {
+      return 'Image quality is acceptable but could be better. Based on what I can see, this appears to be a maintenance issue. For more accurate diagnosis, please upload a clearer image with better focus and lighting.';
+    }
+
+    return 'Clear image detected. Analyzing the issue in detail...';
+  }
+
+  Future<String> analyzeTextDescription({
+    required String description,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 300));
+
+    if (description.length < 10 ||
+        description.toLowerCase() == 'fix my house' ||
+        description.toLowerCase() == 'help' ||
+        description.toLowerCase() == 'repair') {
+      return 'What specifically needs fixing? Please provide more details such as:\n'
+          '- Plumbing (leaks, clogs, pipe issues)\n'
+          '- Electrical (wiring, outlets, switches)\n'
+          '- Carpentry (doors, windows, furniture)\n'
+          '- AC/Cooling issues\n'
+          '- Or describe your issue in more detail';
+    }
+
+    return 'Thank you for the details. Let me analyze your issue and find the best workers to help you...';
+  }
+}
+
+// ============================================================================
+// 6. Mock Account Lockout Service
+// ============================================================================
+
+class MockAccountLockoutService {
+  final Map<String, int> _failedAttempts = {};
+  final Map<String, DateTime> _lockoutUntil = {};
+
+  void recordFailedAttempt(String email) {
+    _failedAttempts[email] = (_failedAttempts[email] ?? 0) + 1;
+
+    if (_failedAttempts[email]! >= 5) {
+      _lockoutUntil[email] = DateTime.now().add(Duration(minutes: 30));
+    }
+  }
+
+  bool isLocked(String email) {
+    if (!_lockoutUntil.containsKey(email)) return false;
+
+    if (DateTime.now().isAfter(_lockoutUntil[email]!)) {
+      _lockoutUntil.remove(email);
+      _failedAttempts.remove(email);
+      return false;
+    }
+
+    return true;
+  }
+
+  void resetAttempts(String email) {
+    _failedAttempts.remove(email);
+    _lockoutUntil.remove(email);
   }
 
   void clearAllLockouts() {
-    _lockouts.clear();
+    _failedAttempts.clear();
+    _lockoutUntil.clear();
   }
 }
 
-class LockoutData {
-  final String email;
-  int attempts;
-  DateTime lastAttempt;
-  DateTime? lockedUntil;
+// ============================================================================
+// 7. Mock OTP Service
+// ============================================================================
 
-  LockoutData({
-    required this.email,
-    required this.attempts,
-    required this.lastAttempt,
-    this.lockedUntil,
-  });
-}
+class MockOTPService {
+  final Map<String, String> _otpCodes = {};
+  final Map<String, DateTime> _otpExpiry = {};
+  final Map<String, int> _otpAttempts = {};
 
-/// Mock Email Service
-class MockEmailService {
-  final List<EmailRecord> _sentEmails = [];
+  Future<void> sendOTP(String phoneNumber) async {
+    await Future.delayed(Duration(milliseconds: 100));
 
-  Future<void> sendPasswordResetEmail({
-    required String email,
-    required String resetLink,
-  }) async {
-    await Future.delayed(Duration(milliseconds: 10));
-
-    _sentEmails.add(EmailRecord(
-      recipient: email,
-      type: EmailType.passwordReset,
-      sentAt: DateTime.now(),
-    ));
+    String otp = (100000 + Random().nextInt(900000)).toString();
+    _otpCodes[phoneNumber] = otp;
+    _otpExpiry[phoneNumber] = DateTime.now().add(Duration(minutes: 5));
+    _otpAttempts[phoneNumber] = 0;
   }
 
-  List<EmailRecord> getSentEmails({
-    required String recipient,
-    required EmailType type,
-  }) {
-    return _sentEmails
-        .where((email) => email.recipient == recipient && email.type == type)
-        .toList();
+  bool verifyOTP(String phoneNumber, String otp) {
+    if (!_otpCodes.containsKey(phoneNumber)) return false;
+
+    _otpAttempts[phoneNumber] = (_otpAttempts[phoneNumber] ?? 0) + 1;
+
+    if (_otpAttempts[phoneNumber]! > 3) {
+      _otpCodes.remove(phoneNumber);
+      return false;
+    }
+
+    if (DateTime.now().isAfter(_otpExpiry[phoneNumber]!)) {
+      _otpCodes.remove(phoneNumber);
+      return false;
+    }
+
+    return _otpCodes[phoneNumber] == otp;
   }
-}
 
-class EmailRecord {
-  final String recipient;
-  final EmailType type;
-  final DateTime sentAt;
+  bool isExpired(String phoneNumber) {
+    if (!_otpExpiry.containsKey(phoneNumber)) return true;
+    return DateTime.now().isAfter(_otpExpiry[phoneNumber]!);
+  }
 
-  EmailRecord({
-    required this.recipient,
-    required this.type,
-    required this.sentAt,
-  });
-}
-
-enum EmailType {
-  passwordReset,
-  verification,
-  notification,
+  void clearOTPData() {
+    _otpCodes.clear();
+    _otpExpiry.clear();
+    _otpAttempts.clear();
+  }
 }
