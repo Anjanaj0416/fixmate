@@ -1,16 +1,15 @@
 // lib/screens/ai_chat_screen.dart
-// COMPLETE FIXED VERSION - Replace entire file
-// This version uses ML model to predict service type before showing workers
+// ENHANCED VERSION - Both photo upload and text description supported
+// Replace the entire file with this version
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'dart:typed_data';
 import '../services/openai_service.dart';
-import '../services/ml_service.dart'; // ✅ Import ML Service
+import '../services/ml_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/storage_service.dart';
-import 'enhanced_worker_selection_screen.dart';
 import 'worker_results_screen.dart';
 
 class ChatMessage {
@@ -18,7 +17,7 @@ class ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   final XFile? image;
-  final bool showOptions;
+  final bool showFindWorkersButton; // Show button for both photo and text
   final bool isError;
 
   ChatMessage({
@@ -26,7 +25,7 @@ class ChatMessage {
     required this.isUser,
     required this.timestamp,
     this.image,
-    this.showOptions = false,
+    this.showFindWorkersButton = false,
     this.isError = false,
   });
 }
@@ -148,69 +147,25 @@ class _AIChatScreenState extends State<AIChatScreen> {
     );
   }
 
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: Duration(seconds: 3),
-      ),
-    );
-  }
-
-  Widget _buildImageWidget(XFile imageFile, double width, double height) {
-    return FutureBuilder<dynamic>(
-      future: _loadImageBytes(imageFile),
-      builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          return Image.memory(
-            snapshot.data!,
-            width: width,
-            height: height,
-            fit: BoxFit.cover,
-          );
-        }
-        return Container(
-          width: width,
-          height: height,
-          color: Colors.grey[300],
-          child: Center(child: CircularProgressIndicator()),
-        );
-      },
-    );
-  }
-
-  Future<dynamic> _loadImageBytes(XFile imageFile) async {
-    return await imageFile.readAsBytes();
-  }
-
-  void _sendMessage() async {
+  Future<void> _sendMessage() async {
     String message = _messageController.text.trim();
+    XFile? imageToAnalyze = _selectedImage;
 
-    if (message.isEmpty && _selectedImage == null) return;
+    // Must have either text or image
+    if (message.isEmpty && imageToAnalyze == null) {
+      return;
+    }
 
     setState(() {
-      if (_selectedImage != null) {
-        _messages.add(ChatMessage(
-          text: message.isEmpty ? 'Analyzing image...' : message,
-          isUser: true,
-          timestamp: DateTime.now(),
-          image: _selectedImage,
-        ));
-      } else {
-        _messages.add(ChatMessage(
-          text: message,
-          isUser: true,
-          timestamp: DateTime.now(),
-        ));
-      }
-      _isLoading = true;
-    });
-
-    _messageController.clear();
-    final imageToAnalyze = _selectedImage;
-    setState(() {
+      _messages.add(ChatMessage(
+        text: message.isEmpty ? 'Analyzing image...' : message,
+        isUser: true,
+        timestamp: DateTime.now(),
+        image: imageToAnalyze,
+      ));
+      _messageController.clear();
       _selectedImage = null;
+      _isLoading = true;
     });
 
     _scrollToBottom();
@@ -218,26 +173,65 @@ class _AIChatScreenState extends State<AIChatScreen> {
     try {
       String response;
 
+      // OPTION A: Image Upload Flow
       if (imageToAnalyze != null) {
+        setState(() {
+          _messages.add(ChatMessage(
+            text: '🔍 Analyzing image...',
+            isUser: false,
+            timestamp: DateTime.now(),
+          ));
+        });
+        _scrollToBottom();
+
         response = await OpenAIService.analyzeImageFromXFile(
           imageFile: imageToAnalyze,
-          userMessage: message.isEmpty
-              ? 'What issue do you see in this image? Provide a detailed description.'
-              : message,
+          userMessage: message.isNotEmpty
+              ? message
+              : 'What issue do you see in this image? Provide a detailed description.',
         );
 
         _lastProblemDescription = response;
-      } else {
+
+        setState(() {
+          _messages.add(ChatMessage(
+            text: response,
+            isUser: false,
+            timestamp: DateTime.now(),
+            showFindWorkersButton: true, // Show button for image analysis
+          ));
+        });
+      }
+      // OPTION B: Text Description Flow
+      else {
+        // Check if this looks like a problem description
+        bool isProblemDescription = _isProblemDescription(message);
+
         response = await OpenAIService.sendMessage(message);
+
+        if (isProblemDescription) {
+          _lastProblemDescription = message; // Store the user's description
+
+          setState(() {
+            _messages.add(ChatMessage(
+              text: response,
+              isUser: false,
+              timestamp: DateTime.now(),
+              showFindWorkersButton: true, // Show button for text description
+            ));
+          });
+        } else {
+          setState(() {
+            _messages.add(ChatMessage(
+              text: response,
+              isUser: false,
+              timestamp: DateTime.now(),
+            ));
+          });
+        }
       }
 
       setState(() {
-        _messages.add(ChatMessage(
-          text: response,
-          isUser: false,
-          timestamp: DateTime.now(),
-          showOptions: imageToAnalyze != null,
-        ));
         _isLoading = false;
       });
 
@@ -256,7 +250,65 @@ class _AIChatScreenState extends State<AIChatScreen> {
     }
   }
 
-  // ========== FIXED: Use ML model to predict service type ==========
+  // Helper to detect if message is a problem description
+  bool _isProblemDescription(String text) {
+    text = text.toLowerCase();
+
+    // Keywords that indicate a problem description
+    List<String> problemKeywords = [
+      'leak',
+      'broken',
+      'not working',
+      'issue',
+      'problem',
+      'fix',
+      'repair',
+      'damage',
+      'crack',
+      'block',
+      'clog',
+      'stuck',
+      'loose',
+      'fault',
+      'malfunction',
+      'defect',
+      'error',
+      'water',
+      'pipe',
+      'toilet',
+      'sink',
+      'faucet',
+      'shower',
+      'electrical',
+      'wiring',
+      'switch',
+      'outlet',
+      'light',
+      'plumbing',
+      'drain',
+      'heating',
+      'cooling',
+      'ac',
+      'hvac',
+      'roof',
+      'ceiling',
+      'wall',
+      'floor',
+      'door',
+      'window',
+      'paint',
+      'carpenter',
+      'electrician',
+      'plumber',
+      'help',
+      'need',
+      'urgent'
+    ];
+
+    return problemKeywords.any((keyword) => text.contains(keyword));
+  }
+
+  // Main worker finding function - works for both photo and text
   Future<void> _findWorkers() async {
     if (_lastProblemDescription == null) {
       _showErrorSnackBar('No problem description available');
@@ -272,7 +324,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Step 1: Upload photo to Firebase Storage
+      // Step 1: Upload photos if any exist in the conversation
       List<String> uploadedPhotoUrls = [];
 
       for (var message in _messages.reversed) {
@@ -310,7 +362,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
         }
       }
 
-      // Step 2: Use ML model to predict service type
+      // Step 2: Use ML model to predict service type and find workers
       setState(() {
         _messages.add(ChatMessage(
           text: '🤖 Analyzing your issue to find the best workers...',
@@ -320,7 +372,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
       });
       _scrollToBottom();
 
-      print('🔍 Predicting service type from description...');
+      print('🔍 Using ML model to predict service type...');
       print('📝 Description: $_lastProblemDescription');
       print('📍 Location: $location');
 
@@ -336,15 +388,17 @@ class _AIChatScreenState extends State<AIChatScreen> {
       print(
           '📊 Confidence: ${(mlResponse.aiAnalysis.servicePredictions.first.confidence * 100).toStringAsFixed(1)}%');
 
-      // Get the top prediction
+      setState(() => _isLoading = false);
+
+      // Navigate to worker results
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => WorkerResultsScreen(
-            workers: mlResponse.workers, // Workers from ML model dataset
+            workers: mlResponse.workers,
             aiAnalysis: mlResponse.aiAnalysis,
             problemDescription: _lastProblemDescription!,
-            problemImageUrls: uploadedPhotoUrls, // ✅ ADD THIS LINE
+            problemImageUrls: uploadedPhotoUrls,
           ),
         ),
       );
@@ -376,146 +430,61 @@ class _AIChatScreenState extends State<AIChatScreen> {
     }
   }
 
-  String _determineUrgency(AIAnalysis aiAnalysis) {
-    String description = _lastProblemDescription?.toLowerCase() ?? '';
-
-    List<String> urgentKeywords = [
-      'urgent',
-      'emergency',
-      'immediate',
-      'asap',
-      'broken',
-      'not working',
-      'leaking',
-      'flooding',
-      'no water',
-      'no power'
-    ];
-
-    List<String> sameDayKeywords = ['today', 'now', 'quickly', 'soon'];
-
-    if (urgentKeywords.any((keyword) => description.contains(keyword))) {
-      return 'urgent';
-    }
-
-    if (sameDayKeywords.any((keyword) => description.contains(keyword))) {
-      return 'same_day';
-    }
-
-    return 'normal';
-  }
-
   String _formatServiceType(String serviceType) {
     return serviceType
-        .replaceAll('_', ' ')
-        .split(' ')
+        .split('_')
         .map((word) => word[0].toUpperCase() + word.substring(1))
         .join(' ');
   }
 
   Future<String?> _showLocationDialog() async {
-    final TextEditingController locationController = TextEditingController();
-
-    if (_userLocation != null && _userLocation!.isNotEmpty) {
-      locationController.text = _userLocation!;
-    }
+    TextEditingController locationController =
+        TextEditingController(text: _userLocation ?? '');
 
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.location_on, color: Colors.blue),
-            SizedBox(width: 8),
-            Text('Enter Location'),
-          ],
-        ),
+        title: Text('Confirm Location'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Where do you need the service?',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
+            Text('Please confirm your location to find nearby workers:'),
             SizedBox(height: 16),
             TextField(
               controller: locationController,
               decoration: InputDecoration(
-                hintText: 'e.g., Kandy, Colombo',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                labelText: 'Location',
+                hintText: 'e.g., Colombo, Kandy, Galle',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.location_on),
               ),
-              autofocus: true,
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, null),
+            onPressed: () => Navigator.pop(context),
             child: Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
-              String location = locationController.text.trim();
-              if (location.isNotEmpty) {
-                Navigator.pop(context, location);
-              }
+              Navigator.pop(context, locationController.text.trim());
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-            ),
-            child: Text('Continue'),
+            child: Text('Confirm'),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _handleGetRepairTips() async {
-    if (_lastProblemDescription == null) {
-      _showErrorSnackBar('No problem description available');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      String response = await OpenAIService.sendMessage(
-        'Based on this problem: "$_lastProblemDescription", '
-        'provide step-by-step DIY repair tips. '
-        'Be specific and practical. '
-        'Include safety warnings if necessary.',
-      );
-
-      setState(() {
-        _messages.add(ChatMessage(
-          text: response,
-          isUser: false,
-          timestamp: DateTime.now(),
-        ));
-        _isLoading = false;
-      });
-      _scrollToBottom();
-    } catch (e) {
-      setState(() {
-        _messages.add(ChatMessage(
-          text: 'Failed to get repair tips: ${e.toString()}',
-          isUser: false,
-          timestamp: DateTime.now(),
-          isError: true,
-        ));
-        _isLoading = false;
-      });
-      _scrollToBottom();
-    }
-  }
-
-  String _formatTime(DateTime time) {
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
@@ -526,28 +495,33 @@ class _AIChatScreenState extends State<AIChatScreen> {
           children: [
             Icon(Icons.smart_toy, color: Colors.white),
             SizedBox(width: 8),
-            Text('AI Assistant'),
+            Text('AI Assistant', style: TextStyle(color: Colors.white)),
           ],
         ),
-        backgroundColor: Color(0xFF2196F3),
-        elevation: 0,
+        backgroundColor: Colors.blue,
+        iconTheme: IconThemeData(color: Colors.white),
       ),
       body: Column(
         children: [
+          // Messages list
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
               padding: EdgeInsets.all(16),
               itemCount: _messages.length,
               itemBuilder: (context, index) {
-                return _buildMessageBubble(_messages[index]);
+                final message = _messages[index];
+                return _buildMessageBubble(message);
               },
             ),
           ),
+
+          // Loading indicator
           if (_isLoading)
             Padding(
-              padding: EdgeInsets.all(8),
+              padding: EdgeInsets.symmetric(vertical: 8),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SizedBox(
                     width: 20,
@@ -555,75 +529,65 @@ class _AIChatScreenState extends State<AIChatScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                   SizedBox(width: 12),
-                  Flexible(
-                    child: Text(
-                      'AI is thinking...',
-                      style: TextStyle(color: Colors.grey[600]),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
+                  Text('Processing...', style: TextStyle(color: Colors.grey)),
                 ],
               ),
             ),
+
+          // Selected image preview
           if (_selectedImage != null)
             Container(
-              margin: EdgeInsets.all(8),
-              height: 120,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Stack(
+              padding: EdgeInsets.all(8),
+              color: Colors.grey[200],
+              child: Row(
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: _buildImageWidget(
-                      _selectedImage!,
-                      double.infinity,
-                      120,
+                    child: _buildImageWidget(_selectedImage!, 60, 60),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Image selected',
+                      style: TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ),
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: IconButton(
-                      icon: Icon(Icons.close, color: Colors.white),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.black54,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _selectedImage = null;
-                        });
-                      },
-                    ),
+                  IconButton(
+                    icon: Icon(Icons.close),
+                    onPressed: () {
+                      setState(() {
+                        _selectedImage = null;
+                      });
+                    },
                   ),
                 ],
               ),
             ),
+
+          // Input area
           Container(
-            padding: EdgeInsets.all(8),
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  offset: Offset(0, -2),
-                  blurRadius: 4,
                   color: Colors.black12,
+                  blurRadius: 4,
+                  offset: Offset(0, -2),
                 ),
               ],
             ),
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.add_photo_alternate, color: Colors.blue),
+                  icon: Icon(Icons.image, color: Colors.blue),
                   onPressed: _pickImage,
                 ),
                 Expanded(
                   child: TextField(
                     controller: _messageController,
                     decoration: InputDecoration(
-                      hintText: 'Type a message...',
+                      hintText: 'Type a message or describe your issue...',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,
@@ -631,10 +595,11 @@ class _AIChatScreenState extends State<AIChatScreen> {
                       filled: true,
                       fillColor: Colors.grey[100],
                       contentPadding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
                     maxLines: null,
-                    textCapitalization: TextCapitalization.sentences,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 SizedBox(width: 8),
@@ -654,81 +619,113 @@ class _AIChatScreenState extends State<AIChatScreen> {
   }
 
   Widget _buildMessageBubble(ChatMessage message) {
-    return Align(
-      alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: EdgeInsets.only(bottom: 16),
-        padding: EdgeInsets.all(12),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        decoration: BoxDecoration(
-          color: message.isUser
-              ? Colors.blue
-              : (message.isError ? Colors.red[50] : Colors.grey[200]),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (message.image != null) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: _buildImageWidget(
-                  message.image!,
-                  double.infinity,
-                  200,
+    return Padding(
+      padding: EdgeInsets.only(bottom: 16),
+      child: Row(
+        mainAxisAlignment:
+            message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!message.isUser) ...[
+            CircleAvatar(
+              backgroundColor: Colors.blue,
+              child: Icon(Icons.smart_toy, color: Colors.white, size: 20),
+            ),
+            SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Column(
+              crossAxisAlignment: message.isUser
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: message.isError
+                        ? Colors.red[100]
+                        : message.isUser
+                            ? Colors.blue
+                            : Colors.grey[200],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (message.image != null) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: _buildImageWidget(message.image!, 200, 200),
+                        ),
+                        SizedBox(height: 8),
+                      ],
+                      Text(
+                        message.text,
+                        style: TextStyle(
+                          color: message.isUser ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              if (message.text.isNotEmpty) SizedBox(height: 8),
-            ],
-            if (message.text.isNotEmpty)
-              Text(
-                message.text,
-                style: TextStyle(
-                  color: message.isUser ? Colors.white : Colors.black87,
-                  fontSize: 15,
-                ),
-              ),
-            if (message.showOptions && !message.isUser) ...[
-              SizedBox(height: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+                if (message.showFindWorkersButton) ...[
+                  SizedBox(height: 8),
                   ElevatedButton.icon(
                     onPressed: _findWorkers,
-                    icon: Icon(Icons.person_search, size: 18),
+                    icon: Icon(Icons.search),
                     label: Text('Find Skilled Workers'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
                       foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: _handleGetRepairTips,
-                    icon: Icon(Icons.tips_and_updates, size: 18),
-                    label: Text('Get Repair Tips'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.blue,
-                      padding: EdgeInsets.symmetric(vertical: 12),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
                   ),
                 ],
-              ),
-            ],
-            SizedBox(height: 4),
-            Text(
-              _formatTime(message.timestamp),
-              style: TextStyle(
-                color: message.isUser ? Colors.white70 : Colors.grey[600],
-                fontSize: 11,
-              ),
+                SizedBox(height: 4),
+                Text(
+                  _formatTime(message.timestamp),
+                  style: TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          if (message.isUser) ...[
+            SizedBox(width: 8),
+            CircleAvatar(
+              backgroundColor: Colors.grey[300],
+              child: Icon(Icons.person, color: Colors.grey[600], size: 20),
             ),
           ],
-        ),
+        ],
       ),
+    );
+  }
+
+  String _formatTime(DateTime dateTime) {
+    return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  // Helper method to build image widget (works on web and mobile)
+  Widget _buildImageWidget(XFile imageFile, double width, double height) {
+    return FutureBuilder<Uint8List>(
+      future: imageFile.readAsBytes(),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          return Image.memory(
+            snapshot.data!,
+            width: width,
+            height: height,
+            fit: BoxFit.cover,
+          );
+        }
+        return Container(
+          width: width,
+          height: height,
+          color: Colors.grey[300],
+          child: Center(child: CircularProgressIndicator()),
+        );
+      },
     );
   }
 }
