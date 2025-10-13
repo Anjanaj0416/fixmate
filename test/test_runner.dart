@@ -5,7 +5,8 @@
 import 'dart:io';
 
 class TestRunner {
-  static const String separator = '=' * 80;
+  // FIXED: Proper string repetition in Dart
+  static final String separator = '=' * 80;
 
   // Test categories and their files
   static final Map<String, List<String>> testCategories = {
@@ -14,6 +15,12 @@ class TestRunner {
     ],
     'Widget Tests': [
       'test/widget_test/auth_widget_test.dart',
+    ],
+    'Security Tests': [
+      'test/security/security_test.dart',
+    ],
+    'Performance Tests': [
+      'test/performance/performance_test.dart',
     ],
   };
 
@@ -61,201 +68,89 @@ class TestRunner {
         totalTests += result['total'] as int;
         passedTests += result['passed'] as int;
         failedTests += result['failed'] as int;
-
-        if (result['passed'] == result['total']) {
-          print('✅ All tests passed in this file\n');
-        } else {
-          print('❌ Some tests failed in this file\n');
-        }
       }
     }
 
     final endTime = DateTime.now();
     final duration = endTime.difference(startTime);
 
-    // Print summary
     print('\n$separator');
     print('📊 TEST SUMMARY');
     print(separator);
     print('Total Tests: $totalTests');
     print('✅ Passed: $passedTests');
     print('❌ Failed: $failedTests');
-    print(
-        '📈 Success Rate: ${(passedTests / totalTests * 100).toStringAsFixed(1)}%');
-    print('⏱️  Duration: ${duration.inSeconds} seconds');
-    print('End Time: ${DateTime.now()}');
+    print('⏱️  Duration: ${duration.inSeconds}s');
+    print('End Time: $endTime');
     print(separator);
 
-    // Print test case coverage
-    print('\n📋 TEST CASE COVERAGE');
-    print(separator);
-    for (var testCase in testCases.entries) {
-      print('${testCase.key}: ${testCase.value}');
-    }
-    print(separator);
-
-    // Exit with appropriate code
     exit(failedTests > 0 ? 1 : 0);
   }
 
-  /// Run specific test file
-  static Future<Map<String, int>> _runTestFile(String testFile) async {
-    try {
-      final result = await Process.run(
-        'flutter',
-        ['test', testFile, '--reporter', 'expanded'],
-        runInShell: true,
-      );
-
-      // Parse output to count tests
-      final output = result.stdout.toString();
-      final passed = _countMatches(output, r'\+\d+');
-      final failed = _countMatches(output, r'ERROR');
-
-      print(output);
-
-      if (result.exitCode != 0) {
-        print('⚠️  Test file had errors');
-      }
-
-      return {
-        'total': passed + failed,
-        'passed': passed,
-        'failed': failed,
-      };
-    } catch (e) {
-      print('❌ Error running test file: $e');
-      return {'total': 0, 'passed': 0, 'failed': 0};
-    }
-  }
-
-  /// Count regex matches in string
-  static int _countMatches(String text, String pattern) {
-    try {
-      return RegExp(pattern).allMatches(text).length;
-    } catch (e) {
-      return 0;
-    }
-  }
-
   /// Run specific test case by ID
-  static Future<void> runTestCase(String testCaseId) async {
+  static Future<void> runTestCase(String testId) async {
+    if (!testCases.containsKey(testId)) {
+      print('❌ Unknown test case: $testId');
+      print('Available test cases:');
+      testCases.forEach((id, name) => print('  $id: $name'));
+      exit(1);
+    }
+
     print('\n$separator');
-    print('🧪 Running Test Case: $testCaseId');
-    print('📝 ${testCases[testCaseId] ?? "Unknown test case"}');
+    print('🧪 Running Test Case: $testId - ${testCases[testId]}');
     print(separator);
 
     final result = await Process.run(
       'flutter',
-      ['test', '--name', testCaseId],
-      runInShell: true,
+      ['test', '--name', testId],
     );
 
-    print(result.stdout);
-
-    if (result.exitCode == 0) {
-      print('\n✅ Test case $testCaseId PASSED');
-    } else {
-      print('\n❌ Test case $testCaseId FAILED');
-      print(result.stderr);
-    }
+    stdout.write(result.stdout);
+    stderr.write(result.stderr);
 
     exit(result.exitCode);
   }
 
-  /// Generate coverage report
-  static Future<void> generateCoverage() async {
-    print('\n$separator');
-    print('📊 Generating Coverage Report');
-    print(separator);
-
-    print('Running tests with coverage...');
-    final testResult = await Process.run(
+  /// Run specific test file
+  static Future<Map<String, int>> _runTestFile(String filePath) async {
+    final result = await Process.run(
       'flutter',
-      ['test', '--coverage'],
-      runInShell: true,
+      ['test', filePath, '--reporter', 'compact'],
     );
 
-    print(testResult.stdout);
+    stdout.write(result.stdout);
+    stderr.write(result.stderr);
 
-    if (testResult.exitCode != 0) {
-      print('❌ Tests failed, coverage not generated');
-      exit(1);
-    }
+    // Parse output to count tests
+    final output = result.stdout.toString();
+    final passedMatch = RegExp(r'\+(\d+)').allMatches(output).lastOrNull;
+    final failedMatch = RegExp(r'-(\d+)').allMatches(output).lastOrNull;
 
-    print('\nGenerating HTML coverage report...');
-    final genhtmlResult = await Process.run(
-      'genhtml',
-      ['coverage/lcov.info', '-o', 'coverage/html'],
-      runInShell: true,
-    );
+    final passed = passedMatch != null ? int.parse(passedMatch.group(1)!) : 0;
+    final failed = failedMatch != null ? int.parse(failedMatch.group(1)!) : 0;
 
-    if (genhtmlResult.exitCode == 0) {
-      print('✅ Coverage report generated at: coverage/html/index.html');
-
-      // Try to open in browser (macOS/Linux)
-      if (Platform.isMacOS) {
-        await Process.run('open', ['coverage/html/index.html']);
-      } else if (Platform.isLinux) {
-        await Process.run('xdg-open', ['coverage/html/index.html']);
-      }
-    } else {
-      print('⚠️  genhtml not found. Install lcov to generate HTML reports.');
-      print('   macOS: brew install lcov');
-      print('   Linux: apt-get install lcov');
-    }
-  }
-
-  /// Print help message
-  static void printHelp() {
-    print('\n$separator');
-    print('🧪 FIXMATE TEST RUNNER');
-    print(separator);
-    print('\nUsage:');
-    print('  dart test/test_runner.dart [command] [options]\n');
-    print('Commands:');
-    print('  all              Run all tests (default)');
-    print('  test <ID>        Run specific test case (e.g., FT-001)');
-    print('  coverage         Generate coverage report');
-    print('  list             List all test cases');
-    print('  help             Show this help message\n');
-    print('Examples:');
-    print('  dart test/test_runner.dart');
-    print('  dart test/test_runner.dart test FT-001');
-    print('  dart test/test_runner.dart coverage');
-    print(separator);
-  }
-
-  /// List all test cases
-  static void listTestCases() {
-    print('\n$separator');
-    print('📋 AVAILABLE TEST CASES');
-    print(separator);
-
-    for (var testCase in testCases.entries) {
-      print('${testCase.key.padRight(10)} ${testCase.value}');
-    }
-
-    print('\nTotal: ${testCases.length} test cases');
-    print(separator);
+    return {
+      'total': passed + failed,
+      'passed': passed,
+      'failed': failed,
+    };
   }
 }
 
-/// Main entry point
-void main(List<String> args) async {
-  if (args.isEmpty || args[0] == 'all') {
+void main(List<String> arguments) async {
+  if (arguments.isEmpty) {
+    print('Usage:');
+    print('  dart test/test_runner.dart all           # Run all tests');
+    print('  dart test/test_runner.dart case FT-001   # Run specific test');
+    exit(1);
+  }
+
+  if (arguments[0] == 'all') {
     await TestRunner.runAllTests();
-  } else if (args[0] == 'test' && args.length > 1) {
-    await TestRunner.runTestCase(args[1]);
-  } else if (args[0] == 'coverage') {
-    await TestRunner.generateCoverage();
-  } else if (args[0] == 'list') {
-    TestRunner.listTestCases();
-  } else if (args[0] == 'help') {
-    TestRunner.printHelp();
+  } else if (arguments[0] == 'case' && arguments.length > 1) {
+    await TestRunner.runTestCase(arguments[1]);
   } else {
-    print('❌ Unknown command: ${args[0]}');
-    TestRunner.printHelp();
+    print('❌ Unknown command: ${arguments[0]}');
     exit(1);
   }
 }

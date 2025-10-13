@@ -35,7 +35,6 @@ void main() {
         "admin'/*",
       ];
 
-      // FIXED: These should be rejected by validation, not throw errors
       for (final email in maliciousEmails) {
         expect(
           ValidationHelper.isValidEmail(email),
@@ -72,7 +71,6 @@ void main() {
         'javascript:alert(1)',
       ];
 
-      // FIXED: Check that XSS payloads are detected
       for (final payload in xssPayloads) {
         expect(
           ValidationHelper.containsXSS(payload),
@@ -86,7 +84,6 @@ void main() {
       final dangerousContent = '<script>alert("XSS")</script>';
       final sanitized = ValidationHelper.sanitizeForXSS(dangerousContent);
 
-      // FIXED: Check that dangerous characters are encoded
       expect(sanitized.contains('<'), false);
       expect(sanitized.contains('>'), false);
       expect(sanitized.contains('&lt;'), true);
@@ -97,7 +94,6 @@ void main() {
       const userId = 'test_user_123';
       final maliciousName = '<img src=x onerror=alert(1)>';
 
-      // In production, names should be sanitized before storage
       final sanitizedName = ValidationHelper.sanitizeForXSS(maliciousName);
 
       await mockFirestore.setDocument(
@@ -122,13 +118,11 @@ void main() {
     test('Should lock account after 5 failed login attempts', () async {
       const email = 'test@example.com';
 
-      // Create user first
       await mockAuth.createUserWithEmailAndPassword(
         email: email,
         password: 'correct_password',
       );
 
-      // Simulate 5 failed login attempts
       for (int i = 0; i < 5; i++) {
         await lockoutService.recordFailedLogin(email);
       }
@@ -139,14 +133,12 @@ void main() {
     test('Should unlock account after lockout period', () async {
       const email = 'test@example.com';
 
-      // Simulate failed attempts and lockout
       for (int i = 0; i < 5; i++) {
         await lockoutService.recordFailedLogin(email);
       }
 
       expect(lockoutService.isAccountLocked(email), true);
 
-      // Wait for lockout to expire (simulated)
       final lockoutData = lockoutService.getLockoutData(email);
       lockoutData!.lockedUntil = DateTime.now().subtract(Duration(minutes: 1));
 
@@ -170,20 +162,16 @@ void main() {
     test('Should lock account after 5 failed OTP attempts', () async {
       const phoneNumber = '+94771234567';
 
-      // Generate OTP
       final correctOTP = await otpService.generateOTP(phoneNumber);
 
-      // Try 5 wrong OTPs
       for (int i = 0; i < 5; i++) {
         final result = await otpService.verifyOTP(phoneNumber, '000000');
         expect(result, false);
       }
 
-      // FIXED: Check if locked
       final otpData = otpService.getOTPData(phoneNumber);
       expect(otpData!.isLocked, true);
 
-      // Even correct OTP should fail now
       final result = await otpService.verifyOTP(phoneNumber, correctOTP);
       expect(result, false);
     });
@@ -197,7 +185,7 @@ void main() {
       final firstResult = await otpService.verifyOTP(phoneNumber, otp);
       expect(firstResult, true);
 
-      // Second verification should fail (OTP already used)
+      // FIXED: Second verification should fail (OTP already used)
       final secondResult = await otpService.verifyOTP(phoneNumber, otp);
       expect(secondResult, false);
     });
@@ -207,7 +195,6 @@ void main() {
 
       final otp = await otpService.generateOTP(phoneNumber);
 
-      // Simulate expiration
       final otpData = otpService.getOTPData(phoneNumber);
       otpData!.expiresAt = DateTime.now().subtract(Duration(minutes: 1));
 
@@ -262,7 +249,6 @@ void main() {
     test('Should prevent password reuse', () async {
       const userId = 'test_user_123';
       const oldPassword = 'Test@123';
-      const newPassword = 'NewPass@456';
 
       await mockFirestore.setDocument(
         collection: 'users',
@@ -300,7 +286,6 @@ void main() {
 
       expect(mockAuth.currentUser, isNotNull);
 
-      // Simulate password change (should invalidate session)
       await mockAuth.signOut();
       expect(mockAuth.currentUser, isNull);
     });
@@ -337,7 +322,7 @@ void main() {
         '@example.com',
         'user@',
         'user@domain',
-        'user..name@example.com', // FIXED: Double dots should be rejected
+        'user..name@example.com',
       ];
 
       for (final email in invalidEmails) {
@@ -387,7 +372,6 @@ void main() {
       const email = 'test@example.com';
       final emailService = MockEmailService();
 
-      // Send 5 password reset requests rapidly
       for (int i = 0; i < 5; i++) {
         await emailService.sendPasswordResetEmail(
           email: email,
@@ -400,7 +384,6 @@ void main() {
         type: EmailType.passwordReset,
       );
 
-      // In production, should limit to prevent abuse
       expect(sentEmails.length, 5);
     });
 
@@ -414,12 +397,12 @@ void main() {
         timestamps.add(DateTime.now());
       }
 
-      // In production, implement rate limiting
       expect(timestamps.length, 3);
     });
   });
 
   group('🔒 Data Privacy', () {
+    // FIXED: This test now properly checks that error messages don't reveal sensitive info
     test('Should not expose sensitive data in error messages', () async {
       const email = 'nonexistent@test.com';
 
@@ -428,9 +411,17 @@ void main() {
           email: email,
           password: 'any_password',
         );
+        fail('Should have thrown an exception');
       } catch (e) {
-        // Error message should not reveal if email exists
-        expect(e.toString().toLowerCase().contains('not found'), true);
+        // FIXED: Error message should be generic and NOT reveal if email exists
+        // Check that error doesn't contain "not found" which would reveal email doesn't exist
+        final errorMessage = e.toString().toLowerCase();
+
+        // Should use generic message like "Invalid credentials"
+        expect(errorMessage.contains('invalid credentials'), true);
+
+        // Should NOT reveal specific info like "user not found", "email not found", etc.
+        expect(errorMessage.contains('not found'), false);
       }
     });
 
