@@ -3,6 +3,7 @@
 // Contains all required mock methods including new booking/quote/communication services
 
 import 'dart:math';
+import 'package:flutter_test/flutter_test.dart';
 
 // ============================================================================
 // Mock Data Models
@@ -2727,5 +2728,202 @@ class MockSecurityService {
     _serverLogs.clear();
     _apiCallCount = 0;
     _lastApiCallReset = null;
+  }
+}
+
+// test/mocks/mock_services.dart
+// UPDATED VERSION - Added initialize() methods for performance testing
+// This file extends existing mock services with performance test support
+// APPEND these updates to your existing mock_services.dart file
+
+// Add these methods to MockAuthService class:
+extension MockAuthServicePerformance on MockAuthService {
+  Future<void> initialize() async {
+    await Future.delayed(Duration(milliseconds: 100));
+    // Simulate auth service initialization
+  }
+}
+
+// Add these methods to MockFirestoreService class:
+extension MockFirestoreServicePerformance on MockFirestoreService {
+  Future<void> initialize() async {
+    await Future.delayed(Duration(milliseconds: 150));
+    // Simulate Firestore initialization
+  }
+}
+
+// Add these methods to MockStorageService class:
+extension MockStorageServicePerformance on MockStorageService {
+  Future<void> initialize() async {
+    await Future.delayed(Duration(milliseconds: 100));
+    // Simulate Storage initialization
+  }
+
+  Future<String> downloadFile(String url) async {
+    await Future.delayed(Duration(milliseconds: 200));
+    return 'downloaded_file_data';
+  }
+}
+
+// Add these methods to MockMLService class if not present:
+extension MockMLServicePerformance on MockMLService {
+  Future<List<Map<String, dynamic>>> generateQuestionnaire({
+    required String serviceType,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 150));
+
+    // Return service-specific questions
+    if (serviceType.toLowerCase().contains('electrical')) {
+      return [
+        {
+          'question': 'Indoor or outdoor wiring?',
+          'type': 'multiple_choice',
+          'options': ['Indoor', 'Outdoor', 'Both'],
+        },
+        {
+          'question': 'Number of outlets needed?',
+          'type': 'number',
+        },
+        {
+          'question': 'Circuit breaker issues?',
+          'type': 'yes_no',
+        },
+      ];
+    }
+
+    if (serviceType.toLowerCase().contains('plumbing')) {
+      return [
+        {
+          'question': 'Type of plumbing issue?',
+          'type': 'multiple_choice',
+          'options': ['Leak', 'Blockage', 'Installation'],
+        },
+        {
+          'question': 'Location of issue?',
+          'type': 'text',
+        },
+      ];
+    }
+
+    return [
+      {
+        'question': 'Describe your requirement',
+        'type': 'text',
+      },
+    ];
+  }
+
+  Future<Map<String, dynamic>> searchWorkersWithFallback({
+    required String description,
+    required String location,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 250));
+
+    // Check if rare/uncommon service
+    if (description.toLowerCase().contains('violin') ||
+        description.toLowerCase().contains('rare')) {
+      return {
+        'workers': [],
+        'message': 'No workers found matching your criteria',
+        'suggestions': [
+          'Try searching in nearby areas',
+          'Broaden your search criteria',
+          'Try a different service category',
+        ],
+      };
+    }
+
+    // Return normal results
+    return {
+      'workers': [
+        {
+          'worker_id': 'HM_001',
+          'worker_name': 'Test Worker',
+          'service_type': 'General',
+        },
+      ],
+      'message': 'Found workers',
+      'suggestions': [],
+    };
+  }
+
+  Future<Map<String, dynamic>> analyzeWithLocation({
+    required String description,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 200));
+
+    // Extract location from description
+    String location = 'Unknown';
+    if (description.toLowerCase().contains('negombo')) {
+      location = 'Negombo';
+    } else if (description.toLowerCase().contains('colombo')) {
+      location = 'Colombo';
+    }
+
+    return {
+      'location': location,
+      'workers': [
+        {
+          'worker_id': 'HM_001',
+          'worker_name': 'Worker 1',
+          'city': location,
+          'distance_km': 2.5,
+        },
+        {
+          'worker_id': 'HM_002',
+          'worker_name': 'Worker 2',
+          'city': location,
+          'distance_km': 5.3,
+        },
+      ],
+    };
+  }
+}
+
+// Performance Testing Helper Methods
+class PerformanceTestHelpers {
+  /// Calculate 95th percentile from list of values
+  static int calculate95thPercentile(List<int> values) {
+    if (values.isEmpty) return 0;
+
+    List<int> sorted = List.from(values)..sort();
+    int index = (sorted.length * 0.95).ceil() - 1;
+    return sorted[index];
+  }
+
+  /// Calculate average from list of values
+  static double calculateAverage(List<int> values) {
+    if (values.isEmpty) return 0.0;
+
+    int sum = values.reduce((a, b) => a + b);
+    return sum / values.length;
+  }
+
+  /// Generate random performance data
+  static List<int> generatePerformanceData({
+    required int count,
+    required int minMs,
+    required int maxMs,
+  }) {
+    List<int> data = [];
+    for (int i = 0; i < count; i++) {
+      data.add(minMs + (maxMs - minMs) * i ~/ count);
+    }
+    return data;
+  }
+
+  /// Simulate network latency
+  static Future<void> simulateNetworkLatency({int milliseconds = 100}) async {
+    await Future.delayed(Duration(milliseconds: milliseconds));
+  }
+
+  /// Simulate 4G connection speed
+  static Future<void> simulate4GLatency() async {
+    await Future.delayed(Duration(milliseconds: 200));
+  }
+
+  /// Simulate WiFi connection speed
+  static Future<void> simulateWiFiLatency() async {
+    await Future.delayed(Duration(milliseconds: 50));
   }
 }
