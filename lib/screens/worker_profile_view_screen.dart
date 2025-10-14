@@ -26,6 +26,7 @@ class _WorkerProfileViewScreenState extends State<WorkerProfileViewScreen> {
   WorkerModel? _worker;
   List<ReviewModel> _reviews = [];
   Map<String, dynamic> _ratingStats = {};
+  String? _workerDocumentId; // Store the actual Firebase document ID
 
   @override
   void initState() {
@@ -61,7 +62,9 @@ class _WorkerProfileViewScreenState extends State<WorkerProfileViewScreen> {
         workerDoc = querySnapshot.docs.first;
       }
 
-      print('✅ Worker document found!');
+      // Store the actual Firebase document ID for streaming online status
+      _workerDocumentId = workerDoc.id;
+      print('✅ Worker document found! Document ID: $_workerDocumentId');
 
       // Check if document data is valid before parsing
       if (!workerDoc.exists || workerDoc.data() == null) {
@@ -93,6 +96,25 @@ class _WorkerProfileViewScreenState extends State<WorkerProfileViewScreen> {
         ),
       );
     }
+  }
+
+  // ============ NEW: Stream to get worker's online status ============
+  // ============ UPDATED: Stream to get worker's online status ============
+  Stream<bool> _getWorkerOnlineStatus() {
+    // Use the stored document ID if available, otherwise fall back to widget.workerId
+    final docId = _workerDocumentId ?? widget.workerId;
+
+    return FirebaseFirestore.instance
+        .collection('workers')
+        .doc(docId)
+        .snapshots()
+        .map((snapshot) {
+      if (!snapshot.exists || snapshot.data() == null) return false;
+      var data = snapshot.data() as Map<String, dynamic>;
+      bool isOnline = data['is_online'] ?? false;
+      print('📡 Online status for $docId: $isOnline'); // Debug log
+      return isOnline;
+    });
   }
 
   @override
@@ -196,108 +218,162 @@ class _WorkerProfileViewScreenState extends State<WorkerProfileViewScreen> {
       padding: EdgeInsets.all(24),
       child: Column(
         children: [
-          // Profile Photo
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 3),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
-                ),
-              ],
-            ),
-            child: CircleAvatar(
-              radius: 60,
-              backgroundColor: Colors.white,
-              backgroundImage: _worker!.profilePictureUrl != null &&
-                      _worker!.profilePictureUrl!.isNotEmpty
-                  ? NetworkImage(_worker!.profilePictureUrl!)
-                  : null,
-              child: _worker!.profilePictureUrl == null ||
-                      _worker!.profilePictureUrl!.isEmpty
-                  ? Text(
-                      _worker!.workerName.isNotEmpty
-                          ? _worker!.workerName[0].toUpperCase()
-                          : 'W',
-                      style: TextStyle(
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[700],
+          // Profile Photo with Online Status Indicator
+          StreamBuilder<bool>(
+            stream: _getWorkerOnlineStatus(),
+            builder: (context, snapshot) {
+              bool isOnline = snapshot.data ?? false;
+
+              return Stack(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: CircleAvatar(
+                      radius: 60,
+                      backgroundColor: Colors.white,
+                      backgroundImage: _worker!.profilePictureUrl != null &&
+                              _worker!.profilePictureUrl!.isNotEmpty
+                          ? NetworkImage(_worker!.profilePictureUrl!)
+                          : null,
+                      child: _worker!.profilePictureUrl == null ||
+                              _worker!.profilePictureUrl!.isEmpty
+                          ? Text(
+                              _worker!.workerName.isNotEmpty
+                                  ? _worker!.workerName[0].toUpperCase()
+                                  : 'W',
+                              style: TextStyle(
+                                fontSize: 40,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+                  // ============ NEW: Online Status Indicator (Green Dot) ============
+                  Positioned(
+                    bottom: 5,
+                    right: 5,
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: isOnline ? Colors.green : Colors.grey,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: isOnline
+                                ? Colors.green.withOpacity(0.5)
+                                : Colors.grey.withOpacity(0.3),
+                            blurRadius: 8,
+                            spreadRadius: 2,
+                          ),
+                        ],
                       ),
-                    )
-                  : null,
-            ),
+                    ),
+                  ),
+                  // ===================================================================
+                ],
+              );
+            },
           ),
           SizedBox(height: 16),
 
-          // Name
+          // Worker Name
           Text(
             _worker!.workerName,
             style: TextStyle(
-              fontSize: 24,
+              fontSize: 28,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
+            textAlign: TextAlign.center,
           ),
-          SizedBox(height: 4),
+          SizedBox(height: 8),
+
+          // ============ NEW: Online Status Badge ============
+          StreamBuilder<bool>(
+            stream: _getWorkerOnlineStatus(),
+            builder: (context, snapshot) {
+              bool isOnline = snapshot.data ?? false;
+
+              return Container(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isOnline ? Colors.green : Colors.grey[600],
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      isOnline ? 'Online' : 'Offline',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          // ==================================================
+          SizedBox(height: 8),
 
           // Service Type
           Text(
             _worker!.serviceType,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 18,
               color: Colors.white70,
             ),
+            textAlign: TextAlign.center,
           ),
-          SizedBox(height: 8),
-
-          // Verified Badge
-          if (_worker!.verified)
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white, width: 1),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.verified, size: 16, color: Colors.white),
-                  SizedBox(width: 4),
-                  Text(
-                    'Verified Worker',
-                    style: TextStyle(color: Colors.white, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-
           SizedBox(height: 16),
 
-          // Stats Row
+          // Rating Display
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildStatItem(
-                Icons.star,
-                _worker!.rating > 0
-                    ? _worker!.rating.toStringAsFixed(1)
-                    : 'New',
-                'Rating',
+              Icon(Icons.star, color: Colors.amber, size: 28),
+              SizedBox(width: 8),
+              Text(
+                _ratingStats['averageRating']?.toStringAsFixed(1) ?? '0.0',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
-              _buildStatItem(
-                Icons.work,
-                '${_worker!.jobsCompleted}',
-                'Jobs Done',
-              ),
-              _buildStatItem(
-                Icons.trending_up,
-                '${_worker!.successRate.toStringAsFixed(0)}%',
-                'Success',
+              SizedBox(width: 4),
+              Text(
+                '(${_ratingStats['totalReviews'] ?? 0} reviews)',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.white70,
+                ),
               ),
             ],
           ),
