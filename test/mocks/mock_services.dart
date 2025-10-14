@@ -1960,3 +1960,772 @@ class MockNotificationService {
     _pushEnabled.clear();
   }
 }
+
+// test/mocks/mock_services_additions.dart
+// COMPLETE FIXED VERSION - Add these classes to your existing mock_services.dart file
+// Add these THREE classes at the END of your test/mocks/mock_services.dart file
+
+// ============================================================================
+// Mock Rating Service - Handles reviews, ratings, and profanity detection
+// ============================================================================
+
+class MockRatingService {
+  final Map<String, List<Map<String, dynamic>>> _reviews = {};
+  final List<Map<String, dynamic>> _flaggedReviews = [];
+  MockFirestoreService? _firestoreService;
+
+  void setFirestoreService(MockFirestoreService firestoreService) {
+    _firestoreService = firestoreService;
+  }
+
+  Future<void> submitRating({
+    required String bookingId,
+    required String workerId,
+    required String workerName,
+    required String customerId,
+    required String customerName,
+    required double rating,
+    required String review,
+    required String serviceType,
+    List<String> tags = const [],
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    // Check for profanity
+    if (_containsProfanity(review)) {
+      // Flag review for admin
+      _flaggedReviews.add({
+        'review_id': 'R_${_flaggedReviews.length + 1}',
+        'booking_id': bookingId,
+        'worker_id': workerId,
+        'customer_id': customerId,
+        'review': review,
+        'rating': rating,
+        'flagged': true,
+        'flag_reason': 'profanity_detected',
+        'date': DateTime.now(),
+      });
+
+      throw Exception('Review contains inappropriate content');
+    }
+
+    // Create review
+    final reviewData = {
+      'review_id': 'R_${DateTime.now().millisecondsSinceEpoch}',
+      'booking_id': bookingId,
+      'worker_id': workerId,
+      'worker_name': workerName,
+      'customer_id': customerId,
+      'customer_name': customerName,
+      'rating': rating,
+      'review': review,
+      'service_type': serviceType,
+      'tags': tags,
+      'date': DateTime.now(),
+    };
+
+    if (!_reviews.containsKey(workerId)) {
+      _reviews[workerId] = [];
+    }
+    _reviews[workerId]!.add(reviewData);
+
+    // Update worker's average rating in Firestore
+    if (_firestoreService != null) {
+      await _updateWorkerRating(workerId);
+    }
+  }
+
+  Future<void> _updateWorkerRating(String workerId) async {
+    if (_firestoreService == null) return;
+
+    final reviews = _reviews[workerId] ?? [];
+    if (reviews.isEmpty) return;
+
+    double totalRating = 0;
+    for (var review in reviews) {
+      totalRating += review['rating'] as double;
+    }
+
+    double averageRating = totalRating / reviews.length;
+
+    // Get existing worker data
+    final workerDoc = await _firestoreService!.getDocument(
+      collection: 'workers',
+      documentId: workerId,
+    );
+
+    if (workerDoc.exists) {
+      await _firestoreService!.updateDocument(
+        collection: 'workers',
+        documentId: workerId,
+        data: {
+          'rating': averageRating,
+          'total_ratings': reviews.length,
+        },
+      );
+    }
+  }
+
+  bool _containsProfanity(String text) {
+    final profanityWords = [
+      'f***',
+      'b****',
+      'damn',
+      'hell',
+      'shit',
+      'fuck',
+      'fucking'
+    ];
+    final lowerText = text.toLowerCase();
+
+    for (var word in profanityWords) {
+      final cleanWord = word.replaceAll('*', '');
+      if (lowerText.contains(cleanWord)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<List<Map<String, dynamic>>> getWorkerReviews(String workerId) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    final reviews = List<Map<String, dynamic>>.from(_reviews[workerId] ?? []);
+
+    // Sort by date (newest first)
+    reviews.sort((a, b) {
+      final dateA = a['date'] as DateTime;
+      final dateB = b['date'] as DateTime;
+      return dateB.compareTo(dateA);
+    });
+
+    return reviews;
+  }
+
+  Future<void> addReview({
+    required String workerId,
+    required Map<String, dynamic> reviewData,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_reviews.containsKey(workerId)) {
+      _reviews[workerId] = [];
+    }
+    _reviews[workerId]!.add(reviewData);
+  }
+
+  Future<List<Map<String, dynamic>>> getFlaggedReviews() async {
+    await Future.delayed(Duration(milliseconds: 50));
+    return List<Map<String, dynamic>>.from(_flaggedReviews);
+  }
+
+  Future<void> editReview({
+    required String bookingId,
+    required String newReview,
+    required double newRating,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    // Reviews cannot be edited
+    throw Exception(
+        'Reviews cannot be edited. Contact support for corrections');
+  }
+
+  void clearAll() {
+    _reviews.clear();
+    _flaggedReviews.clear();
+  }
+}
+
+// ============================================================================
+// Mock Admin Service - Handles admin operations
+// ============================================================================
+
+class MockAdminService {
+  final Map<String, String> _userStatuses = {}; // userId -> status
+  final List<Map<String, dynamic>> _moderationLogs = [];
+  MockFirestoreService? _firestoreService;
+
+  void setFirestoreService(MockFirestoreService firestoreService) {
+    _firestoreService = firestoreService;
+  }
+
+  Future<bool> checkAdminAccess({required String userId}) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (_firestoreService == null) return false;
+
+    final userDoc = await _firestoreService!.getDocument(
+      collection: 'users',
+      documentId: userId,
+    );
+
+    if (!userDoc.exists) return false;
+
+    final data = userDoc.data();
+    if (data == null) return false;
+
+    final role = data['role'];
+    return role == 'admin';
+  }
+
+  Future<List<String>> getAdminMenuOptions() async {
+    await Future.delayed(Duration(milliseconds: 30));
+
+    return [
+      'User Management',
+      'Content Moderation',
+      'Analytics',
+      'Support Inbox',
+      'Settings',
+    ];
+  }
+
+  Future<List<Map<String, dynamic>>> searchUsers({
+    required String query,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    if (_firestoreService == null) return [];
+
+    final results = <Map<String, dynamic>>[];
+    final users = await _firestoreService!.queryCollection(
+      collection: 'users',
+      where: {},
+    );
+
+    for (var user in users) {
+      final data = user.data()!;
+      if (data['email'].toString().contains(query)) {
+        results.add(data);
+      }
+    }
+
+    return results;
+  }
+
+  Future<void> suspendUser({
+    required String adminId,
+    required String targetUserId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    _userStatuses[targetUserId] = 'suspended';
+
+    if (_firestoreService != null) {
+      await _firestoreService!.updateDocument(
+        collection: 'users',
+        documentId: targetUserId,
+        data: {
+          'status': 'suspended',
+          'suspended_at': DateTime.now(),
+          'suspended_by': adminId,
+        },
+      );
+    }
+  }
+
+  Future<void> unsuspendUser({
+    required String adminId,
+    required String targetUserId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    _userStatuses[targetUserId] = 'active';
+
+    if (_firestoreService != null) {
+      await _firestoreService!.updateDocument(
+        collection: 'users',
+        documentId: targetUserId,
+        data: {
+          'status': 'active',
+          'unsuspended_at': DateTime.now(),
+          'unsuspended_by': adminId,
+        },
+      );
+    }
+  }
+
+  Future<bool> isUserSuspended(String userId) async {
+    await Future.delayed(Duration(milliseconds: 30));
+    return _userStatuses[userId] == 'suspended';
+  }
+
+  Future<List<Map<String, dynamic>>> getFlaggedContent() async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    // Return flagged reviews from rating service
+    return [];
+  }
+
+  Future<void> removeReview({
+    required String adminId,
+    required String reviewId,
+    required String workerId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+
+    // Log moderation action
+    _moderationLogs.add({
+      'admin_id': adminId,
+      'action': 'remove_review',
+      'review_id': reviewId,
+      'worker_id': workerId,
+      'timestamp': DateTime.now(),
+    });
+
+    // In real implementation, would remove review and recalculate rating
+  }
+
+  Future<List<Map<String, dynamic>>> getModerationLogs(String adminId) async {
+    await Future.delayed(Duration(milliseconds: 50));
+    return List<Map<String, dynamic>>.from(_moderationLogs);
+  }
+
+  Future<Map<String, dynamic>> getAnalytics() async {
+    await Future.delayed(Duration(milliseconds: 200));
+
+    if (_firestoreService == null) {
+      return {
+        'totalUsers': 0,
+        'totalWorkers': 0,
+        'activeWorkers': 0,
+        'totalBookings': 0,
+        'completedBookings': 0,
+        'revenue': 0.0,
+        'bookingTrends': [],
+        'revenueTrends': [],
+      };
+    }
+
+    // Count users
+    final users = await _firestoreService!.queryCollection(
+      collection: 'users',
+      where: {},
+    );
+
+    // Count workers
+    final workers = await _firestoreService!.queryCollection(
+      collection: 'workers',
+      where: {},
+    );
+
+    final activeWorkers = workers.where((w) {
+      final data = w.data()!;
+      return data['status'] == 'online';
+    }).length;
+
+    // Count bookings
+    final bookings = await _firestoreService!.queryCollection(
+      collection: 'bookings',
+      where: {},
+    );
+
+    final completedBookings = bookings.where((b) {
+      final data = b.data()!;
+      return data['status'] == 'completed';
+    }).length;
+
+    // Calculate revenue
+    double revenue = 0;
+    for (var booking in bookings) {
+      final data = booking.data()!;
+      if (data['status'] == 'completed') {
+        revenue += (data['final_price'] ?? 0.0) as double;
+      }
+    }
+
+    return {
+      'totalUsers': users.length,
+      'totalWorkers': workers.length,
+      'activeWorkers': activeWorkers,
+      'totalBookings': bookings.length,
+      'completedBookings': completedBookings,
+      'revenue': revenue,
+      'bookingTrends': _generateMockTrends(),
+      'revenueTrends': _generateMockTrends(),
+    };
+  }
+
+  List<Map<String, dynamic>> _generateMockTrends() {
+    return List.generate(7, (i) {
+      return {
+        'date': DateTime.now().subtract(Duration(days: 6 - i)),
+        'value': 10 + Random().nextInt(20),
+      };
+    });
+  }
+
+  Future<String> exportUsersToCSV() async {
+    await Future.delayed(Duration(milliseconds: 200));
+
+    if (_firestoreService == null) return '';
+
+    final users = await _firestoreService!.queryCollection(
+      collection: 'users',
+      where: {},
+    );
+
+    String csv = 'email,name,accountType,phone\n';
+
+    for (var user in users) {
+      final data = user.data()!;
+      csv +=
+          '${data['email']},${data['name']},${data['accountType']},${data['phone']}\n';
+    }
+
+    return csv;
+  }
+
+  Future<Map<String, dynamic>> importUsersFromCSV(String csvData) async {
+    await Future.delayed(Duration(milliseconds: 300));
+
+    final lines = csvData.trim().split('\n');
+    if (lines.isEmpty) {
+      return {'totalRows': 0, 'validRows': 0, 'invalidRows': 0, 'errors': []};
+    }
+
+    final header = lines[0];
+    final dataLines = lines.sublist(1);
+
+    int validRows = 0;
+    int invalidRows = 0;
+    final errors = <String>[];
+
+    int userId = 101;
+
+    for (var line in dataLines) {
+      final fields = line.split(',');
+      if (fields.length < 4) {
+        invalidRows++;
+        errors.add('Invalid row format: $line');
+        continue;
+      }
+
+      final email = fields[0].trim();
+      final name = fields[1].trim();
+      final accountType = fields[2].trim();
+      final phone = fields[3].trim();
+
+      // Validate email
+      if (!_isValidEmail(email)) {
+        invalidRows++;
+        errors.add('Invalid email: $email');
+        continue;
+      }
+
+      // Import valid user
+      if (_firestoreService != null) {
+        await _firestoreService!.setDocument(
+          collection: 'users',
+          documentId: 'user_$userId',
+          data: {
+            'email': email,
+            'name': name,
+            'accountType': accountType,
+            'phone': phone,
+          },
+        );
+      }
+
+      validRows++;
+      userId++;
+    }
+
+    return {
+      'totalRows': dataLines.length,
+      'validRows': validRows,
+      'invalidRows': invalidRows,
+      'errors': errors,
+    };
+  }
+
+  bool _isValidEmail(String email) {
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    return emailRegex.hasMatch(email);
+  }
+
+  void clearAll() {
+    _userStatuses.clear();
+    _moderationLogs.clear();
+  }
+}
+
+// ============================================================================
+// Mock Security Service - Handles security operations
+// ============================================================================
+
+class MockSecurityService {
+  final Map<String, bool> _encryptedPasswords = {};
+  final Map<String, String> _sessionTokens = {};
+  final Map<String, DateTime> _tokenExpiration = {};
+  final Map<String, String> _resetTokens = {};
+  final Map<String, bool> _usedResetTokens = {};
+  final Map<String, int> _failedLogins = {};
+  final Map<String, DateTime> _accountLockouts = {};
+  final List<Map<String, dynamic>> _communicationLog = [];
+  final List<Map<String, dynamic>> _securityAlerts =
+      []; // FIXED: Changed from {} to []
+  final List<String> _networkLogs = [];
+  final List<String> _serverLogs = [];
+  int _apiCallCount = 0;
+  DateTime? _lastApiCallReset;
+
+  bool isPasswordEncrypted({
+    required String userId,
+    required String password,
+  }) {
+    // Simulate password encryption check
+    _encryptedPasswords[userId] = true;
+    return true;
+  }
+
+  Future<bool> checkDashboardAccess({
+    required String userId,
+    required bool otpVerified,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    // Require OTP verification for 2FA users
+    return otpVerified;
+  }
+
+  Map<String, dynamic> getOAuthConfiguration() {
+    return {
+      'consentScreenConfigured': true,
+      'redirectURLs': [
+        'https://fixmate.com/auth/callback',
+        'https://app.fixmate.com/callback',
+      ],
+      'stateParameterUsed': true,
+      'pkceImplemented': true,
+    };
+  }
+
+  String generateSessionToken(String userId,
+      {String? deviceId, String? ipAddress}) {
+    final token = 'token_${userId}_${DateTime.now().millisecondsSinceEpoch}';
+    _sessionTokens[token] = userId;
+    _tokenExpiration[token] = DateTime.now().add(Duration(hours: 1));
+
+    // Log communication
+    _communicationLog.add({
+      'type': 'token_generation',
+      'userId': userId,
+      'deviceId': deviceId,
+      'ipAddress': ipAddress,
+      'protocol': 'TLS 1.3',
+      'encrypted': true,
+      'timestamp': DateTime.now(),
+    });
+
+    return token;
+  }
+
+  void expireToken(String token) {
+    _tokenExpiration[token] = DateTime.now().subtract(Duration(hours: 1));
+  }
+
+  bool validateToken(String token) {
+    if (!_tokenExpiration.containsKey(token)) return false;
+
+    return DateTime.now().isBefore(_tokenExpiration[token]!);
+  }
+
+  String generatePasswordResetToken({required String email}) {
+    final token = 'reset_${email}_${DateTime.now().millisecondsSinceEpoch}';
+    _resetTokens[email] = token;
+    _tokenExpiration[token] = DateTime.now().add(Duration(hours: 1));
+    return token;
+  }
+
+  void expireResetToken(String token) {
+    _tokenExpiration[token] = DateTime.now().subtract(Duration(hours: 2));
+  }
+
+  void useResetToken(String token) {
+    _usedResetTokens[token] = true;
+  }
+
+  bool validateResetToken(String token) {
+    // Check if used
+    if (_usedResetTokens[token] == true) return false;
+
+    // Check if expired
+    if (!_tokenExpiration.containsKey(token)) return false;
+
+    return DateTime.now().isBefore(_tokenExpiration[token]!);
+  }
+
+  Future<bool> checkAccess({
+    required String userId,
+    required String requiredRole,
+  }) async {
+    // Mock RBAC check - would query Firestore in real implementation
+    return false; // Default deny
+  }
+
+  Future<Map<String, dynamic>> makeAPICall({
+    required String endpoint,
+    String? token,
+    String? deviceId,
+    String? ipAddress,
+    String? csrfToken,
+    String? origin,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    // Check rate limiting
+    _checkRateLimit();
+
+    // Validate token
+    if (token == null) {
+      throw Exception('401 Unauthorized: No token provided');
+    }
+
+    if (!validateToken(token)) {
+      throw Exception('401 Unauthorized: Invalid or expired token');
+    }
+
+    // Check CSRF token for state-changing operations
+    if (endpoint.contains('/create') || endpoint.contains('/update')) {
+      if (csrfToken == null) {
+        throw Exception('403 Forbidden: missing CSRF token');
+      }
+    }
+
+    // Check origin for CSRF protection
+    if (origin != null && !origin.contains('fixmate.com')) {
+      throw Exception('403 Forbidden: Invalid origin');
+    }
+
+    // Check for session hijacking (different IP/device)
+    final userId = _sessionTokens[token];
+    if (deviceId != null && ipAddress != null) {
+      // In real implementation, would check against stored device/IP
+      // For now, just simulate detection
+      if (deviceId != 'device_a') {
+        throw Exception('Session invalidated: Suspicious activity detected');
+      }
+    }
+
+    _apiCallCount++;
+
+    return {'success': true, 'data': 'API response'};
+  }
+
+  void _checkRateLimit() {
+    // Reset counter every minute
+    if (_lastApiCallReset == null ||
+        DateTime.now().difference(_lastApiCallReset!).inMinutes >= 1) {
+      _apiCallCount = 0;
+      _lastApiCallReset = DateTime.now();
+    }
+
+    // Rate limit: 100 requests per minute
+    if (_apiCallCount >= 100) {
+      throw Exception('429 Rate limit exceeded');
+    }
+  }
+
+  List<Map<String, dynamic>> getCommunicationLog() {
+    return List<Map<String, dynamic>>.from(_communicationLog);
+  }
+
+  String sanitizeInput(String input) {
+    String sanitized = input;
+
+    // Remove script tags
+    sanitized = sanitized.replaceAll(
+        RegExp(r'<script[^>]*>.*?</script>', caseSensitive: false), '');
+
+    // Remove event handlers
+    sanitized =
+        sanitized.replaceAll(RegExp(r'on\w+\s*=', caseSensitive: false), '');
+
+    // Remove javascript: protocol
+    sanitized =
+        sanitized.replaceAll(RegExp(r'javascript:', caseSensitive: false), '');
+
+    // Escape HTML tags
+    sanitized = sanitized.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+
+    return sanitized;
+  }
+
+  bool checkPrivacyPolicy() {
+    return true;
+  }
+
+  bool isConsentRequired() {
+    return true;
+  }
+
+  Future<void> requestDataDeletion(String userId) async {
+    await Future.delayed(Duration(milliseconds: 100));
+    // Mark for deletion
+  }
+
+  Future<bool> isDataDeletionRequested(String userId) async {
+    await Future.delayed(Duration(milliseconds: 50));
+    return true;
+  }
+
+  Future<void> recordFailedLogin(String email) async {
+    await Future.delayed(Duration(milliseconds: 30));
+
+    _failedLogins[email] = (_failedLogins[email] ?? 0) + 1;
+
+    if (_failedLogins[email]! >= 10) {
+      _accountLockouts[email] = DateTime.now().add(Duration(minutes: 15));
+    }
+  }
+
+  bool isAccountLocked(String email) {
+    if (!_accountLockouts.containsKey(email)) return false;
+
+    return DateTime.now().isBefore(_accountLockouts[email]!);
+  }
+
+  Map<String, dynamic> getLockoutInfo(String email) {
+    return {
+      'locked': isAccountLocked(email),
+      'attempts': _failedLogins[email] ?? 0,
+      'lockoutMinutes': 15,
+    };
+  }
+
+  List<Map<String, dynamic>> getSecurityAlerts(String userId) {
+    return [
+      {
+        'type': 'suspicious_activity',
+        'message': 'Login attempt from new device',
+        'timestamp': DateTime.now(),
+      }
+    ];
+  }
+
+  List<String> getNetworkLogs() {
+    return List<String>.from(_networkLogs);
+  }
+
+  List<String> getServerLogs() {
+    return List<String>.from(_serverLogs);
+  }
+
+  void clearAll() {
+    _encryptedPasswords.clear();
+    _sessionTokens.clear();
+    _tokenExpiration.clear();
+    _resetTokens.clear();
+    _usedResetTokens.clear();
+    _failedLogins.clear();
+    _accountLockouts.clear();
+    _communicationLog.clear();
+    _securityAlerts.clear();
+    _networkLogs.clear();
+    _serverLogs.clear();
+    _apiCallCount = 0;
+    _lastApiCallReset = null;
+  }
+}
