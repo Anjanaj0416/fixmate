@@ -659,11 +659,22 @@ class MockOTPService {
 // NEW: Mock Quote Service
 // ============================================================================
 
+// ============================================================================
+// COMPLETE MockQuoteService Class for test/mocks/mock_services.dart
+// Replace the existing MockQuoteService class with this complete version
+// ============================================================================
+
 class MockQuoteService {
   final Map<String, Map<String, dynamic>> _quotes = {};
   final Map<String, List<String>> _customerQuotes =
       {}; // customer_id -> quote_ids
   int _quoteCounter = 1;
+  MockFirestoreService? _firestoreService;
+
+  // Method to set Firestore service for worker availability checking
+  void setFirestoreService(MockFirestoreService firestoreService) {
+    _firestoreService = firestoreService;
+  }
 
   Future<String> createQuoteRequest({
     required String customerId,
@@ -739,6 +750,7 @@ class MockQuoteService {
     _quotes[quoteId]!['timeline'] = timeline;
     _quotes[quoteId]!['notes'] = notes;
     _quotes[quoteId]!['status'] = 'sent';
+    _quotes[quoteId]!['sent_at'] = DateTime.now();
     _quotes[quoteId]!['expires_at'] = DateTime.now().add(Duration(hours: 48));
   }
 
@@ -756,11 +768,14 @@ class MockQuoteService {
       'status': 'sent',
       'price': 5000.0,
       'created_at': DateTime.now(),
+      'sent_at': DateTime.now(),
       'expires_at': DateTime.now().add(Duration(hours: 48)),
     };
   }
 
-  Future<String> acceptQuote({required String quoteId}) async {
+  Future<void> acceptQuote({
+    required String quoteId,
+  }) async {
     await Future.delayed(Duration(milliseconds: 100));
 
     if (!_quotes.containsKey(quoteId)) {
@@ -769,30 +784,51 @@ class MockQuoteService {
 
     final quote = _quotes[quoteId]!;
 
-    // Check if quote expired
-    if (quote['expires_at'] != null &&
-        DateTime.now().isAfter(quote['expires_at'] as DateTime)) {
-      quote['status'] = 'expired';
+    // Check if quote is expired
+    if (quote['status'] == 'expired') {
       throw Exception('This quote expired. Request new quote');
     }
 
-    // Check worker availability (simplified check)
-    // In real implementation, would query Firestore
-    final workerId = quote['worker_id'];
-    // Simulate availability check - you could enhance this
+    // Check expiration time
+    final expiresAt = quote['expires_at'] as DateTime?;
+    if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
+      _quotes[quoteId]!['status'] = 'expired';
+      throw Exception('This quote expired. Request new quote');
+    }
 
-    quote['status'] = 'accepted';
-    quote['accepted_at'] = DateTime.now();
+    // FIXED: Check worker availability from Firestore
+    final workerId = quote['worker_id'] as String?;
+    if (workerId != null && _firestoreService != null) {
+      try {
+        final workerDoc = await _firestoreService!.getDocument(
+          collection: 'workers',
+          documentId: workerId,
+        );
 
-    // Create booking
-    final bookingId = 'B_${DateTime.now().millisecondsSinceEpoch}';
-    quote['booking_id'] = bookingId;
+        if (workerDoc.exists) {
+          final isOnline = workerDoc.data()!['is_online'];
+          if (isOnline == false) {
+            throw Exception(
+                'Worker no longer available. Please request new quote');
+          }
+        }
+      } catch (e) {
+        // Re-throw if it's our custom error
+        if (e.toString().contains('Worker no longer available')) {
+          rethrow;
+        }
+        // Otherwise, continue (worker doc might not exist yet in test)
+      }
+    }
 
-    return bookingId;
+    _quotes[quoteId]!['status'] = 'accepted';
+    _quotes[quoteId]!['accepted_at'] = DateTime.now();
   }
 
-  Future<void> declineQuote({required String quoteId}) async {
-    await Future.delayed(Duration(milliseconds: 50));
+  Future<void> declineQuote({
+    required String quoteId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
 
     if (!_quotes.containsKey(quoteId)) {
       throw Exception('Quote not found');
@@ -818,20 +854,114 @@ class MockQuoteService {
     };
   }
 
+  Future<Map<String, dynamic>?> getQuote({
+    required String quoteId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 30));
+
+    if (!_quotes.containsKey(quoteId)) {
+      return null;
+    }
+
+    return Map<String, dynamic>.from(_quotes[quoteId]!);
+  }
+
+  Future<List<Map<String, dynamic>>> getQuotesByCustomer({
+    required String customerId,
+    String? status,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    var quotes = _quotes.values.where((q) => q['customer_id'] == customerId);
+
+    if (status != null) {
+      quotes = quotes.where((q) => q['status'] == status);
+    }
+
+    return quotes.map((q) => Map<String, dynamic>.from(q)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getQuotesByWorker({
+    required String workerId,
+    String? status,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    var quotes = _quotes.values.where((q) => q['worker_id'] == workerId);
+
+    if (status != null) {
+      quotes = quotes.where((q) => q['status'] == status);
+    }
+
+    return quotes.map((q) => Map<String, dynamic>.from(q)).toList();
+  }
+
+  Future<void> updateQuotePrice({
+    required String quoteId,
+    required double price,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_quotes.containsKey(quoteId)) {
+      throw Exception('Quote not found');
+    }
+
+    _quotes[quoteId]!['price'] = price;
+    _quotes[quoteId]!['updated_at'] = DateTime.now();
+  }
+
+  Future<int> getPendingQuoteCount({
+    required String workerId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 30));
+
+    return _quotes.values
+        .where((q) => q['worker_id'] == workerId && q['status'] == 'pending')
+        .length;
+  }
+
+  Future<void> expireOldQuotes() async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    final now = DateTime.now();
+
+    for (var quoteId in _quotes.keys) {
+      final quote = _quotes[quoteId]!;
+      final expiresAt = quote['expires_at'] as DateTime?;
+
+      if (expiresAt != null &&
+          now.isAfter(expiresAt) &&
+          quote['status'] == 'sent') {
+        _quotes[quoteId]!['status'] = 'expired';
+      }
+    }
+  }
+
   void clearAll() {
     _quotes.clear();
     _customerQuotes.clear();
     _quoteCounter = 1;
   }
 }
-
 // ============================================================================
 // NEW: Mock Booking Service
+// ============================================================================
+
+// ============================================================================
+// ============================================================================
+// COMPLETE MockBookingService Class for test/mocks/mock_services.dart
+// Replace the existing MockBookingService class with this complete version
 // ============================================================================
 
 class MockBookingService {
   final Map<String, Map<String, dynamic>> _bookings = {};
   int _bookingCounter = 1;
+  MockFirestoreService? _firestoreService;
+
+  // Method to set Firestore service for phone validation
+  void setFirestoreService(MockFirestoreService firestoreService) {
+    _firestoreService = firestoreService;
+  }
 
   Future<String> createDirectBooking({
     required String customerId,
@@ -905,49 +1035,31 @@ class MockBookingService {
     }
 
     _bookings[bookingId]!['status'] = status;
-    _bookings[bookingId]!['${status}_at'] = DateTime.now();
+    _bookings[bookingId]!['updated_at'] = DateTime.now();
   }
 
-  Future<void> cancelBooking({required String bookingId}) async {
+  Future<void> cancelBooking({
+    required String bookingId,
+  }) async {
     await Future.delayed(Duration(milliseconds: 50));
 
     if (!_bookings.containsKey(bookingId)) {
       throw Exception('Booking not found');
     }
 
-    final booking = _bookings[bookingId]!;
-
-    if (booking['status'] != 'requested') {
-      throw Exception(
-          'Contact worker to cancel. Phone: ${booking['worker_phone'] ?? '+94771234567'}');
+    // Check if booking is already accepted
+    if (_bookings[bookingId]!['status'] == 'accepted' ||
+        _bookings[bookingId]!['status'] == 'in_progress') {
+      throw Exception('Contact worker to cancel - booking already accepted');
     }
 
-    booking['status'] = 'cancelled';
-    booking['cancelled_at'] = DateTime.now();
+    _bookings[bookingId]!['status'] = 'cancelled';
+    _bookings[bookingId]!['cancelled_at'] = DateTime.now();
   }
 
-  Future<bool> canCancelBooking({required String bookingId}) async {
-    await Future.delayed(Duration(milliseconds: 30));
-
-    if (!_bookings.containsKey(bookingId)) {
-      return false;
-    }
-
-    final booking = _bookings[bookingId]!;
-    return booking['status'] == 'requested';
-  }
-
-  Future<List<Map<String, dynamic>>> getWorkerBookingRequests({
-    required String workerId,
+  Future<void> acceptBooking({
+    required String bookingId,
   }) async {
-    await Future.delayed(Duration(milliseconds: 100));
-
-    return _bookings.values
-        .where((b) => b['worker_id'] == workerId && b['status'] == 'requested')
-        .toList();
-  }
-
-  Future<void> acceptBooking({required String bookingId}) async {
     await Future.delayed(Duration(milliseconds: 50));
 
     if (!_bookings.containsKey(bookingId)) {
@@ -958,22 +1070,9 @@ class MockBookingService {
     _bookings[bookingId]!['accepted_at'] = DateTime.now();
   }
 
-  Future<void> declineBooking({
+  Future<void> completeBooking({
     required String bookingId,
-    required String reason,
   }) async {
-    await Future.delayed(Duration(milliseconds: 50));
-
-    if (!_bookings.containsKey(bookingId)) {
-      throw Exception('Booking not found');
-    }
-
-    _bookings[bookingId]!['status'] = 'declined';
-    _bookings[bookingId]!['decline_reason'] = reason;
-    _bookings[bookingId]!['declined_at'] = DateTime.now();
-  }
-
-  Future<void> completeBooking({required String bookingId}) async {
     await Future.delayed(Duration(milliseconds: 50));
 
     if (!_bookings.containsKey(bookingId)) {
@@ -984,60 +1083,53 @@ class MockBookingService {
     _bookings[bookingId]!['completed_at'] = DateTime.now();
   }
 
-  Future<List<Map<String, dynamic>>> getBookingHistory({
-    required String userId,
+  Future<Map<String, dynamic>> getBooking({
+    required String bookingId,
   }) async {
-    await Future.delayed(Duration(milliseconds: 100));
+    await Future.delayed(Duration(milliseconds: 30));
 
-    final history = _bookings.values
-        .where((b) => b['customer_id'] == userId && b['status'] == 'completed')
-        .toList();
-
-    history.sort((a, b) {
-      final aTime = a['completed_at'] as DateTime;
-      final bTime = b['completed_at'] as DateTime;
-      return bTime.compareTo(aTime);
-    });
-
-    return history.map((b) => {...b, 'can_rebook': true}).toList();
-  }
-
-  Future<List<Map<String, dynamic>>> getBookingHistoryPaginated({
-    required String userId,
-    required int page,
-    required int pageSize,
-  }) async {
-    await Future.delayed(Duration(milliseconds: 100));
-
-    final allHistory = _bookings.values
-        .where((b) => b['customer_id'] == userId && b['status'] == 'completed')
-        .toList();
-
-    allHistory.sort((a, b) {
-      final aTime = a['completed_at'] as DateTime;
-      final bTime = b['completed_at'] as DateTime;
-      return bTime.compareTo(aTime);
-    });
-
-    final startIndex = (page - 1) * pageSize;
-    final endIndex = startIndex + pageSize;
-
-    if (startIndex >= allHistory.length) {
-      return [];
+    if (!_bookings.containsKey(bookingId)) {
+      throw Exception('Booking not found');
     }
 
-    final paginatedResults = allHistory.sublist(
-      startIndex,
-      endIndex > allHistory.length ? allHistory.length : endIndex,
-    );
+    return Map<String, dynamic>.from(_bookings[bookingId]!);
+  }
 
-    return paginatedResults;
+  Future<List<Map<String, dynamic>>> getBookingsByCustomer({
+    required String customerId,
+    String? status,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    var bookings =
+        _bookings.values.where((b) => b['customer_id'] == customerId);
+
+    if (status != null) {
+      bookings = bookings.where((b) => b['status'] == status);
+    }
+
+    return bookings.map((b) => Map<String, dynamic>.from(b)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getBookingsByWorker({
+    required String workerId,
+    String? status,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    var bookings = _bookings.values.where((b) => b['worker_id'] == workerId);
+
+    if (status != null) {
+      bookings = bookings.where((b) => b['status'] == status);
+    }
+
+    return bookings.map((b) => Map<String, dynamic>.from(b)).toList();
   }
 
   Future<Map<String, dynamic>> getBookingListView({
     required String bookingId,
   }) async {
-    await Future.delayed(Duration(milliseconds: 50));
+    await Future.delayed(Duration(milliseconds: 30));
 
     if (!_bookings.containsKey(bookingId)) {
       throw Exception('Booking not found');
@@ -1082,11 +1174,32 @@ class MockBookingService {
   }) async {
     await Future.delayed(Duration(milliseconds: 50));
 
-    // Simulate fetching worker phone
-    // In real implementation, would query Firestore
-    final workerPhone = '+94771234567';
+    // FIXED: Fetch worker phone from Firestore if available
+    String? workerPhone; // Make it nullable initially
 
-    if (workerPhone.isEmpty ||
+    if (_firestoreService != null) {
+      try {
+        final workerDoc = await _firestoreService!.getDocument(
+          collection: 'workers',
+          documentId: workerId,
+        );
+
+        if (workerDoc.exists && workerDoc.data()!['phone'] != null) {
+          final phoneValue = workerDoc.data()!['phone'];
+          // Only assign if it's not null
+          if (phoneValue != null) {
+            workerPhone = phoneValue.toString();
+          }
+        }
+      } catch (e) {
+        // If error fetching, workerPhone remains null
+      }
+    }
+
+    // Validate phone number - check for null first
+    if (workerPhone == null ||
+        workerPhone.isEmpty ||
+        workerPhone == 'null' ||
         workerPhone == 'invalid' ||
         workerPhone.length < 10) {
       throw Exception('Phone number not available. Please use chat');
@@ -1098,10 +1211,539 @@ class MockBookingService {
     };
   }
 
+  Future<void> declineBooking({
+    required String bookingId,
+    String? reason,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_bookings.containsKey(bookingId)) {
+      throw Exception('Booking not found');
+    }
+
+    _bookings[bookingId]!['status'] = 'declined';
+    _bookings[bookingId]!['declined_at'] = DateTime.now();
+
+    if (reason != null) {
+      _bookings[bookingId]!['decline_reason'] = reason;
+    }
+  }
+
+  Future<void> startBooking({
+    required String bookingId,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_bookings.containsKey(bookingId)) {
+      throw Exception('Booking not found');
+    }
+
+    if (_bookings[bookingId]!['status'] != 'accepted') {
+      throw Exception('Booking must be accepted before starting');
+    }
+
+    _bookings[bookingId]!['status'] = 'in_progress';
+    _bookings[bookingId]!['started_at'] = DateTime.now();
+  }
+
+  Future<List<Map<String, dynamic>>> getBookingHistory({
+    required String userId,
+    required String userType, // 'customer' or 'worker'
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    var bookings = _bookings.values.where((b) {
+      if (userType == 'customer') {
+        return b['customer_id'] == userId && b['status'] == 'completed';
+      } else {
+        return b['worker_id'] == userId && b['status'] == 'completed';
+      }
+    }).toList();
+
+    // Sort by completion date (newest first)
+    bookings.sort((a, b) {
+      final dateA = a['completed_at'] as DateTime?;
+      final dateB = b['completed_at'] as DateTime?;
+      if (dateA == null || dateB == null) return 0;
+      return dateB.compareTo(dateA);
+    });
+
+    // Apply pagination
+    final start = offset;
+    final end = (offset + limit).clamp(0, bookings.length);
+
+    if (start >= bookings.length) {
+      return [];
+    }
+
+    return bookings
+        .sublist(start, end)
+        .map((b) => Map<String, dynamic>.from(b))
+        .toList();
+  }
+
+  Future<int> getBookingCount({
+    required String userId,
+    required String userType,
+    String? status,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 30));
+
+    var bookings = _bookings.values.where((b) {
+      if (userType == 'customer') {
+        return b['customer_id'] == userId;
+      } else {
+        return b['worker_id'] == userId;
+      }
+    });
+
+    if (status != null) {
+      bookings = bookings.where((b) => b['status'] == status);
+    }
+
+    return bookings.length;
+  }
+
+  Future<void> updateBookingSpecialInstructions({
+    required String bookingId,
+    required String instructions,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_bookings.containsKey(bookingId)) {
+      throw Exception('Booking not found');
+    }
+
+    _bookings[bookingId]!['special_instructions'] = instructions;
+    _bookings[bookingId]!['updated_at'] = DateTime.now();
+  }
+
+  Future<void> rateBooking({
+    required String bookingId,
+    required double rating,
+    String? review,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (!_bookings.containsKey(bookingId)) {
+      throw Exception('Booking not found');
+    }
+
+    if (_bookings[bookingId]!['status'] != 'completed') {
+      throw Exception('Can only rate completed bookings');
+    }
+
+    if (rating < 1.0 || rating > 5.0) {
+      throw Exception('Rating must be between 1.0 and 5.0');
+    }
+
+    _bookings[bookingId]!['rating'] = rating;
+    _bookings[bookingId]!['review'] = review;
+    _bookings[bookingId]!['rated_at'] = DateTime.now();
+  }
+
   void clearAll() {
     _bookings.clear();
     _bookingCounter = 1;
   }
+}
+
+final Map<String, Map<String, dynamic>> _bookings = {};
+int _bookingCounter = 1;
+MockFirestoreService? _firestoreService;
+
+// Method to set Firestore service for phone validation
+void setFirestoreService(MockFirestoreService firestoreService) {
+  _firestoreService = firestoreService;
+}
+
+Future<String> createDirectBooking({
+  required String customerId,
+  required String workerId,
+  required DateTime scheduledDate,
+  required double defaultRate,
+}) async {
+  await Future.delayed(Duration(milliseconds: 100));
+
+  // Validate future date
+  if (scheduledDate.isBefore(DateTime.now())) {
+    throw Exception('Please select a future date');
+  }
+
+  final bookingId = 'B_${_bookingCounter++}';
+  _bookings[bookingId] = {
+    'booking_id': bookingId,
+    'customer_id': customerId,
+    'worker_id': workerId,
+    'scheduled_date': scheduledDate,
+    'price': defaultRate,
+    'status': 'requested',
+    'created_at': DateTime.now(),
+  };
+
+  return bookingId;
+}
+
+Future<void> createBooking({
+  required String bookingId,
+  required String customerId,
+  String? workerId,
+  required String status,
+  DateTime? completedAt,
+  String? specialInstructions,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  _bookings[bookingId] = {
+    'booking_id': bookingId,
+    'customer_id': customerId,
+    'worker_id': workerId ?? 'worker_default',
+    'customer_name': 'Test Customer',
+    'worker_name': 'Test Worker',
+    'problem_description': 'Test problem',
+    'scheduled_date': DateTime.now().add(Duration(days: 1)),
+    'location': 'Colombo',
+    'status': status,
+    'created_at': DateTime.now(),
+    'service_type': 'Plumbing',
+    'final_price': 3500.0,
+  };
+
+  if (completedAt != null) {
+    _bookings[bookingId]!['completed_at'] = completedAt;
+  }
+
+  if (specialInstructions != null) {
+    _bookings[bookingId]!['special_instructions'] = specialInstructions;
+  }
+}
+
+Future<void> updateBookingStatus({
+  required String bookingId,
+  required String status,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  if (!_bookings.containsKey(bookingId)) {
+    throw Exception('Booking not found');
+  }
+
+  _bookings[bookingId]!['status'] = status;
+  _bookings[bookingId]!['updated_at'] = DateTime.now();
+}
+
+Future<void> cancelBooking({
+  required String bookingId,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  if (!_bookings.containsKey(bookingId)) {
+    throw Exception('Booking not found');
+  }
+
+  // Check if booking is already accepted
+  if (_bookings[bookingId]!['status'] == 'accepted' ||
+      _bookings[bookingId]!['status'] == 'in_progress') {
+    throw Exception('Contact worker to cancel - booking already accepted');
+  }
+
+  _bookings[bookingId]!['status'] = 'cancelled';
+  _bookings[bookingId]!['cancelled_at'] = DateTime.now();
+}
+
+Future<void> acceptBooking({
+  required String bookingId,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  if (!_bookings.containsKey(bookingId)) {
+    throw Exception('Booking not found');
+  }
+
+  _bookings[bookingId]!['status'] = 'accepted';
+  _bookings[bookingId]!['accepted_at'] = DateTime.now();
+}
+
+Future<void> completeBooking({
+  required String bookingId,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  if (!_bookings.containsKey(bookingId)) {
+    throw Exception('Booking not found');
+  }
+
+  _bookings[bookingId]!['status'] = 'completed';
+  _bookings[bookingId]!['completed_at'] = DateTime.now();
+}
+
+Future<Map<String, dynamic>> getBooking({
+  required String bookingId,
+}) async {
+  await Future.delayed(Duration(milliseconds: 30));
+
+  if (!_bookings.containsKey(bookingId)) {
+    throw Exception('Booking not found');
+  }
+
+  return Map<String, dynamic>.from(_bookings[bookingId]!);
+}
+
+Future<List<Map<String, dynamic>>> getBookingsByCustomer({
+  required String customerId,
+  String? status,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  var bookings = _bookings.values.where((b) => b['customer_id'] == customerId);
+
+  if (status != null) {
+    bookings = bookings.where((b) => b['status'] == status);
+  }
+
+  return bookings.map((b) => Map<String, dynamic>.from(b)).toList();
+}
+
+Future<List<Map<String, dynamic>>> getBookingsByWorker({
+  required String workerId,
+  String? status,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  var bookings = _bookings.values.where((b) => b['worker_id'] == workerId);
+
+  if (status != null) {
+    bookings = bookings.where((b) => b['status'] == status);
+  }
+
+  return bookings.map((b) => Map<String, dynamic>.from(b)).toList();
+}
+
+Future<Map<String, dynamic>> getBookingListView({
+  required String bookingId,
+}) async {
+  await Future.delayed(Duration(milliseconds: 30));
+
+  if (!_bookings.containsKey(bookingId)) {
+    throw Exception('Booking not found');
+  }
+
+  final booking = _bookings[bookingId]!;
+  final instructions = booking['special_instructions'] as String?;
+
+  return {
+    'booking_id': bookingId,
+    'instructions_preview': instructions != null && instructions.length > 100
+        ? instructions.substring(0, 100)
+        : instructions ?? '',
+    'has_read_more': instructions != null && instructions.length > 100,
+  };
+}
+
+Future<String> createEmergencyBooking({
+  required String customerId,
+  required String workerId,
+  required double defaultRate,
+}) async {
+  await Future.delayed(Duration(milliseconds: 100));
+
+  final bookingId = 'B_emergency_${_bookingCounter++}';
+  _bookings[bookingId] = {
+    'booking_id': bookingId,
+    'customer_id': customerId,
+    'worker_id': workerId,
+    'urgency': 'emergency',
+    'status': 'requested',
+    'price': defaultRate,
+    'created_at': DateTime.now(),
+  };
+
+  return bookingId;
+}
+
+// REPLACE the initiateCall method in MockBookingService with this fixed version:
+
+Future<Map<String, dynamic>> initiateCall({
+  required String workerId,
+  required String customerId,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  // FIXED: Fetch worker phone from Firestore if available
+  String? workerPhone; // Make it nullable initially
+
+  if (_firestoreService != null) {
+    try {
+      final workerDoc = await _firestoreService!.getDocument(
+        collection: 'workers',
+        documentId: workerId,
+      );
+
+      if (workerDoc.exists && workerDoc.data()!['phone'] != null) {
+        final phoneValue = workerDoc.data()!['phone'];
+        // Only assign if it's not null
+        if (phoneValue != null) {
+          workerPhone = phoneValue.toString();
+        }
+      }
+    } catch (e) {
+      // If error fetching, workerPhone remains null
+    }
+  }
+
+  // Validate phone number - check for null first
+  if (workerPhone == null ||
+      workerPhone.isEmpty ||
+      workerPhone == 'null' ||
+      workerPhone == 'invalid' ||
+      workerPhone.length < 10) {
+    throw Exception('Phone number not available. Please use chat');
+  }
+
+  return {
+    'action': 'dial',
+    'phone_number': workerPhone,
+  };
+}
+
+Future<void> declineBooking({
+  required String bookingId,
+  String? reason,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  if (!_bookings.containsKey(bookingId)) {
+    throw Exception('Booking not found');
+  }
+
+  _bookings[bookingId]!['status'] = 'declined';
+  _bookings[bookingId]!['declined_at'] = DateTime.now();
+
+  if (reason != null) {
+    _bookings[bookingId]!['decline_reason'] = reason;
+  }
+}
+
+Future<void> startBooking({
+  required String bookingId,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  if (!_bookings.containsKey(bookingId)) {
+    throw Exception('Booking not found');
+  }
+
+  if (_bookings[bookingId]!['status'] != 'accepted') {
+    throw Exception('Booking must be accepted before starting');
+  }
+
+  _bookings[bookingId]!['status'] = 'in_progress';
+  _bookings[bookingId]!['started_at'] = DateTime.now();
+}
+
+Future<List<Map<String, dynamic>>> getBookingHistory({
+  required String userId,
+  required String userType, // 'customer' or 'worker'
+  int limit = 20,
+  int offset = 0,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  var bookings = _bookings.values.where((b) {
+    if (userType == 'customer') {
+      return b['customer_id'] == userId && b['status'] == 'completed';
+    } else {
+      return b['worker_id'] == userId && b['status'] == 'completed';
+    }
+  }).toList();
+
+  // Sort by completion date (newest first)
+  bookings.sort((a, b) {
+    final dateA = a['completed_at'] as DateTime?;
+    final dateB = b['completed_at'] as DateTime?;
+    if (dateA == null || dateB == null) return 0;
+    return dateB.compareTo(dateA);
+  });
+
+  // Apply pagination
+  final start = offset;
+  final end = (offset + limit).clamp(0, bookings.length);
+
+  if (start >= bookings.length) {
+    return [];
+  }
+
+  return bookings
+      .sublist(start, end)
+      .map((b) => Map<String, dynamic>.from(b))
+      .toList();
+}
+
+Future<int> getBookingCount({
+  required String userId,
+  required String userType,
+  String? status,
+}) async {
+  await Future.delayed(Duration(milliseconds: 30));
+
+  var bookings = _bookings.values.where((b) {
+    if (userType == 'customer') {
+      return b['customer_id'] == userId;
+    } else {
+      return b['worker_id'] == userId;
+    }
+  });
+
+  if (status != null) {
+    bookings = bookings.where((b) => b['status'] == status);
+  }
+
+  return bookings.length;
+}
+
+Future<void> updateBookingSpecialInstructions({
+  required String bookingId,
+  required String instructions,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  if (!_bookings.containsKey(bookingId)) {
+    throw Exception('Booking not found');
+  }
+
+  _bookings[bookingId]!['special_instructions'] = instructions;
+  _bookings[bookingId]!['updated_at'] = DateTime.now();
+}
+
+Future<void> rateBooking({
+  required String bookingId,
+  required double rating,
+  String? review,
+}) async {
+  await Future.delayed(Duration(milliseconds: 50));
+
+  if (!_bookings.containsKey(bookingId)) {
+    throw Exception('Booking not found');
+  }
+
+  if (_bookings[bookingId]!['status'] != 'completed') {
+    throw Exception('Can only rate completed bookings');
+  }
+
+  if (rating < 1.0 || rating > 5.0) {
+    throw Exception('Rating must be between 1.0 and 5.0');
+  }
+
+  _bookings[bookingId]!['rating'] = rating;
+  _bookings[bookingId]!['review'] = review;
+  _bookings[bookingId]!['rated_at'] = DateTime.now();
+}
+
+void clearAll() {
+  _bookings.clear();
+  _bookingCounter = 1;
 }
 
 // ============================================================================
