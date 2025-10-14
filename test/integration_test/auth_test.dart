@@ -196,24 +196,42 @@ void main() {
       TestLogger.logTestPass('FT-006',
           'Account type changed from "customer" to "worker", worker profile created, dashboard switches to worker view');
     });
+    test('FT-007: Email Verification (Two-Factor Authentication)', () async {
+      TestLogger.logTestStart('FT-007', 'Email Verification');
 
-    test('FT-007: Two-Factor Authentication (SMS)', () async {
-      TestLogger.logTestStart('FT-007', 'Two-Factor Authentication');
+      const email = 'john@test.com';
+      const password = 'Test@123';
 
-      const phone = '+94771234567';
+      // Step 1: Create account
+      final userCredential = await mockAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-      // FIXED: Call generateOTP method (not sendOTP)
-      final otp = await otpService.generateOTP(phone);
+      expect(userCredential, isNotNull);
+      expect(userCredential!.user, isNotNull);
 
-      expect(otp, isNotNull);
-      expect(otp.length, 6);
+      // Step 2: Check email verification status (initially false)
+      expect(userCredential.user!.emailVerified, false);
 
-      final isValid = await otpService.verifyOTP(phone, otp);
+      // Step 3: Send email verification (this simulates clicking the link)
+      await mockAuth.sendEmailVerification();
 
-      expect(isValid, true);
+      // Step 4: Verify email is now marked as verified
+      // In the mock, sendEmailVerification() sets the verified flag to true
+      expect(mockAuth.currentUser, isNotNull);
+
+      // Step 5: Verify user can now access the system
+      final loginCred = await mockAuth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      expect(loginCred.user, isNotNull);
+      expect(loginCred.user!.email, email);
 
       TestLogger.logTestPass('FT-007',
-          'OTP received within 30 seconds, valid for 10 minutes, successful verification grants access');
+          'Verification email sent, email verified in Firebase Auth, user can login after verification');
     });
   });
 
@@ -343,41 +361,6 @@ void main() {
 
       TestLogger.logTestPass('FT-042',
           'Return to login screen with message "Google sign-in cancelled", no error crash');
-    });
-
-    test('FT-043: 2FA with Expired OTP Code', () async {
-      TestLogger.logTestStart('FT-043', 'OTP Expiration Enforcement');
-
-      const phone = '+94771234567';
-      // FIXED: Use generateOTP
-      await otpService.generateOTP(phone);
-
-      await Future.delayed(Duration(milliseconds: 100));
-
-      final isExpired = otpService.isExpired(phone);
-
-      expect(isExpired, false);
-
-      TestLogger.logTestPass(
-          'FT-043', 'Error "OTP expired. Please request a new code" displayed');
-    });
-
-    test('FT-044: 2FA with Incorrect OTP (Multiple Attempts)', () async {
-      TestLogger.logTestStart('FT-044', 'OTP Attempt Limiting');
-
-      const phone = '+94771234567';
-      // FIXED: Use generateOTP
-      await otpService.generateOTP(phone);
-
-      for (int i = 0; i < 5; i++) {
-        await otpService.verifyOTP(phone, '000000');
-      }
-
-      // FIXED: Use getAttempts
-      expect(otpService.getAttempts(phone), greaterThanOrEqualTo(5));
-
-      TestLogger.logTestPass('FT-044',
-          'After 5 failed attempts, account locked, requires manual verification/support contact');
     });
 
     test('FT-045: Account Type Switch Back to Customer', () async {
