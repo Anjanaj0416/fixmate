@@ -2761,12 +2761,12 @@ extension MockStorageServicePerformance on MockStorageService {
 
   Future<String> downloadFile(String url) async {
     await Future.delayed(Duration(milliseconds: 200));
-    return 'downloaded_file_data';
+    return 'downloaded_file_data_from_$url';
   }
 }
 
-// Add these methods to MockMLService class if not present:
 extension MockMLServicePerformance on MockMLService {
+  /// Generate service-specific questionnaire
   Future<List<Map<String, dynamic>>> generateQuestionnaire({
     required String serviceType,
   }) async {
@@ -2777,40 +2777,39 @@ extension MockMLServicePerformance on MockMLService {
       return [
         {
           'question': 'Indoor or outdoor wiring?',
-          'type': 'multiple_choice',
-          'options': ['Indoor', 'Outdoor', 'Both'],
+          'type': 'choice',
+          'options': ['Indoor', 'Outdoor', 'Both']
         },
-        {
-          'question': 'Number of outlets needed?',
-          'type': 'number',
-        },
-        {
-          'question': 'Circuit breaker issues?',
-          'type': 'yes_no',
-        },
+        {'question': 'Number of outlets affected?', 'type': 'number'},
+        {'question': 'Circuit breaker issues?', 'type': 'boolean'},
       ];
-    }
-
-    if (serviceType.toLowerCase().contains('plumbing')) {
+    } else if (serviceType.toLowerCase().contains('plumbing')) {
       return [
         {
-          'question': 'Type of plumbing issue?',
-          'type': 'multiple_choice',
-          'options': ['Leak', 'Blockage', 'Installation'],
+          'question': 'Location of leak?',
+          'type': 'choice',
+          'options': ['Kitchen', 'Bathroom', 'Outdoor']
         },
         {
-          'question': 'Location of issue?',
-          'type': 'text',
+          'question': 'Severity of leak?',
+          'type': 'choice',
+          'options': ['Minor drip', 'Steady flow', 'Burst pipe']
         },
+        {'question': 'Water pressure normal?', 'type': 'boolean'},
+      ];
+    } else if (serviceType.toLowerCase().contains('ac')) {
+      return [
+        {
+          'question': 'Type of AC unit?',
+          'type': 'choice',
+          'options': ['Split', 'Window', 'Central']
+        },
+        {'question': 'Age of unit?', 'type': 'number'},
+        {'question': 'Regular maintenance performed?', 'type': 'boolean'},
       ];
     }
 
-    return [
-      {
-        'question': 'Describe your requirement',
-        'type': 'text',
-      },
-    ];
+    return [];
   }
 
   Future<Map<String, dynamic>> searchWorkersWithFallback({
